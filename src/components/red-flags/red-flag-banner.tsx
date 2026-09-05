@@ -51,7 +51,7 @@ export function RedFlagBanner({
   };
 
   return (
-    <div className="space-y-3" role="alert">
+    <div className="space-y-3" role="alert" aria-live="assertive">
       {localAlerts.map((alert) => (
         <div
           key={alert.ruleId}
@@ -59,7 +59,7 @@ export function RedFlagBanner({
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-white shrink-0 mt-0.5 shadow-xs">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-white shrink-0 mt-0.5 shadow-xs" aria-hidden="true">
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div>
@@ -82,7 +82,7 @@ export function RedFlagBanner({
 
             <div className="shrink-0 flex items-center gap-2 sm:self-center">
               {alert.acknowledgedAt ? (
-                <div className="flex items-center gap-1.5 rounded-lg bg-white/80 border border-red-200 px-3 py-1.5 text-xs text-emerald-800 font-semibold">
+                <div className="flex items-center gap-1.5 rounded-lg bg-white/80 border border-red-200 px-3.5 py-2 text-xs text-emerald-800 font-semibold min-h-[44px]">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   <span>Acknowledged ({formatDateTime(alert.acknowledgedAt)})</span>
                 </div>
@@ -91,7 +91,8 @@ export function RedFlagBanner({
                   type="button"
                   disabled={isAcknowledging === alert.ruleId}
                   onClick={() => handleAcknowledge(alert.ruleId)}
-                  className="rounded-lg bg-red-700 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-red-800 transition-colors"
+                  className="inline-flex items-center justify-center min-h-[44px] min-w-[120px] rounded-lg bg-red-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                  aria-label={`Acknowledge red flag ${alert.ruleId}: ${alert.message}`}
                 >
                   {isAcknowledging === alert.ruleId ? "Recording..." : "Acknowledge Signal"}
                 </button>

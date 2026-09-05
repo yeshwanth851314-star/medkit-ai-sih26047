@@ -15,8 +15,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="flex min-h-full flex-col bg-surface-50 text-slate-900 antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-clinical-600 focus:px-4 focus:py-2 focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+        >
+          Skip to main content
+        </a>
         <Header />
-        <main className="flex-1">
+        <main id="main-content" className="flex-1" tabIndex={-1}>
           {children}
         </main>
         <footer className="border-t border-surface-200 bg-white py-4 text-center text-xs text-slate-500">
