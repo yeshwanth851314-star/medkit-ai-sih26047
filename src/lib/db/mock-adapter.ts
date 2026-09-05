@@ -204,4 +204,12 @@ class MockDatabaseAdapter {
   }
 }
 
-export const mockDb = new MockDatabaseAdapter();
+const globalForMockDb = globalThis as unknown as {
+  __medkit_mock_db?: MockDatabaseAdapter;
+};
+
+if (!globalForMockDb.__medkit_mock_db) {
+  globalForMockDb.__medkit_mock_db = new MockDatabaseAdapter();
+}
+
+export const mockDb = globalForMockDb.__medkit_mock_db;

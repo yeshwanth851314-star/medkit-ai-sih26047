@@ -4,7 +4,15 @@ import { createCaseDraft } from "@/features/cases/case-service";
 import { ClinicalCase } from "@/types/database";
 import { verifyPatientConsent } from "@/features/consent/consent-service";
 
-const activeSessions: Map<string, InterviewSession> = new Map();
+const globalForSessions = globalThis as unknown as {
+  __medkit_active_sessions?: Map<string, InterviewSession>;
+};
+
+if (!globalForSessions.__medkit_active_sessions) {
+  globalForSessions.__medkit_active_sessions = new Map();
+}
+
+const activeSessions: Map<string, InterviewSession> = globalForSessions.__medkit_active_sessions;
 
 export function createInterviewSession(
   patientId: string,
