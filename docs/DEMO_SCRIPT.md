@@ -2,44 +2,45 @@
 
 **Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Ministry / Sponsor:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
-**Demo Mode:** Deterministic & Offline-Reliable (Zero dependence on venue Wi-Fi luck)  
+**Intelligence Mode:** Hybrid Live Intelligence (Gemini 2.5 Flash) with Resilient Deterministic Fallback  
 
 ---
 
 ## 1. 3-Minute Lightning Pitch (Executive Summary)
 
 ### The Hook (0:00 – 0:30)
-> *"Respected Jury Members, across India, OPD doctors see 60 to 100 patients every single day. They spend 70% of that precious 4-minute consultation typing names, asking the same routine questions, and deciphering old crumbled prescription slips.  
-> **MedKit AI** transforms clinical intake before the patient even sits in the doctor's chair. Through multilingual speech, adaptive symptom trees, and document digitization, it prepares a verified, provenance-stamped clinical case sheet for the physician.  
-> Crucially: **MedKit AI is NOT an autonomous doctor.** The physician remains in total control at every step."*
+> *"Respected Jury Members, across India, OPD doctors see 60 to 100 patients every single day. They spend 70% of that precious 4-minute consultation typing names, asking routine questions, and deciphering crumpled prescription slips.  
+> **MedKit AI** turns a patient's voice, answers, and medical documents into a verified, structured clinical history—before the doctor begins the consultation.  
+> Crucially: **MedKit AI is NOT an autonomous doctor.** The attending physician remains in total control at every step, with strict clinical copy, deterministic red flag guarantees, and ABDM-aligned consent."*
 
 ### The Core Demo (0:30 – 2:00)
-1. **Patient Registration & Kiosk:**
-   - Register patient (auto-generates `MED-2026-XXXX`).
-   - Switch language to **Telugu** (`తెలుగు`).
-   - Play/Speak: *"ఛాతీలో తీవ్రమైన నొప్పి వస్తోంది, ఎడమ భుజం లాగుతోంది, చాలా చెమటలు పోస్తున్నాయి."*
-   - Show: Speech transcription keeps the verbatim Telugu text for clinical audit while normalizing it into standard clinical English.
-2. **Deterministic Red Flag Safety Signal:**
-   - Immediately show the high-contrast red alert:  
+1. **Intelligence Provider Transparency & Safety Header:**
+   - Point to the header badge: Click **`● Live Intelligence`** (or **`● Demo Mode`**).
+   - Show the Inspector: Explaining the decoupled architecture—Gemini 2.5 Flash for multimodal reasoning, coupled with an 8-second circuit breaker that guarantees zero venue presentation failures.
+2. **Patient Registration & Kiosk Intake with Explicit Consent:**
+   - Open `/intake/new`. Switch language to **Telugu** (`తెలుగు`) or English.
+   - Show explicit clinical consent screen: Patient acknowledges purpose and scope. Consent is immutably persisted with audit trail.
+   - Adaptive symptom questionnaire dynamically branches to the acute cardiac tree upon selecting *"Chest pain / discomfort"*.
+3. **Deterministic Red Flag Safety Signal:**
+   - Immediately show the high-contrast critical alert:  
      `"Potential red flag detected — immediate clinical assessment recommended."`
-   - Point out rule `RF-001` (Cardiovascular Emergency). The system flags the risk; it does not diagnose.
-3. **Prior Document Ingestion:**
-   - Upload/Open prior prescription PDF.
-   - Show side-by-side OCR extraction with confidence score and page-reference attribution.
-4. **Doctor Copilot Review & AYUSH Dashavidha Pariksha:**
+   - Point out rule `RF-001` (Cardiovascular Emergency). Only an authenticated doctor can acknowledge it.
+4. **Prior Document Ingestion & Provenance:**
+   - Upload/Open prior prescription image or PDF.
+   - Show OCR extraction with confidence score and `candidate` medication status until confirmed.
+5. **Doctor Copilot Review & AYUSH Dashavidha Pariksha:**
    - Doctor opens Case Sheet.
-   - Acknowledges red flag signal.
-   - For AYUSH cases: Shows 10-fold examination (Prakriti: *Pitta-Vata*, Vikriti, Sara, Sattva, Ahara-Vihara) with Vaidya verification stamp.
-   - Deterministic AI-assisted summary generated with mandatory disclaimer:  
+   - Generates AI-assisted clinical summary with mandatory disclaimer:  
      `"AI-assisted summary — clinician review required."`
-5. **Finalization & Interoperability:**
+   - For AYUSH cases: Shows 10-fold examination (Prakriti: *Pitta-Vata*, Vikriti, Sara, Sattva, Ahara-Vihara) with Vaidya verification stamp.
+6. **Finalization & Interoperability:**
    - Doctor clicks **Finalize Case**. Mutations are permanently locked (immutability).
    - Click **View FHIR / ABDM Representation**:
      - Shows valid FHIR R4 Bundle (Patient, Encounter, Condition, LOINC Observations).
      - Displays badge: *"FHIR-compatible representation / ABDM integration-ready architecture"*.
 
 ### The Conclusion (2:00 – 3:00)
-> *"MedKit AI solves the root bottleneck of Indian healthcare: doctor burnout and incomplete patient histories. Built with Next.js App Router, Supabase, and Google GenAI, backed by 73 automated tests, and 100% demo-resilient. Thank you."*
+> *"MedKit AI solves the root bottleneck of Indian healthcare: doctor burnout and incomplete patient histories. Built with Next.js App Router, Supabase with RLS, and Google Gemini 2.5 Flash, backed by 105+ automated unit and Playwright E2E tests, and 100% demo-resilient. Thank you."*
 
 ---
 
@@ -47,13 +48,13 @@
 
 | Step | Screen / URL | Action | What to Say / Point Out |
 |---|---|---|---|
-| **1** | `/` (Landing Page) | Point to header safety badge | *"Notice the 'Clinician Controlled' indicator and accessible skip navigation."* |
-| **2** | `/doctor/dashboard` | Log in as Dr. Arvind Swamy | *"Single-click role-based clinical authentication with audit logging."* |
-| **3** | `/doctor/patients` | Search for patient or register | *"Generates standardized MED-2026 codes and checks for duplicate registrations."* |
-| **4** | `/intake/new` | Select Telugu, record speech | *"Bilingual intake: verbatim Telugu preserved alongside normalized clinical concepts."* |
+| **1** | `/` (Landing Page) | Click Provider Badge in Header | *"Notice the 'Live Intelligence' / 'Demo Mode' indicator revealing provider health, Gemini model status, and fallback guarantees."* |
+| **2** | `/doctor/dashboard` | Log in as Dr. Ananya Rao (`doctor@medkit.ai`) | *"Cryptographic HMAC-SHA256 session token with timing-safe verification and role authorization."* |
+| **3** | `/doctor/patients` | Search for patient or register | *"Standardized MED-2026 codes and instant duplicate detection."* |
+| **4** | `/intake/new` | Select Telugu, complete consent | *"Bilingual intake: verifiable patient consent stored before any interview data is compiled."* |
 | **5** | `/doctor/cases/[id]` | Case Sheet view | *"Red flag banner requires explicit physician acknowledgment. Prior OCR medications are tagged with candidate status until confirmed."* |
 | **6** | `/doctor/cases/[id]` | Toggle AYUSH tab | *"Comprehensive Dashavidha Pariksha and Ahara-Vihara tailored for Ayurvedic clinical practice."* |
-| **7** | `/doctor/cases/[id]` | Click 'Finalize Case' | *"Once finalized, the case becomes tamper-evident and immutable."* |
+| **7** | `/doctor/cases/[id]` | Click 'Finalize Case' | *"Once finalized, the case becomes tamper-evident and immutable with clinician provenance."* |
 | **8** | Modal Drawer | Click 'FHIR / ABDM Preview' | *"Instant HL7 FHIR R4 bundle with LOINC vital codes, ready for NRCES ABDM sandbox ingestion."* |
 | **9** | `/doctor/cases/[id]/print` | Click 'Print Clinical Sheet' | *"Print-optimized PDF case sheet with hospital header, doctor signature block, and mandatory disclaimers."* |
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Activity, Stethoscope, Users, FileText, ShieldAlert, Sparkles } from "lucide-react";
+import { ProviderBadge } from "./provider-badge";
 
 export function Header() {
   return (
@@ -42,10 +43,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500 bg-surface-100 px-2.5 py-1.5 rounded-md border border-surface-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-medium">Clinician Controlled</span>
-          </div>
+          <ProviderBadge />
 
           <Link
             href="/intake/new"
