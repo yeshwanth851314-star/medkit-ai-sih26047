@@ -72,3 +72,37 @@ This document records the foundational and ongoing technical and product decisio
   - Documents: *"Extracted from uploaded document — verify before use."*
 - **Trade-offs:** Requires deliberate copy review and prevents flashy but irresponsible "AI Diagnostic" claims.
 - **Date:** 2026-09-06
+
+---
+
+## ADR-006: AYUSH Assessment Integration via Dashavidha Pariksha
+
+- **Decision:** Integrate traditional Indian medicine principles into MedKit AI via a dedicated AYUSH case type featuring Dashavidha Pariksha (10-fold examination: Prakriti, Vikriti, Sara, Samhanana, Pramana, Satmya, Sattva, Ahara Shakti, Vyayama Shakti, Vaya) and Ahara-Vihara evaluation.
+- **Context:** SIH Problem Statement SIH26047 is sponsored by the Ministry of Ayush / All India Institute of Ayurveda (AIIA). The software must accommodate both modern Allopathic workflows and Ayurvedic holistic assessment.
+- **Chosen option:** Implement specialized AYUSH data structures with clinician review and verification workflows.
+- **Why:** Delivers authentic, respectful clinical utility for Ayurvedic Vaidyas while maintaining interoperability with allopathic records.
+- **Trade-offs:** Additional form inputs and vocabulary requirements; solved via structured select inputs and presets.
+- **Date:** 2026-09-06
+
+---
+
+## ADR-007: Interoperability Boundary & FHIR R4 / ABDM representation
+
+- **Decision:** Implement FHIR R4 bundle mapping with ABDM profile metadata (`https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact`) covering Patient, Encounter, Condition, LOINC Observations, Allergies, and Medications, strictly labeled *"FHIR-compatible representation / ABDM integration-ready architecture"*.
+- **Context:** Alignment with Ayushman Bharat Digital Mission (ABDM) guidelines is crucial for national health stack integration.
+- **Chosen option:** Generate valid FHIR R4 JSON bundles internally with ABHA identifier mapping and NRCES profiles.
+- **Why:** Demonstrates architecture readiness for sandbox certification without making fraudulent claims of live production ABDM gateway connectivity during the hackathon.
+- **Trade-offs:** Must maintain bundle mapping fidelity alongside native database schemas.
+- **Date:** 2026-09-06
+
+---
+
+## ADR-008: Offline-First Resilience & Deterministic Fallbacks
+
+- **Decision:** Implement client-side offline queuing for case drafts and deterministic local rule engines for safety-critical evaluations.
+- **Context:** Primary Health Centres (PHCs) and rural health camps often face intermittent or absent internet connectivity.
+- **Chosen option:** Offline mutation queue with retry logic and deterministic summarization / red-flag evaluation that functions 100% offline without remote AI connectivity.
+- **Why:** Eliminates single points of failure, preserves patient history at the edge, and ensures 100% demo reliability under live judging conditions.
+- **Trade-offs:** Local queues must be explicitly synced upon reconnection.
+- **Date:** 2026-09-06
+
