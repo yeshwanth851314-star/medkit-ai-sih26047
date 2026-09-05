@@ -57,10 +57,16 @@ export async function updateCaseDraft(
   if (updates.familyHistory !== undefined) patch.family_history = updates.familyHistory;
   if (updates.personalHistory !== undefined) patch.personal_history = updates.personalHistory;
   if (updates.medicationHistory !== undefined) patch.medication_history = updates.medicationHistory;
+  if ((updates as any).medication_history !== undefined) patch.medication_history = (updates as any).medication_history;
   if (updates.allergyHistory !== undefined) patch.allergy_history = updates.allergyHistory;
+  if ((updates as any).allergy_history !== undefined) patch.allergy_history = (updates as any).allergy_history;
   if (updates.examination !== undefined) patch.examination = updates.examination;
   if (updates.assessmentPlan !== undefined) patch.assessment_plan = updates.assessmentPlan;
+  if ((updates as any).assessment_plan !== undefined) patch.assessment_plan = (updates as any).assessment_plan;
   if (updates.ayushAssessment !== undefined) patch.ayush_assessment = updates.ayushAssessment;
+  if ((updates as any).ayush_assessment !== undefined) patch.ayush_assessment = (updates as any).ayush_assessment;
+  if ((updates as any).red_flags !== undefined) patch.red_flags = (updates as any).red_flags;
+  if ((updates as any).redFlags !== undefined) patch.red_flags = (updates as any).redFlags;
   if (updates.provenance !== undefined) patch.provenance = updates.provenance;
 
   const updated = await updateCase(id, patch);

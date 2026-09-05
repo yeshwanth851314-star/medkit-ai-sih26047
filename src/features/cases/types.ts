@@ -37,6 +37,7 @@ export const examinationSchema = z.object({
   spo2: z.string().optional().nullable(),
   general: z.string().optional().nullable(),
   systemic: z.string().optional().nullable(),
+  vitals: z.record(z.any()).optional().nullable(),
 });
 
 export const assessmentPlanSchema = z.object({
@@ -59,6 +60,8 @@ export const caseInputSchema = z.object({
   examination: examinationSchema.optional().nullable(),
   assessmentPlan: assessmentPlanSchema.optional().nullable(),
   ayushAssessment: z.record(z.any()).optional().nullable(),
+  redFlags: z.array(z.record(z.any())).optional().nullable(),
+  red_flags: z.array(z.record(z.any())).optional().nullable(),
   status: z.enum(["draft", "final"]).default("draft"),
   provenance: z.record(z.enum(["patient", "clinician", "ocr", "ai", "system/rule"])).optional().nullable(),
 });
