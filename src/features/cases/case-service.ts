@@ -8,6 +8,7 @@ export async function createCaseDraft(
 ): Promise<ClinicalCase> {
   const newCase = await createCase({
     patient_id: input.patientId,
+    consent_id: input.consentId || null,
     created_by: createdBy || null,
     status: "draft",
     case_type: input.caseType,

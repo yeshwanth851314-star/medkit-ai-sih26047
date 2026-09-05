@@ -5,6 +5,7 @@ class MockDatabaseAdapter {
   private patients: Map<string, Patient> = new Map();
   private cases: Map<string, ClinicalCase> = new Map();
   private documents: Map<string, MedicalDocument> = new Map();
+  private consents: Map<string, any> = new Map();
   private auditLogs: AuditLogEntry[] = [];
   private isInitialized = false;
 
@@ -147,6 +148,42 @@ class MockDatabaseAdapter {
   // Documents
   async getDocumentsByPatientId(patientId: string): Promise<MedicalDocument[]> {
     return Array.from(this.documents.values()).filter((d) => d.patient_id === patientId);
+  }
+
+  // Consents
+  async recordConsent(data: any): Promise<any> {
+    const id = data.id || crypto.randomUUID();
+    const now = new Date().toISOString();
+    const record = {
+      ...data,
+      id,
+      consent_timestamp: data.consent_timestamp || now,
+      revoked: false,
+      created_at: now,
+    };
+    this.consents.set(id, record);
+    return record;
+  }
+
+  async getConsentById(id: string): Promise<any | null> {
+    return this.consents.get(id) || null;
+  }
+
+  async getConsentByPatientId(patientId: string): Promise<any | null> {
+    const list = Array.from(this.consents.values()).filter((c) => c.patient_id === patientId);
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || null;
+  }
+
+  async revokeConsent(id: string): Promise<any | null> {
+    const existing = this.consents.get(id);
+    if (!existing) return null;
+    const updated = {
+      ...existing,
+      revoked: true,
+      revoked_at: new Date().toISOString(),
+    };
+    this.consents.set(id, updated);
+    return updated;
   }
 
   // Audit Logs

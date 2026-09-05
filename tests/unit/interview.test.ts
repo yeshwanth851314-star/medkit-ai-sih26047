@@ -1,13 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   createInterviewSession,
   submitInterviewAnswer,
   compileInterviewToCase,
   getInterviewSession,
 } from "../../src/features/interview/interview-service";
+import { recordPatientConsent } from "../../src/features/consent/consent-service";
 
 describe("Phase 8: Adaptive Question Engine Tests", () => {
   const patientId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(async () => {
+    await recordPatientConsent({
+      patientId,
+      language: "en",
+      consentMethod: "touch_acknowledgement",
+      scope: ["voice_recording", "document_extraction", "ai_summary"],
+    });
+  });
 
   it("initializes an interview session with Q_CHIEF_COMPLAINT entry question", () => {
     const session = createInterviewSession(patientId, "en");

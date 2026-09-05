@@ -47,6 +47,7 @@ export const assessmentPlanSchema = z.object({
 
 export const caseInputSchema = z.object({
   patientId: z.string().uuid("Valid patient UUID required"),
+  consentId: z.string().optional().nullable(),
   caseType: z.enum(["general", "ayush"]).default("general"),
   patientLanguage: z.string().default("en"),
   chiefComplaint: z.string().min(3, "Chief complaint must be at least 3 characters"),

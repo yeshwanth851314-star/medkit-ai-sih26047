@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createInterviewSession, getCurrentQuestion } from "@/features/interview/interview-service";
+import { recordPatientConsent } from "@/features/consent/consent-service";
 
 export async function POST(request: Request) {
   try {
@@ -7,11 +8,23 @@ export async function POST(request: Request) {
     const patientId = body.patientId || "11111111-1111-4111-8111-111111111111"; // Fallback to synthetic demo patient if needed
     const language = body.language === "te" ? "te" : "en";
 
-    const session = createInterviewSession(patientId, language);
+    let consentId = body.consentId;
+    if (!consentId) {
+      const consentRecord = await recordPatientConsent({
+        patientId,
+        language,
+        consentMethod: body.consentMethod || "touch_acknowledgement",
+        scope: ["voice_recording", "document_extraction", "ai_summary"],
+      });
+      consentId = consentRecord.id;
+    }
+
+    const session = createInterviewSession(patientId, language, consentId);
     const initialQuestion = getCurrentQuestion(session);
 
     return NextResponse.json({
       sessionId: session.id,
+      consentId,
       session,
       currentQuestion: initialQuestion,
     });
@@ -20,3 +33,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to start interview session" }, { status: 500 });
   }
 }
+

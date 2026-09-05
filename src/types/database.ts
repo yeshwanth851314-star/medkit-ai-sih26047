@@ -100,6 +100,7 @@ export interface AyushAssessment {
 export interface ClinicalCase {
   id: string;
   patient_id: string;
+  consent_id?: string | null;
   created_by?: string | null;
   status: CaseStatus;
   case_type: CaseType;

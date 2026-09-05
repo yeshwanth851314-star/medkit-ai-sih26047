@@ -2,17 +2,20 @@ import { InterviewSession, QuestionNode } from "./types";
 import { QUESTION_GRAPH } from "./question-graph";
 import { createCaseDraft } from "@/features/cases/case-service";
 import { ClinicalCase } from "@/types/database";
+import { verifyPatientConsent } from "@/features/consent/consent-service";
 
 const activeSessions: Map<string, InterviewSession> = new Map();
 
 export function createInterviewSession(
   patientId: string,
-  language: "en" | "te" = "en"
+  language: "en" | "te" = "en",
+  consentId?: string | null
 ): InterviewSession {
   const sessionId = crypto.randomUUID();
   const session: InterviewSession = {
     id: sessionId,
     patientId,
+    consentId: consentId || null,
     language,
     status: "active",
     consentGiven: true,
@@ -81,6 +84,12 @@ export async function compileInterviewToCase(sessionId: string): Promise<Clinica
   const session = activeSessions.get(sessionId);
   if (!session) throw new Error("Interview session not found");
 
+  // Verify clinical consent is active and not revoked
+  const consentCheck = await verifyPatientConsent(session.patientId);
+  if (!consentCheck.valid) {
+    throw new Error(`CONSENT_REQUIRED: ${consentCheck.reason || "Patient clinical consent is required before compiling case intake"}`);
+  }
+
   const answers = session.answers;
   const chiefComplaint = answers.chief_complaint?.rawAnswer || "General clinical intake";
 
@@ -100,9 +109,10 @@ export async function compileInterviewToCase(sessionId: string): Promise<Clinica
     hpi.associated_symptoms.push(answers.cough_fever.rawAnswer);
   }
 
-  // Create Case Draft
+  // Create Case Draft with linked consent
   const newCase = await createCaseDraft({
     patientId: session.patientId,
+    consentId: session.consentId || consentCheck.consent?.id || null,
     caseType: "general",
     patientLanguage: session.language,
     chiefComplaint,

@@ -29,6 +29,7 @@ export interface CapturedAnswer {
 export interface InterviewSession {
   id: string;
   patientId: string;
+  consentId?: string | null;
   language: "en" | "te";
   status: "active" | "submitted" | "abandoned";
   consentGiven: boolean;
