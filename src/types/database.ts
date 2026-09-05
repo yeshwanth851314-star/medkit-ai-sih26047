@@ -91,6 +91,9 @@ export interface AyushAssessment {
     dietary_habits?: string | null;
     daily_routine?: string | null;
   } | null;
+  source?: "clinician" | "patient" | "ai" | null;
+  verifiedBy?: string | null;
+  verifiedAt?: string | null;
 }
 
 export interface ClinicalCase {
