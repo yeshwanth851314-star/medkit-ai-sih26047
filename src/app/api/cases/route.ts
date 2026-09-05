@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { caseInputSchema } from "@/features/cases/types";
 import { createCaseDraft } from "@/features/cases/case-service";
-import { getCurrentUser } from "@/lib/auth/session";
+import { requireApiAuth } from "@/lib/auth/api-guard";
+import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function POST(request: Request) {
+  const auth = await requireApiAuth(request, {
+    allowedRoles: ["doctor", "clinician", "admin", "staff"],
+  });
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const body = await request.json();
     const validated = caseInputSchema.safeParse(body);
@@ -15,8 +21,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await getCurrentUser();
-    const newCase = await createCaseDraft(validated.data, user?.id);
+    const newCase = await createCaseDraft(validated.data, auth.user.id);
+
+    await logAuditEvent({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      action: "CREATE_CASE",
+      resourceType: "cases",
+      resourceId: newCase.id,
+      metadata: { case_type: newCase.case_type, status: newCase.status },
+    });
 
     return NextResponse.json({ success: true, case: newCase }, { status: 201 });
   } catch (err) {

@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { buildPatientTimeline, compareConsecutiveVisits } from "@/features/timeline/timeline-service";
+import { requireApiAuth } from "@/lib/auth/api-guard";
+import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ patientId: string }> }
 ) {
+  const auth = await requireApiAuth(request);
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const { patientId } = await params;
     const { searchParams } = new URL(request.url);
@@ -15,6 +20,15 @@ export async function GET(
       compareConsecutiveVisits(patientId, targetCaseId),
     ]);
 
+    await logAuditEvent({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      action: "READ_TIMELINE",
+      resourceType: "patients",
+      resourceId: patientId,
+      metadata: { action: "view_timeline", targetCaseId },
+    });
+
     return NextResponse.json({
       milestones,
       comparison,
@@ -24,3 +38,4 @@ export async function GET(
     return NextResponse.json({ error: "Failed to construct patient timeline" }, { status: 500 });
   }
 }
+

@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { validateDocumentFile } from "@/features/documents/document-service";
 import { getDocumentsByPatientId } from "@/lib/db/supabase";
-import { mockDb } from "@/lib/db/mock-adapter";
+import { requireApiAuth } from "@/lib/auth/api-guard";
+import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(request: Request) {
+  const auth = await requireApiAuth(request);
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get("patientId");
@@ -13,6 +17,16 @@ export async function GET(request: Request) {
     }
 
     const documents = await getDocumentsByPatientId(patientId);
+
+    await logAuditEvent({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      action: "READ_DOCUMENT",
+      resourceType: "documents",
+      resourceId: patientId,
+      metadata: { count: documents.length },
+    });
+
     return NextResponse.json({ documents });
   } catch (err: any) {
     console.error("GET /api/documents error:", err);
@@ -21,6 +35,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiAuth(request);
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const body = await request.json();
     const { patientId, fileName, mimeType, sizeBytes, documentType } = body;
@@ -41,7 +58,7 @@ export async function POST(request: Request) {
       id: docId,
       patient_id: patientId,
       case_id: null,
-      uploaded_by: "system",
+      uploaded_by: auth.user.fullName || auth.user.id,
       storage_path: `/private/documents/${patientId}/${docId}`,
       original_filename: fileName,
       mime_type: mimeType,
@@ -51,9 +68,19 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
+    await logAuditEvent({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      action: "UPLOAD_DOCUMENT",
+      resourceType: "documents",
+      resourceId: docId,
+      metadata: { fileName, mimeType, patientId },
+    });
+
     return NextResponse.json({ success: true, document: newDoc }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/documents error:", err);
     return NextResponse.json({ error: "Failed to upload document" }, { status: 500 });
   }
 }
+

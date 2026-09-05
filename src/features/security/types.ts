@@ -4,16 +4,22 @@ export type AuditAction =
   | "AUTH_LOGIN"
   | "AUTH_LOGOUT"
   | "CREATE_PATIENT"
+  | "READ_PATIENT"
   | "UPDATE_PATIENT"
   | "CREATE_CASE"
+  | "READ_CASE"
   | "UPDATE_CASE"
   | "FINALIZE_CASE"
   | "ACKNOWLEDGE_RED_FLAG"
   | "UPLOAD_DOCUMENT"
+  | "READ_DOCUMENT"
   | "CONFIRM_DOCUMENT_OCR"
+  | "READ_TIMELINE"
+  | "CONSENT_RECORDED"
   | "VERIFY_AYUSH"
   | "VERIFY_MULTILINGUAL"
   | "EXPORT_FHIR";
+
 
 export interface ClinicalAuditLog {
   id: string;

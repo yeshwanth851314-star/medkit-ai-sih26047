@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { searchPatients, registerPatient, checkDuplicatePatient } from "@/features/patients/patient-service";
+import { searchPatients, registerPatient } from "@/features/patients/patient-service";
 import { patientRegistrationSchema } from "@/features/patients/types";
+import { requireApiAuth } from "@/lib/auth/api-guard";
+import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(request: Request) {
+  const auth = await requireApiAuth(request, {
+    allowedRoles: ["doctor", "clinician", "admin", "staff"],
+  });
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("search") || undefined;
@@ -15,6 +22,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiAuth(request, {
+    allowedRoles: ["doctor", "clinician", "admin", "staff"],
+  });
+  if ("errorResponse" in auth) return auth.errorResponse;
+
   try {
     const body = await request.json();
     const validated = patientRegistrationSchema.safeParse(body);
@@ -38,6 +50,15 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
+
+    await logAuditEvent({
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      action: "CREATE_PATIENT",
+      resourceType: "patients",
+      resourceId: result.patient.id,
+      metadata: { patient_code: result.patient.patient_code },
+    });
 
     return NextResponse.json({ success: true, patient: result.patient }, { status: 201 });
   } catch (err) {

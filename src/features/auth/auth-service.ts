@@ -2,6 +2,8 @@ import { env } from "@/config/env";
 import { getSupabaseClient } from "@/lib/db/supabase";
 import { AuthUser, LoginCredentials } from "./types";
 
+import { signSessionToken, verifySessionToken } from "@/lib/auth/jwt";
+
 // Known synthetic demo clinical users for reliable hackathon presentation
 export const DEMO_USERS: Record<string, AuthUser & { passwordHash: string }> = {
   "doctor@medkit.ai": {
@@ -50,15 +52,18 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
       .eq("id", data.user.id)
       .single();
 
+    const authUser: AuthUser = {
+      id: data.user.id,
+      email: data.user.email || credentials.email,
+      fullName: profile?.full_name || "Doctor",
+      role: profile?.role || "doctor",
+      facilityId: profile?.facility_id || null,
+    };
+
+    const token = signSessionToken(authUser);
     return {
-      user: {
-        id: data.user.id,
-        email: data.user.email || credentials.email,
-        fullName: profile?.full_name || "Doctor",
-        role: profile?.role || "doctor",
-        facilityId: profile?.facility_id || null,
-      },
-      token: data.session?.access_token || crypto.randomUUID(),
+      user: authUser,
+      token,
     };
   }
 
@@ -66,11 +71,10 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
   const demoAccount = DEMO_USERS[credentials.email.toLowerCase().trim()];
   if (demoAccount && demoAccount.passwordHash === credentials.password) {
     const { passwordHash, ...user } = demoAccount;
-    // Generate secure opaque token format: base64 encoded user info + signature
-    const tokenPayload = Buffer.from(JSON.stringify(user)).toString("base64");
+    const token = signSessionToken(user);
     return {
       user,
-      token: `demo-session-${tokenPayload}`,
+      token,
     };
   }
 
@@ -78,17 +82,5 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
 }
 
 export function parseSessionToken(token: string): AuthUser | null {
-  if (!token) return null;
-
-  if (token.startsWith("demo-session-")) {
-    try {
-      const payloadBase64 = token.replace("demo-session-", "");
-      const jsonStr = Buffer.from(payloadBase64, "base64").toString("utf-8");
-      return JSON.parse(jsonStr) as AuthUser;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  return verifySessionToken(token);
 }
