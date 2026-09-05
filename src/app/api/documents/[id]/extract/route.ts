@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { processDocumentExtraction } from "@/features/documents/document-service";
+import { getOCRProvider } from "@/features/documents/ocr-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
@@ -12,7 +12,8 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const extraction = await processDocumentExtraction(id);
+    const ocrProvider = getOCRProvider();
+    const extraction = await ocrProvider.extract({ documentId: id });
 
     await logAuditEvent({
       actorId: auth.user.id,
@@ -39,7 +40,15 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const extraction = await processDocumentExtraction(id);
+    const body = await request.json().catch(() => ({}));
+    const ocrProvider = getOCRProvider();
+    const extraction = await ocrProvider.extract({
+      documentId: id,
+      imageBase64: body.imageBase64,
+      mimeType: body.mimeType,
+      fileName: body.fileName,
+      mockId: body.mockId,
+    });
 
     await logAuditEvent({
       actorId: auth.user.id,
@@ -47,7 +56,7 @@ export async function POST(
       action: "CONFIRM_DOCUMENT_OCR",
       resourceType: "documents",
       resourceId: id,
-      metadata: { action: "run_extraction" },
+      metadata: { action: "run_extraction", provider: extraction.providerMeta?.provider },
     });
 
     return NextResponse.json({ extraction });

@@ -38,6 +38,7 @@ export const documentExtractionResultSchema = z.object({
   disclaimer: z.string(),
   status: processingStatusSchema,
   errorMessage: z.string().optional().nullable(),
+  providerMeta: z.record(z.any()).optional(),
 });
 
 export type DocumentExtractionResult = z.infer<typeof documentExtractionResultSchema>;

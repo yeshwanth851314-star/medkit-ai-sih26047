@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateDeterministicSummary, generateAIAssistedSummary } from "@/features/summaries/summary-service";
+import { generateDeterministicSummary } from "@/features/summaries/summary-service";
+import { getAIProvider } from "@/features/ai/ai-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 
 export async function GET(
@@ -35,8 +36,9 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const useAI = body.type === "ai_assisted";
 
+    const aiProvider = getAIProvider();
     const summary = useAI
-      ? await generateAIAssistedSummary(id)
+      ? await aiProvider.generateClinicalSummary(id)
       : await generateDeterministicSummary(id);
 
     return NextResponse.json({ summary });

@@ -10,6 +10,7 @@ const envSchema = z.object({
   supabaseServiceKey: z.string().optional().default(""),
   geminiApiKey: z.string().optional().default(""),
   geminiModel: z.string().default("gemini-2.5-flash"),
+  preferLiveProviders: z.boolean().default(false),
   logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 
@@ -26,6 +27,7 @@ export function getEnvConfig(): EnvConfig {
     supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     geminiModel: process.env.GEMINI_MODEL,
+    preferLiveProviders: process.env.PREFER_LIVE_PROVIDERS === "true",
     logLevel: process.env.LOG_LEVEL as any,
   };
 

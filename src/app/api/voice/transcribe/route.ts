@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { processSpeechTranscription } from "@/features/voice/voice-service";
+import { getSpeechProvider } from "@/features/voice/speech-provider";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const result = await processSpeechTranscription({
+    const speechProvider = getSpeechProvider();
+
+    const result = await speechProvider.transcribe({
       audioBase64: body.audioBase64,
+      mimeType: body.mimeType,
       language: body.language || "en",
       mockId: body.mockId,
     });
