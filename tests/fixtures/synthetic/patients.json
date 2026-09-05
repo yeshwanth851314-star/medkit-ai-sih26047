@@ -1,0 +1,75 @@
+[
+  {
+    "_syntheticNotice": "DEMO ONLY: All data is completely synthetic. No real patient information.",
+    "id": "11111111-1111-4111-8111-111111111111",
+    "patient_code": "MED-2026-0001",
+    "full_name": "Ramesh Kumar Varma",
+    "date_of_birth": "1978-05-14",
+    "gender": "Male",
+    "phone": "+91-98765-00001",
+    "address": "Plot 42, Hitech City Road, Hyderabad, Telangana",
+    "blood_group": "B+",
+    "emergency_contact": {
+      "name": "Sunita Varma",
+      "relationship": "Spouse",
+      "phone": "+91-98765-00002"
+    },
+    "category": "normal_patient"
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: All data is completely synthetic. No real patient information.",
+    "id": "22222222-2222-4222-8222-222222222222",
+    "patient_code": "MED-2026-0002",
+    "full_name": "Lakshmi Narayana Rao",
+    "date_of_birth": "1964-11-20",
+    "gender": "Male",
+    "phone": "+91-98765-00003",
+    "address": "D.No 12-4-15, Gandhinagar, Vijayawada, Andhra Pradesh",
+    "blood_group": "O+",
+    "emergency_contact": {
+      "name": "Srinivas Rao",
+      "relationship": "Son",
+      "phone": "+91-98765-00004"
+    },
+    "category": "cardiac_red_flag_patient"
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: All data is completely synthetic. No real patient information.",
+    "id": "33333333-3333-4333-8333-333333333333",
+    "patient_code": "MED-2026-0003",
+    "full_name": "Ananya Sharma",
+    "date_of_birth": "1995-03-08",
+    "gender": "Female",
+    "phone": "+91-98765-00005",
+    "address": "103 Green Park Residency, Indiranagar, Bengaluru, Karnataka",
+    "blood_group": "A+",
+    "emergency_contact": null,
+    "category": "ayush_intake_patient"
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: Incomplete profile for boundary testing.",
+    "id": "44444444-4444-4444-8444-444444444444",
+    "patient_code": "MED-2026-0004",
+    "full_name": "Unknown Visitor",
+    "date_of_birth": null,
+    "gender": "Unknown",
+    "phone": null,
+    "address": null,
+    "blood_group": null,
+    "emergency_contact": null,
+    "category": "incomplete_patient"
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: Duplicate suspect fixture matching Ramesh Kumar Varma.",
+    "id": "55555555-5555-4555-8555-555555555555",
+    "patient_code": "MED-2026-0005",
+    "full_name": "Ramesh K. Varma",
+    "date_of_birth": "1978-05-14",
+    "gender": "Male",
+    "phone": "+91-98765-00001",
+    "address": "Hyderabad",
+    "blood_group": "B+",
+    "emergency_contact": null,
+    "category": "duplicate_suspect_patient"
+  }
+]

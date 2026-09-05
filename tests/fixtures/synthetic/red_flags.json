@@ -1,0 +1,51 @@
+[
+  {
+    "rule_id": "RED_FLAG_ACUTE_CHEST_PAIN",
+    "version": "1.0",
+    "name": "Acute Ischemic / Coronary Red Flag",
+    "severity": "critical",
+    "triggers": {
+      "chief_complaint_keywords": ["chest pain", "chest pressure", "crushing", "retrosternal", "ఛాతీలో నొప్పి"],
+      "radiation": ["left arm", "left shoulder", "jaw", "back"],
+      "associated_symptoms": ["diaphoresis", "sweating", "dyspnea", "shortness of breath", "nausea"]
+    },
+    "message": "Potential red flag detected — acute crushing chest pain with radiation and diaphoresis. Immediate clinical assessment recommended.",
+    "clinical_rationale": "Symptoms suggest possible Acute Coronary Syndrome (ACS) or acute cardiac event requiring urgent ECG and clinical evaluation."
+  },
+  {
+    "rule_id": "RED_FLAG_ACUTE_BREATHLESSNESS",
+    "version": "1.0",
+    "name": "Acute Respiratory Distress Red Flag",
+    "severity": "critical",
+    "triggers": {
+      "chief_complaint_keywords": ["breathlessness", "cannot breathe", "stridor", "gasping", "ఆయాసం"],
+      "associated_symptoms": ["cyanosis", "unable to speak in sentences", "wheezing at rest"]
+    },
+    "message": "Potential red flag detected — acute severe respiratory compromise. Immediate clinical assessment recommended.",
+    "clinical_rationale": "High risk of acute pulmonary embolism, severe asthma/COPD exacerbation, or pneumothorax."
+  },
+  {
+    "rule_id": "RED_FLAG_ACUTE_NEURO_DEFICIT",
+    "version": "1.0",
+    "name": "Acute Neurological / Stroke Red Flag",
+    "severity": "critical",
+    "triggers": {
+      "chief_complaint_keywords": ["facial droop", "arm weakness", "slurred speech", "sudden vision loss", "మాట తడబడటం"],
+      "onset": "sudden"
+    },
+    "message": "Potential red flag detected — sudden onset focal neurological deficit. Immediate clinical assessment recommended.",
+    "clinical_rationale": "Suspicion of acute cerebrovascular event (Stroke) requiring immediate FAST assessment and stroke protocol activation."
+  },
+  {
+    "rule_id": "RED_FLAG_ANAPHYLAXIS",
+    "version": "1.0",
+    "name": "Acute Anaphylaxis / Severe Allergic Reaction",
+    "severity": "critical",
+    "triggers": {
+      "chief_complaint_keywords": ["throat swelling", "lip swelling", "diffuse urticaria after injection or medication", "wheeze after food"],
+      "associated_symptoms": ["hypotension", "dizziness", "stridor"]
+    },
+    "message": "Potential red flag detected — acute airway compromise or systemic allergic reaction. Immediate clinical assessment recommended.",
+    "clinical_rationale": "Possible anaphylactic shock requiring immediate IM epinephrine and airway management."
+  }
+]

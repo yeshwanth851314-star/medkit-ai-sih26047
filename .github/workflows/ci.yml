@@ -1,0 +1,43 @@
+name: MedKit AI CI Quality Gate
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Secret Leaks / Environment Hygiene
+        run: |
+          if grep -rn "sk-ant" . --exclude-dir=node_modules || grep -rn "AIzaSy" . --exclude-dir=node_modules; then
+            echo "::error::Potential hardcoded secrets detected!"
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit & Domain Integration Tests
+        run: npm run test:unit
+
+      - name: Production Build
+        run: npm run build

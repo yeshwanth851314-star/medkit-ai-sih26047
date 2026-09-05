@@ -1,0 +1,240 @@
+[
+  {
+    "_syntheticNotice": "DEMO ONLY: All clinical data is synthetic.",
+    "id": "c1111111-1111-4111-8111-111111111111",
+    "patient_id": "11111111-1111-4111-8111-111111111111",
+    "status": "final",
+    "case_type": "general",
+    "patient_language": "en",
+    "created_at": "2026-08-10T10:00:00Z",
+    "finalized_at": "2026-08-10T10:25:00Z",
+    "chief_complaint": "Persistent dry cough for 2 weeks with throat irritation",
+    "hpi": {
+      "onset": "2 weeks ago, gradual",
+      "duration": "14 days",
+      "character": "Dry, hacking, non-productive",
+      "severity": "Moderate, disturbing sleep",
+      "aggravating_factors": "Cold air, night time",
+      "relieving_factors": "Warm water sips",
+      "associated_symptoms": ["mild throat tickle", "occasional rhinitis"],
+      "denies": ["fever", "shortness of breath", "chest pain", "hemoptysis"]
+    },
+    "past_history": {
+      "chronic_conditions": ["Seasonal allergic rhinitis"],
+      "surgeries": [],
+      "hospitalizations": []
+    },
+    "family_history": {
+      "conditions": ["Father: Type 2 Diabetes Mellitus", "Mother: Hypertension"]
+    },
+    "personal_history": {
+      "diet": "Vegetarian",
+      "sleep": "6 hours, disturbed by cough",
+      "smoking": "Never",
+      "alcohol": "Never"
+    },
+    "medication_history": [
+      {
+        "name": "Cetirizine 10mg",
+        "dose": "1 tab at bedtime",
+        "duration": "5 days",
+        "source": "patient"
+      }
+    ],
+    "allergy_history": [
+      {
+        "substance": "Dust / Pollen",
+        "reaction": "Sneezing and rhinorrhea",
+        "severity": "Mild",
+        "source": "patient"
+      }
+    ],
+    "examination": {
+      "blood_pressure": "120/80 mmHg",
+      "pulse": "74 bpm",
+      "temperature": "98.4 F",
+      "respiratory_rate": "16 /min",
+      "spo2": "99% on room air",
+      "throat": "Mild pharyngeal congestion, no exudates",
+      "lungs": "Clear to auscultation bilaterally, no wheeze"
+    },
+    "assessment_plan": {
+      "summary": "Post-viral / allergic cough. No signs of lower respiratory tract infection.",
+      "plan": "Continue warm fluids, saline gargles, Levocetirizine 5mg for 5 days. Return if fever develops."
+    },
+    "provenance": {
+      "chief_complaint": "patient",
+      "hpi": "patient",
+      "medications": "patient",
+      "examination": "clinician",
+      "assessment_plan": "clinician"
+    }
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: Current intake case demonstrating progression from previous visit.",
+    "id": "c2222222-2222-4222-8222-222222222222",
+    "patient_id": "11111111-1111-4111-8111-111111111111",
+    "status": "draft",
+    "case_type": "general",
+    "patient_language": "en",
+    "created_at": "2026-09-06T09:30:00Z",
+    "finalized_at": null,
+    "chief_complaint": "Cough has worsened, now productive with low-grade fever for 3 days",
+    "hpi": {
+      "onset": "3 days ago fever started, cough productive with yellow sputum",
+      "duration": "3 days of fever, 27 days total cough",
+      "character": "Productive, purulent sputum",
+      "severity": "Moderate to severe",
+      "associated_symptoms": ["low-grade fever (100 F)", "fatigue", "mild chest heaviness with coughing"],
+      "denies": ["hemoptysis", "severe breathlessness"]
+    },
+    "past_history": {
+      "chronic_conditions": ["Seasonal allergic rhinitis"]
+    },
+    "family_history": {
+      "conditions": ["Father: Type 2 Diabetes Mellitus"]
+    },
+    "personal_history": {
+      "diet": "Vegetarian",
+      "sleep": "Poor due to cough"
+    },
+    "medication_history": [
+      {
+        "name": "Levocetirizine 5mg",
+        "dose": "1 tab daily",
+        "duration": "10 days",
+        "source": "patient"
+      },
+      {
+        "name": "Paracetamol 650mg",
+        "dose": "SOS for fever (2 doses taken)",
+        "duration": "2 days",
+        "source": "patient"
+      }
+    ],
+    "allergy_history": [
+      {
+        "substance": "Dust / Pollen",
+        "reaction": "Sneezing and rhinorrhea",
+        "severity": "Mild",
+        "source": "patient"
+      }
+    ],
+    "examination": {
+      "blood_pressure": "124/82 mmHg",
+      "pulse": "84 bpm",
+      "temperature": "100.2 F",
+      "spo2": "97% on room air"
+    },
+    "assessment_plan": {
+      "summary": "",
+      "plan": ""
+    },
+    "provenance": {
+      "chief_complaint": "patient",
+      "hpi": "patient",
+      "medications": "patient"
+    }
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: High-salience potential red flag cardiac case.",
+    "id": "c3333333-3333-4333-8333-333333333333",
+    "patient_id": "22222222-2222-4222-8222-222222222222",
+    "status": "draft",
+    "case_type": "general",
+    "patient_language": "te",
+    "created_at": "2026-09-06T10:15:00Z",
+    "finalized_at": null,
+    "chief_complaint": "Severe crushing retrosternal chest pain radiating to left shoulder and jaw with profuse sweating for 45 minutes",
+    "raw_patient_complaint": "ఛాతీలో తీవ్రమైన నొప్పి, ఎడమ చేయి మరియు దవడకు లాగుతోంది, చెమటలు ఎక్కువగా పడుతున్నాయి (45 నిమిషాల నుంచి)",
+    "hpi": {
+      "onset": "Acute onset 45 minutes ago while climbing stairs",
+      "duration": "45 minutes, continuous",
+      "character": "Heavy, crushing, pressure-like",
+      "location": "Retrosternal chest",
+      "radiation": "Left shoulder, left arm, lower jaw",
+      "associated_symptoms": ["diaphoresis (profuse sweating)", "nausea", "shortness of breath on mild exertion"],
+      "aggravating_factors": "Exertion",
+      "relieving_factors": "None with rest"
+    },
+    "past_history": {
+      "chronic_conditions": ["Hypertension (10 years)", "Dyslipidemia (5 years)"]
+    },
+    "medication_history": [
+      {
+        "name": "Telmisartan 40mg",
+        "dose": "1 tab daily",
+        "source": "patient"
+      },
+      {
+        "name": "Atorvastatin 10mg",
+        "dose": "1 tab at night",
+        "source": "patient"
+      }
+    ],
+    "allergy_history": [],
+    "examination": {
+      "blood_pressure": "154/96 mmHg",
+      "pulse": "98 bpm, regular",
+      "spo2": "95% on room air"
+    },
+    "red_flags": [
+      {
+        "rule_id": "RED_FLAG_ACUTE_CHEST_PAIN",
+        "severity": "critical",
+        "message": "Potential red flag detected — acute crushing chest pain with radiation and diaphoresis. Immediate clinical assessment recommended.",
+        "triggered_at": "2026-09-06T10:17:00Z"
+      }
+    ],
+    "provenance": {
+      "chief_complaint": "patient",
+      "raw_patient_complaint": "patient",
+      "hpi": "ai_normalized_from_speech",
+      "red_flags": "system/rule"
+    }
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: Structured AYUSH case with Dashavidha Pariksha and Ahara-Vihara.",
+    "id": "c4444444-4444-4444-8444-444444444444",
+    "patient_id": "33333333-3333-4333-8333-333333333333",
+    "status": "final",
+    "case_type": "ayush",
+    "patient_language": "en",
+    "created_at": "2026-09-01T11:00:00Z",
+    "finalized_at": "2026-09-01T11:45:00Z",
+    "chief_complaint": "Amlapitta (Acid dyspepsia) with burning sensation in epigastrium and sour eructations for 1 month",
+    "hpi": {
+      "onset": "Gradual over 4 weeks",
+      "duration": "1 month",
+      "character": "Vidaha (burning), Tikta-Amlodgara (bitter/sour burping)",
+      "aggravating_factors": "Spicy food, tea, skipping breakfast, irregular meals",
+      "relieving_factors": "Cold milk sips"
+    },
+    "ayush_assessment": {
+      "prakriti": "Pitta-Vata",
+      "vikriti": "Pitta Pradhana Tridosha",
+      "sara": "Madhyama Sara",
+      "samhanana": "Madhyama (Moderate compact body frame)",
+      "pramana": "Pramana yukta",
+      "satmya": "Madhyama Satmya",
+      "sattva": "Pravara (Good mental strength)",
+      "ahara_shakti": "Abhyavaharana: Avara, Jarana: Mandagni (Poor digestive capacity)",
+      "vyayama_shakti": "Madhyama",
+      "vaya": "Madhyama Vaya (31 years)",
+      "ahara_vihara": {
+        "dietary_habits": "Katu-Amla rasa pradhana ahara, Adhyashana (eating before previous food is digested)",
+        "daily_routine": "Late night sleep (1 AM), ratri jagarana, morning sleep (divaswapna)"
+      }
+    },
+    "assessment_plan": {
+      "summary": "Urdhwaga Amlapitta associated with Pitta Prakopa and Mandagni due to Viruddha Ahara and Ratrijagarana.",
+      "plan": "Nidana Parivarjana (avoid spicy/fermented foods, maintain regular meal times), Avipattikar Churna 3g before meals with warm water, Kamadudha Rasa 250mg twice daily. Review after 14 days."
+    },
+    "provenance": {
+      "chief_complaint": "patient",
+      "hpi": "patient",
+      "ayush_assessment": "clinician",
+      "assessment_plan": "clinician"
+    }
+  }
+]

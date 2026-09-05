@@ -1,0 +1,40 @@
+[
+  {
+    "id": "tr-0001",
+    "mode": "voice",
+    "language": "en",
+    "raw_transcript": "I have been having this terrible dry cough for about two weeks now. It gets worse at night and whenever I drink cold water.",
+    "confidence": 0.97,
+    "status": "confirmed",
+    "normalized_entities": {
+      "complaint": "dry cough",
+      "duration": "2 weeks",
+      "aggravating_factors": ["night", "cold water"]
+    }
+  },
+  {
+    "id": "tr-0002",
+    "mode": "voice",
+    "language": "te",
+    "raw_transcript": "ఛాతీలో తీవ్రమైన నొప్పి వస్తోంది, ఎడమ భుజం లాగుతోంది, చాలా చెమటలు పోస్తున్నాయి.",
+    "confidence": 0.94,
+    "status": "confirmed",
+    "english_translation": "Severe chest pain is occurring, radiating to left shoulder, profuse sweating.",
+    "normalized_entities": {
+      "complaint": "chest pain",
+      "severity": "severe",
+      "radiation": "left shoulder",
+      "associated_symptoms": ["profuse sweating"]
+    }
+  },
+  {
+    "id": "tr-0003",
+    "mode": "voice",
+    "language": "en",
+    "raw_transcript": "[inaudible background noise] ... something in my stomach ... [muffled] ... burning maybe ...",
+    "confidence": 0.42,
+    "status": "needs_review",
+    "requires_manual_edit": true,
+    "warning": "Speech recognition confidence is low (42%). Please review and verify before submitting."
+  }
+]

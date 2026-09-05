@@ -1,0 +1,66 @@
+[
+  {
+    "_syntheticNotice": "DEMO ONLY: Synthetic prescription document extraction fixture.",
+    "id": "doc-0001",
+    "patient_id": "11111111-1111-4111-8111-111111111111",
+    "document_type": "prescription",
+    "original_filename": "prescription_august_2026.pdf",
+    "processing_status": "confirmed",
+    "ocr_confidence": 0.96,
+    "extracted_data": {
+      "doctor_name": "Dr. V. Prasad, MBBS, MD (Gen Med)",
+      "clinic_name": "City Care Clinic",
+      "date": "2026-08-10",
+      "medications": [
+        {
+          "name": "Levocetirizine 5mg",
+          "dosage": "1 tablet once daily at bedtime",
+          "duration": "10 days",
+          "page_ref": 1,
+          "confidence": 0.98,
+          "status": "verified"
+        },
+        {
+          "name": "Paracetamol 650mg",
+          "dosage": "1 tablet SOS for fever",
+          "duration": "3 days",
+          "page_ref": 1,
+          "confidence": 0.94,
+          "status": "verified"
+        }
+      ],
+      "instructions": "Warm saline gargles twice daily. Drink plenty of warm water."
+    }
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: Synthetic lab report extraction fixture with borderline values.",
+    "id": "doc-0002",
+    "patient_id": "22222222-2222-4222-8222-222222222222",
+    "document_type": "lab",
+    "original_filename": "lipid_profile_july_2026.pdf",
+    "processing_status": "confirmed",
+    "ocr_confidence": 0.92,
+    "extracted_data": {
+      "laboratory": "Apollo Diagnostic Services (Synthetic)",
+      "date": "2026-07-22",
+      "tests": [
+        { "name": "Total Cholesterol", "value": "248 mg/dL", "reference": "< 200 mg/dL", "flag": "high", "confidence": 0.95 },
+        { "name": "Triglycerides", "value": "190 mg/dL", "reference": "< 150 mg/dL", "flag": "high", "confidence": 0.93 },
+        { "name": "HDL Cholesterol", "value": "38 mg/dL", "reference": "> 40 mg/dL", "flag": "low", "confidence": 0.91 },
+        { "name": "LDL Cholesterol", "value": "172 mg/dL", "reference": "< 100 mg/dL", "flag": "high", "confidence": 0.94 },
+        { "name": "Fasting Blood Sugar", "value": "108 mg/dL", "reference": "70 - 99 mg/dL", "flag": "borderline", "confidence": 0.96 }
+      ]
+    }
+  },
+  {
+    "_syntheticNotice": "DEMO ONLY: OCR failure fixture for testing graceful degradation.",
+    "id": "doc-0003",
+    "patient_id": "11111111-1111-4111-8111-111111111111",
+    "document_type": "other",
+    "original_filename": "blurred_unreadable_scan.jpg",
+    "processing_status": "failed",
+    "ocr_confidence": 0.12,
+    "error_message": "Document image resolution is too low or text is severely obscured. Original file preserved. Please enter clinical details manually.",
+    "extracted_data": null
+  }
+]
