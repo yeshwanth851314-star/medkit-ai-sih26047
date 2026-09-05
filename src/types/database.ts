@@ -37,32 +37,32 @@ export interface ClinicalProvenance {
 }
 
 export interface HPIStructure {
-  onset?: string;
-  duration?: string;
-  character?: string;
-  location?: string;
-  radiation?: string;
-  severity?: string;
-  aggravating_factors?: string | string[];
-  relieving_factors?: string | string[];
-  associated_symptoms?: string[];
-  denies?: string[];
+  onset?: string | null;
+  duration?: string | null;
+  character?: string | null;
+  location?: string | null;
+  radiation?: string | null;
+  severity?: string | null;
+  aggravating_factors?: string | string[] | null;
+  relieving_factors?: string | string[] | null;
+  associated_symptoms?: string[] | null;
+  denies?: string[] | null;
 }
 
 export interface MedicationEntry {
   name: string;
-  dose?: string;
-  frequency?: string;
-  duration?: string;
-  route?: string;
+  dose?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  route?: string | null;
   source?: ClinicalSource;
   verified_by?: string | null;
 }
 
 export interface AllergyEntry {
   substance: string;
-  reaction?: string;
-  severity?: "Mild" | "Moderate" | "Severe";
+  reaction?: string | null;
+  severity?: "Mild" | "Moderate" | "Severe" | null;
   source?: ClinicalSource;
   verified_by?: string | null;
 }
@@ -77,20 +77,20 @@ export interface RedFlagAlert {
 }
 
 export interface AyushAssessment {
-  prakriti?: string;
-  vikriti?: string;
-  sara?: string;
-  samhanana?: string;
-  pramana?: string;
-  satmya?: string;
-  sattva?: string;
-  ahara_shakti?: string;
-  vyayama_shakti?: string;
-  vaya?: string;
+  prakriti?: string | null;
+  vikriti?: string | null;
+  sara?: string | null;
+  samhanana?: string | null;
+  pramana?: string | null;
+  satmya?: string | null;
+  sattva?: string | null;
+  ahara_shakti?: string | null;
+  vyayama_shakti?: string | null;
+  vaya?: string | null;
   ahara_vihara?: {
-    dietary_habits?: string;
-    daily_routine?: string;
-  };
+    dietary_habits?: string | null;
+    daily_routine?: string | null;
+  } | null;
 }
 
 export interface ClinicalCase {
@@ -110,8 +110,8 @@ export interface ClinicalCase {
   allergy_history?: AllergyEntry[] | null;
   examination?: Record<string, any> | null;
   assessment_plan?: {
-    summary?: string;
-    plan?: string;
+    summary?: string | null;
+    plan?: string | null;
   } | null;
   ayush_assessment?: AyushAssessment | null;
   red_flags?: RedFlagAlert[] | null;
