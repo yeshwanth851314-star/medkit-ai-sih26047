@@ -155,8 +155,10 @@ export class ResilientSpeechProvider implements SpeechProvider {
   }
 
   async transcribe(options: SpeechTranscriptionOptions): Promise<SpeechTranscriptionResponse> {
-    // If client requested mockId explicitly, bypass live API directly
-    if (options.mockId) {
+    const hasRealAudio = Boolean(options.audioBase64 && options.audioBase64.trim().length > 50);
+
+    // If client requested mockId explicitly without real audio, bypass live API directly (demo fixtures only)
+    if (options.mockId && !hasRealAudio) {
       return this.fallback.transcribe(options);
     }
 
@@ -170,6 +172,18 @@ export class ResilientSpeechProvider implements SpeechProvider {
     try {
       return await Promise.race([this.primary.transcribe(options), timeoutPromise]);
     } catch (err: any) {
+      // CLINICAL SAFETY ENFORCEMENT:
+      // If real patient audio was submitted, NEVER silently substitute fabricated synthetic text.
+      // Doing so could mask critical medical emergencies (e.g. replacing acute chest pain with cough).
+      if (hasRealAudio) {
+        console.error(
+          `[Clinical Safety Alert] Speech provider failed on real audio: ${err.message}. Refusing synthetic fallback.`
+        );
+        throw new Error(
+          `Speech recognition service unavailable (${err.message}). For patient safety, live audio cannot fall back to synthetic text. Please retry or enter your symptoms manually.`
+        );
+      }
+
       console.warn(`Speech provider '${this.primary.name}' failed: ${err.message}. Falling back to demo provider.`);
       const fallbackResult = await this.fallback.transcribe(options);
       return {

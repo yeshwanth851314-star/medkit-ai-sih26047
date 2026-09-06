@@ -24,6 +24,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, transcription: result });
   } catch (err: any) {
     console.error("POST /api/voice/transcribe error:", err);
-    return NextResponse.json({ error: "Failed to transcribe speech audio" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: err.message || "Failed to transcribe speech audio",
+        requiresManualEntry: true,
+      },
+      { status: 502 }
+    );
   }
 }
