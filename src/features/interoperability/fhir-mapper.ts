@@ -43,11 +43,11 @@ export function mapCaseToFhirBundle(params: {
       },
     ],
     gender:
-      patient.gender === "male"
+      patient.gender?.trim().toLowerCase() === "male"
         ? "male"
-        : patient.gender === "female"
+        : patient.gender?.trim().toLowerCase() === "female"
         ? "female"
-        : patient.gender === "other"
+        : patient.gender?.trim().toLowerCase() === "other"
         ? "other"
         : "unknown",
     birthDate: patient.date_of_birth || undefined,
@@ -134,118 +134,168 @@ export function mapCaseToFhirBundle(params: {
   }
 
   // 4. Observations (Vitals)
-  const vitals = clinicalCase.examination?.vitals;
-  if (vitals && typeof vitals === "object") {
-    if (vitals.blood_pressure) {
-      entries.push({
-        fullUrl: `urn:uuid:obs-bp-${clinicalCase.id}`,
-        resource: {
-          resourceType: "Observation",
-          id: `obs-bp-${clinicalCase.id}`,
-          status: "final",
-          code: {
-            coding: [
-              {
-                system: "http://loinc.org",
-                code: "85354-9",
-                display: "Blood pressure panel with all children optional",
-              },
-            ],
-            text: "Blood Pressure",
-          },
-          subject: { reference: `urn:uuid:${patient.id}` },
-          valueString: String(vitals.blood_pressure),
-          effectiveDateTime: timestamp,
-        } as FhirObservationResource,
-      });
-    }
+  const examination = clinicalCase.examination || {};
+  const vitalsNested =
+    examination.vitals && typeof examination.vitals === "object" ? examination.vitals : {};
 
-    if (vitals.heart_rate) {
-      entries.push({
-        fullUrl: `urn:uuid:obs-hr-${clinicalCase.id}`,
-        resource: {
-          resourceType: "Observation",
-          id: `obs-hr-${clinicalCase.id}`,
-          status: "final",
-          code: {
-            coding: [
-              {
-                system: "http://loinc.org",
-                code: "8867-4",
-                display: "Heart rate",
-              },
-            ],
-            text: "Heart Rate",
-          },
-          subject: { reference: `urn:uuid:${patient.id}` },
-          valueQuantity: {
-            value: Number(vitals.heart_rate),
-            unit: "beats/minute",
-            system: "http://unitsofmeasure.org",
-            code: "/min",
-          },
-          effectiveDateTime: timestamp,
-        } as FhirObservationResource,
-      });
-    }
+  const parseNumericVital = (val: any): number | null => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === "number" && !isNaN(val)) return val;
+    const cleaned = String(val).replace(/[^0-9.]/g, "");
+    if (!cleaned) return null;
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
+  };
 
-    if (vitals.temperature) {
-      entries.push({
-        fullUrl: `urn:uuid:obs-temp-${clinicalCase.id}`,
-        resource: {
-          resourceType: "Observation",
-          id: `obs-temp-${clinicalCase.id}`,
-          status: "final",
-          code: {
-            coding: [
-              {
-                system: "http://loinc.org",
-                code: "8310-5",
-                display: "Body temperature",
-              },
-            ],
-            text: "Body Temperature",
-          },
-          subject: { reference: `urn:uuid:${patient.id}` },
-          valueQuantity: {
-            value: Number(vitals.temperature),
-            unit: "Fahrenheit",
-            system: "http://unitsofmeasure.org",
-            code: "[degF]",
-          },
-          effectiveDateTime: timestamp,
-        } as FhirObservationResource,
-      });
-    }
+  const bp = vitalsNested.blood_pressure || examination.blood_pressure;
+  const hr =
+    vitalsNested.heart_rate || vitalsNested.pulse || examination.pulse || examination.heart_rate;
+  const temp = vitalsNested.temperature || examination.temperature;
+  const spo2 = vitalsNested.spo2 || examination.spo2;
+  const rr = vitalsNested.respiratory_rate || examination.respiratory_rate;
 
-    if (vitals.spo2) {
-      entries.push({
-        fullUrl: `urn:uuid:obs-spo2-${clinicalCase.id}`,
-        resource: {
-          resourceType: "Observation",
-          id: `obs-spo2-${clinicalCase.id}`,
-          status: "final",
-          code: {
-            coding: [
-              {
-                system: "http://loinc.org",
-                code: "2708-6",
-                display: "Oxygen saturation in Arterial blood",
-              },
-            ],
-            text: "Oxygen Saturation (SpO2)",
-          },
-          subject: { reference: `urn:uuid:${patient.id}` },
-          valueQuantity: {
-            value: Number(vitals.spo2),
-            unit: "%",
-            system: "http://unitsofmeasure.org",
-            code: "%",
-          },
-          effectiveDateTime: timestamp,
-        } as FhirObservationResource,
-      });
-    }
+  if (bp) {
+    entries.push({
+      fullUrl: `urn:uuid:obs-bp-${clinicalCase.id}`,
+      resource: {
+        resourceType: "Observation",
+        id: `obs-bp-${clinicalCase.id}`,
+        status: "final",
+        code: {
+          coding: [
+            {
+              system: "http://loinc.org",
+              code: "85354-9",
+              display: "Blood pressure panel with all children optional",
+            },
+          ],
+          text: "Blood Pressure",
+        },
+        subject: { reference: `urn:uuid:${patient.id}` },
+        valueString: String(bp),
+        effectiveDateTime: timestamp,
+      } as FhirObservationResource,
+    });
+  }
+
+  const hrNum = parseNumericVital(hr);
+  if (hrNum !== null) {
+    entries.push({
+      fullUrl: `urn:uuid:obs-hr-${clinicalCase.id}`,
+      resource: {
+        resourceType: "Observation",
+        id: `obs-hr-${clinicalCase.id}`,
+        status: "final",
+        code: {
+          coding: [
+            {
+              system: "http://loinc.org",
+              code: "8867-4",
+              display: "Heart rate",
+            },
+          ],
+          text: "Heart Rate",
+        },
+        subject: { reference: `urn:uuid:${patient.id}` },
+        valueQuantity: {
+          value: hrNum,
+          unit: "beats/minute",
+          system: "http://unitsofmeasure.org",
+          code: "/min",
+        },
+        effectiveDateTime: timestamp,
+      } as FhirObservationResource,
+    });
+  }
+
+  const tempNum = parseNumericVital(temp);
+  if (tempNum !== null) {
+    entries.push({
+      fullUrl: `urn:uuid:obs-temp-${clinicalCase.id}`,
+      resource: {
+        resourceType: "Observation",
+        id: `obs-temp-${clinicalCase.id}`,
+        status: "final",
+        code: {
+          coding: [
+            {
+              system: "http://loinc.org",
+              code: "8310-5",
+              display: "Body temperature",
+            },
+          ],
+          text: "Body Temperature",
+        },
+        subject: { reference: `urn:uuid:${patient.id}` },
+        valueQuantity: {
+          value: tempNum,
+          unit: "Fahrenheit",
+          system: "http://unitsofmeasure.org",
+          code: "[degF]",
+        },
+        effectiveDateTime: timestamp,
+      } as FhirObservationResource,
+    });
+  }
+
+  const spo2Num = parseNumericVital(spo2);
+  if (spo2Num !== null) {
+    entries.push({
+      fullUrl: `urn:uuid:obs-spo2-${clinicalCase.id}`,
+      resource: {
+        resourceType: "Observation",
+        id: `obs-spo2-${clinicalCase.id}`,
+        status: "final",
+        code: {
+          coding: [
+            {
+              system: "http://loinc.org",
+              code: "2708-6",
+              display: "Oxygen saturation in Arterial blood",
+            },
+          ],
+          text: "Oxygen Saturation (SpO2)",
+        },
+        subject: { reference: `urn:uuid:${patient.id}` },
+        valueQuantity: {
+          value: spo2Num,
+          unit: "%",
+          system: "http://unitsofmeasure.org",
+          code: "%",
+        },
+        effectiveDateTime: timestamp,
+      } as FhirObservationResource,
+    });
+  }
+
+  const rrNum = parseNumericVital(rr);
+  if (rrNum !== null) {
+    entries.push({
+      fullUrl: `urn:uuid:obs-rr-${clinicalCase.id}`,
+      resource: {
+        resourceType: "Observation",
+        id: `obs-rr-${clinicalCase.id}`,
+        status: "final",
+        code: {
+          coding: [
+            {
+              system: "http://loinc.org",
+              code: "9279-1",
+              display: "Respiratory rate",
+            },
+          ],
+          text: "Respiratory Rate",
+        },
+        subject: { reference: `urn:uuid:${patient.id}` },
+        valueQuantity: {
+          value: rrNum,
+          unit: "breaths/minute",
+          system: "http://unitsofmeasure.org",
+          code: "/min",
+        },
+        effectiveDateTime: timestamp,
+      } as FhirObservationResource,
+    });
   }
 
   // 5. AllergyIntolerance

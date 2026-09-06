@@ -163,4 +163,49 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
     const docRes = doc?.resource as Record<string, any>;
     expect(docRes.content[0].attachment.title).toBe("ecg_report.pdf");
   });
+
+  it("handles flat examination vitals with string units and case-insensitive gender", () => {
+    const flatVitalsCase: ClinicalCase = {
+      ...mockCase,
+      id: "c-flat-vitals-01",
+      examination: {
+        blood_pressure: "120/80 mmHg",
+        pulse: "74 bpm",
+        temperature: "98.4 F",
+        respiratory_rate: "16 /min",
+        spo2: "99% on room air",
+      },
+    };
+
+    const femalePatient: Patient = {
+      ...mockPatient,
+      gender: "Female", // Capitalized
+    };
+
+    const bundle = mapCaseToFhirBundle({
+      clinicalCase: flatVitalsCase,
+      patient: femalePatient,
+    });
+
+    const patientEntry = bundle.entry.find((e) => e.resource.resourceType === "Patient");
+    expect((patientEntry?.resource as FhirPatientResource).gender).toBe("female");
+
+    const obsEntries = bundle.entry.filter((e) => e.resource.resourceType === "Observation");
+    expect(obsEntries.length).toBe(5);
+
+    const bpObs = obsEntries.find((e) => (e.resource as any).id.includes("obs-bp"));
+    expect((bpObs?.resource as any).valueString).toBe("120/80 mmHg");
+
+    const hrObs = obsEntries.find((e) => (e.resource as any).id.includes("obs-hr"));
+    expect((hrObs?.resource as any).valueQuantity.value).toBe(74);
+
+    const tempObs = obsEntries.find((e) => (e.resource as any).id.includes("obs-temp"));
+    expect((tempObs?.resource as any).valueQuantity.value).toBe(98.4);
+
+    const spo2Obs = obsEntries.find((e) => (e.resource as any).id.includes("obs-spo2"));
+    expect((spo2Obs?.resource as any).valueQuantity.value).toBe(99);
+
+    const rrObs = obsEntries.find((e) => (e.resource as any).id.includes("obs-rr"));
+    expect((rrObs?.resource as any).valueQuantity.value).toBe(16);
+  });
 });
