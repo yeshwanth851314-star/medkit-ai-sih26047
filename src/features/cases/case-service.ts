@@ -1,4 +1,5 @@
-import { createCase, updateCase, getCaseById, getCasesByPatientId } from "@/lib/db/supabase";
+import { createCase, updateCase, getCaseById, getCasesByPatientId, getSupabaseClient } from "@/lib/db/supabase";
+import { env } from "@/config/env";
 import { ClinicalCase } from "@/types/database";
 import { CaseInput } from "./types";
 
@@ -10,9 +11,9 @@ export async function createCaseDraft(
     patient_id: input.patientId,
     consent_id: input.consentId || null,
     created_by: createdBy || null,
-    status: "draft",
-    case_type: input.caseType,
-    patient_language: input.patientLanguage,
+    status: (input.status as any) || "draft",
+    case_type: input.caseType || "general",
+    patient_language: input.patientLanguage || "en",
     chief_complaint: input.chiefComplaint.trim(),
     raw_patient_complaint: input.rawPatientComplaint || null,
     hpi: input.hpi || null,
@@ -98,6 +99,7 @@ export async function finalizeCase(
   const finalized = await updateCase(id, {
     status: "final",
     finalized_at: new Date().toISOString(),
+    finalized_by: clinicianId || null,
   });
 
   if (!finalized) {
@@ -152,6 +154,25 @@ export async function addCaseAmendment(
 
   if (!updated) {
     throw new Error("Failed to record clinical amendment");
+  }
+
+  // Persist to dedicated immutable case_amendments table when Supabase is active
+  const supabase = getSupabaseClient();
+  if (supabase && !env.isDemoMode) {
+    try {
+      await supabase.from("case_amendments").insert([
+        {
+          case_id: caseId,
+          author_id: amendment.actorId,
+          author_name: amendment.actorName,
+          reason: amendment.reason,
+          notes: amendment.notes,
+          version,
+        },
+      ]);
+    } catch (err) {
+      console.warn("Notice: Failed to insert dedicated case_amendments row", err);
+    }
   }
 
   return updated;

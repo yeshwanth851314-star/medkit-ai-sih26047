@@ -63,8 +63,8 @@ export const caseInputSchema = z.object({
   ayushAssessment: z.record(z.any()).optional().nullable(),
   redFlags: z.array(z.record(z.any())).optional().nullable(),
   red_flags: z.array(z.record(z.any())).optional().nullable(),
-  status: z.enum(["draft", "final"]).default("draft"),
+  status: z.enum(["draft", "final"]).optional().default("draft"),
   provenance: z.record(z.enum(["patient", "clinician", "ocr", "ai", "system/rule"])).optional().nullable(),
 });
 
-export type CaseInput = z.infer<typeof caseInputSchema>;
+export type CaseInput = z.input<typeof caseInputSchema>;

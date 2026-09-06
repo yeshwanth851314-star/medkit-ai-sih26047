@@ -1,6 +1,7 @@
 import { getPatients, getPatientById, createPatient } from "@/lib/db/supabase";
 import { Patient } from "@/types/database";
 import { PatientRegistrationInput, DuplicatePatientWarning } from "./types";
+import { genderToDb } from "@/lib/utils/gender";
 
 export function generatePatientCode(): string {
   const randomDigits = Math.floor(1000 + Math.random() * 9000);
@@ -80,7 +81,7 @@ export async function registerPatient(
     patient_code: patientCode,
     full_name: input.fullName.trim(),
     date_of_birth: input.dateOfBirth || null,
-    gender: input.gender || "Unknown",
+    gender: genderToDb(input.gender),
     phone: input.phone || null,
     address: input.address || null,
     blood_group: input.bloodGroup === "Unknown" ? null : input.bloodGroup,

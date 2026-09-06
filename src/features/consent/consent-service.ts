@@ -22,6 +22,10 @@ export async function recordPatientConsent(input: RecordConsentInput): Promise<C
     consent_method: input.consentMethod || "touch_acknowledgement",
     consent_version: input.consentVersion || "v1.0",
     consent_timestamp: now,
+    status: "granted",
+    granted_at: now,
+    actor_id: input.actorId || input.patientId,
+    revocation_reason: null,
     revoked: false,
     revoked_at: null,
     created_at: now,
@@ -124,7 +128,13 @@ export async function revokePatientConsent(
   if (supabase && !env.isDemoMode) {
     const { data, error } = await supabase
       .from("consents")
-      .update({ revoked: true, revoked_at: now })
+      .update({
+        revoked: true,
+        revoked_at: now,
+        status: "revoked",
+        actor_id: actorId || null,
+        revocation_reason: reason || "Revoked by clinician",
+      })
       .eq("id", consentId)
       .select()
       .single();
@@ -135,7 +145,7 @@ export async function revokePatientConsent(
     }
     updated = data as ConsentRecord;
   } else {
-    updated = (await mockDb.revokeConsent(consentId)) as ConsentRecord | null;
+    updated = (await mockDb.revokeConsent(consentId, actorId, reason)) as ConsentRecord | null;
   }
 
   if (!updated) {

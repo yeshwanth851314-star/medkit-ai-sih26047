@@ -179,13 +179,16 @@ class MockDatabaseAdapter {
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] || null;
   }
 
-  async revokeConsent(id: string): Promise<any | null> {
+  async revokeConsent(id: string, actorId?: string, reason?: string): Promise<any | null> {
     const existing = this.consents.get(id);
     if (!existing) return null;
     const updated = {
       ...existing,
+      status: "revoked",
       revoked: true,
       revoked_at: new Date().toISOString(),
+      actor_id: actorId || null,
+      revocation_reason: reason || "Revoked by clinician",
     };
     this.consents.set(id, updated);
     return updated;

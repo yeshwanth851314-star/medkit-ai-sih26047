@@ -126,6 +126,7 @@ export interface ClinicalCase {
   created_at: string;
   updated_at?: string;
   finalized_at?: string | null;
+  finalized_by?: string | null;
 }
 
 export interface CaseAmendment {
@@ -164,6 +165,9 @@ export interface PatientConsent {
   consented: boolean;
   consent_method: "touch" | "voice" | "assisted";
   consent_version: string;
+  status?: "granted" | "revoked";
+  actor_id?: string | null;
+  revocation_reason?: string | null;
   granted_at: string;
   revoked_at?: string | null;
 }
