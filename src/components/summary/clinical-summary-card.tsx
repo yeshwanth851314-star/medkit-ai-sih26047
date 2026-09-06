@@ -97,7 +97,7 @@ export function ClinicalSummaryCard({
               </span>
             )}
           </div>
-          <h2 className="mt-2 text-base font-bold text-slate-900">Physician Copilot Intake Synopsis</h2>
+          <h2 className="mt-2 text-base font-bold text-slate-900">AI-Assisted Clinical Summary &amp; Physician Copilot Synopsis</h2>
         </div>
 
         <div className="flex items-center gap-2">

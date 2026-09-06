@@ -31,7 +31,26 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
   const [amendReason, setAmendReason] = useState("Addendum to treatment plan based on follow-up report");
   const [amendNotes, setAmendNotes] = useState("");
   const [isSubmittingAmend, setIsSubmittingAmend] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [amendError, setAmendError] = useState<string | null>(null);
+
+  const handleFinalizeCase = async () => {
+    setIsFinalizing(true);
+    try {
+      const res = await fetch(`/api/cases/${clinicalCase.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "finalize" }),
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error("Failed to finalize case", err);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
 
   // Generate valid FHIR R4 Bundle on demand
   const fhirBundle = mapCaseToFhirBundle({
@@ -95,6 +114,19 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
           <FileCode className="h-3.5 w-3.5 text-clinical-600" />
           <span>FHIR R4 / ABDM View</span>
         </button>
+
+        {/* Finalize Case Button (for draft cases) */}
+        {clinicalCase.status === "draft" && (
+          <button
+            type="button"
+            onClick={handleFinalizeCase}
+            disabled={isFinalizing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors disabled:opacity-50"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            <span>{isFinalizing ? "Finalizing..." : "Finalize Case"}</span>
+          </button>
+        )}
 
         {/* Post-finalization Amendment Button */}
         {clinicalCase.status === "final" && (

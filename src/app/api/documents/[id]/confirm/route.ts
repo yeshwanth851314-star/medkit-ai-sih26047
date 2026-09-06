@@ -17,7 +17,7 @@ export async function POST(
     if (!docCheck.authorized) {
       return docCheck.errorResponse;
     }
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { medicationName } = body;
 
     if (!medicationName) {

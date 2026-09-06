@@ -158,4 +158,138 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     const comparisonSection = page.getByText(/What Changed Since the Previous Visit/i);
     await expect(comparisonSection).toBeVisible();
   });
+
+  test("6. Document OCR side-by-side review, candidate verification, and doctor confirmation", async ({ page }) => {
+    await page.goto("/doctor/patients/11111111-1111-4111-8111-111111111111/documents");
+
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/documents/);
+    }
+
+    // Verify OCR side-by-side header
+    const ocrHeading = page.getByText(/Multimodal Document Digitization & OCR/i);
+    await expect(ocrHeading).toBeVisible();
+
+    // Verify Safety Mandate
+    const safetyNotice = page.getByText(/Safety Mandate:/i);
+    await expect(safetyNotice).toBeVisible();
+
+    // Verify Candidate Extracted Fields
+    const candidateSection = page.getByText(/Candidate Extracted Fields/i);
+    await expect(candidateSection).toBeVisible();
+
+    // Verify presence of Verify & Confirm button and trigger verification
+    const verifyBtn = page.getByRole("button", { name: /Verify & Confirm/i }).first();
+    if (await verifyBtn.isVisible()) {
+      await verifyBtn.click();
+      // Should show verified badge
+      const verifiedBadge = page.getByText(/Verified/i).first();
+      await expect(verifiedBadge).toBeVisible();
+    }
+  });
+
+  test("7. AI-assisted summary narrative inline editing, clinician confirmation, and provenance badge", async ({ page }) => {
+    await page.goto("/doctor/cases/c3333333-3333-4333-8333-333333333333");
+
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
+    }
+
+    // Check summary card is visible
+    const summaryCard = page.getByText(/AI-Assisted Clinical Summary & Physician Copilot Synopsis/i);
+    await expect(summaryCard).toBeVisible();
+
+    // Check if Edit Narrative button is available
+    const editBtn = page.getByRole("button", { name: /Edit Narrative/i });
+    if (await editBtn.isVisible()) {
+      await editBtn.click();
+
+      // Ensure textarea is visible and type into it
+      const textarea = page.locator("textarea");
+      await expect(textarea).toBeVisible();
+      await textarea.fill("Clinician review note: Patient stabilized. ECG shows ST elevation. Emergency cardiology consultation initiated.");
+
+      // Click Confirm Synopsis
+      const confirmBtn = page.getByRole("button", { name: /Confirm Synopsis/i });
+      await confirmBtn.click();
+
+      // Verify clinician confirmed status
+      const confirmedBadge = page.getByText(/Clinician Confirmed/i);
+      await expect(confirmedBadge).toBeVisible();
+    }
+  });
+
+  test("8. FHIR R4 / ABDM preview drawer, resource summary counts, and standard compliance verification", async ({ page }) => {
+    await page.goto("/doctor/cases/c1111111-1111-4111-8111-111111111111");
+
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/cases\/c1111111-1111-4111-8111-111111111111/);
+    }
+
+    // Click FHIR R4 / ABDM View button
+    const fhirBtn = page.getByRole("button", { name: /FHIR R4 \/ ABDM View/i });
+    await expect(fhirBtn).toBeVisible();
+    await fhirBtn.click();
+
+    // Verify Drawer Heading
+    const drawerHeading = page.getByText(/FHIR R4 \/ ABDM Record Preview/i);
+    await expect(drawerHeading).toBeVisible();
+
+    // Verify ABDM Compliance Disclaimer
+    const abdmCompliance = page.getByText(/FHIR-compatible representation/i);
+    await expect(abdmCompliance).toBeVisible();
+
+    const standardTag = page.getByText(/HL7 FHIR R4 standard/i);
+    await expect(standardTag).toBeVisible();
+
+    // Switch to Raw JSON tab
+    const jsonTab = page.getByRole("button", { name: /Raw JSON Document/i });
+    await expect(jsonTab).toBeVisible();
+    await jsonTab.click();
+
+    // Verify JSON Content contains Bundle
+    const jsonContent = page.getByText(/"resourceType": "Bundle"/i);
+    await expect(jsonContent).toBeVisible();
+
+    // Close Drawer
+    const closeBtn = page.getByRole("button", { name: "✕" });
+    await closeBtn.click();
+    await expect(drawerHeading).not.toBeVisible();
+  });
+
+  test("9. Ministry of Ayush / AIIA Dashavidha Pariksha, Prakriti-Vikriti, and Ahara-Vihara clinical case display", async ({ page }) => {
+    await page.goto("/doctor/cases/c4444444-4444-4444-8444-444444444444");
+
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/cases\/c4444444-4444-4444-8444-444444444444/);
+    }
+
+    // Verify AYUSH Stream badge
+    const ayushBadge = page.getByText(/ayush Stream/i);
+    await expect(ayushBadge).toBeVisible();
+
+    // Verify Dashavidha Pariksha section
+    const parikshaHeading = page.getByText(/AYUSH Dashavidha Pariksha & Ahara-Vihara/i);
+    await expect(parikshaHeading).toBeVisible();
+
+    // Verify constitutional type (Prakriti)
+    const prakritiValue = page.getByText(/Pitta-Vata/i);
+    await expect(prakritiValue).toBeVisible();
+
+    // Verify Ahara & Vihara Lifestyle Patterns
+    const aharaHeading = page.getByText(/Ahara-Vihara \(Diet & Regimen Analysis\)/i);
+    await expect(aharaHeading).toBeVisible();
+  });
 });
