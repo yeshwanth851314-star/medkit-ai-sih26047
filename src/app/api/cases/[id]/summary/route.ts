@@ -45,6 +45,31 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}));
+
+    // Handle clinician confirmation action
+    if (body.action === "confirm") {
+      const now = new Date().toISOString();
+      const baseline = body.summary || (await generateDeterministicSummary(id));
+      const confirmedSummary = {
+        ...baseline,
+        hpiNarrative: body.narrative || baseline.hpiNarrative || "",
+        status: "confirmed" as const,
+        confirmedBy: auth.user.fullName || auth.user.id,
+        confirmedAt: now,
+        editedByClinician: Boolean(body.editedByClinician),
+      };
+
+      const { updateCase } = await import("@/lib/db/supabase");
+      await updateCase(id, {
+        assessment_plan: {
+          summary: confirmedSummary.hpiNarrative,
+          plan: body.plan || null,
+        },
+      });
+
+      return NextResponse.json({ success: true, summary: confirmedSummary });
+    }
+
     const useAI = body.type === "ai_assisted";
 
     const aiProvider = getAIProvider();

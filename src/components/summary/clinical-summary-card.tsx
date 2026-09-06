@@ -47,8 +47,27 @@ export function ClinicalSummaryCard({
     }
   };
 
-  const handleConfirm = () => {
-    setSummary({ ...summary, hpiNarrative: editedNarrative, status: "confirmed" });
+  const handleConfirm = async () => {
+    try {
+      const res = await fetch(`/api/cases/${caseId}/summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "confirm",
+          narrative: editedNarrative,
+          summary,
+          editedByClinician: editedNarrative !== summary.hpiNarrative,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.summary) {
+        setSummary(data.summary);
+      } else {
+        setSummary({ ...summary, hpiNarrative: editedNarrative, status: "confirmed" });
+      }
+    } catch {
+      setSummary({ ...summary, hpiNarrative: editedNarrative, status: "confirmed" });
+    }
     setIsEditing(false);
     setIsConfirmed(true);
   };
@@ -58,15 +77,19 @@ export function ClinicalSummaryCard({
       {/* Header & Badges */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-surface-200 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-clinical-100 border border-clinical-200 px-2.5 py-0.5 text-xs font-bold text-clinical-800">
               <Sparkles className="h-3.5 w-3.5 text-clinical-600" />
-              {summary.summaryType === "ai_assisted" ? "AI-Assisted Summary" : "Deterministic Clinical Summary"}
+              {summary.providerMeta?.provider === "gemini-2.5-flash"
+                ? `● Live Gemini 2.5 Flash (${summary.providerMeta.latencyMs || 0}ms)`
+                : summary.summaryType === "ai_assisted"
+                ? "● Deterministic Fallback"
+                : "Deterministic Intake Summary"}
             </span>
 
             {isConfirmed ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Clinician Confirmed
+                <CheckCircle2 className="h-3.5 w-3.5" /> Clinician Confirmed {summary.confirmedBy ? `(${summary.confirmedBy})` : ""}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-700">

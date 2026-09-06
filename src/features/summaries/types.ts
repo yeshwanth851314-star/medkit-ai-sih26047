@@ -20,6 +20,17 @@ export const clinicalSummarySchema = z.object({
   provenanceMap: z.record(z.string()),
   disclaimer: z.string(),
   status: z.enum(["draft", "reviewed", "confirmed"]).default("draft"),
+  confirmedBy: z.string().optional().nullable(),
+  confirmedAt: z.string().optional().nullable(),
+  editedByClinician: z.boolean().optional(),
+  providerMeta: z
+    .object({
+      provider: z.string(),
+      latencyMs: z.number().optional(),
+      fallbackUsed: z.boolean().optional(),
+      fallbackReason: z.string().optional(),
+    })
+    .optional(),
   generatedAt: z.string(),
 });
 

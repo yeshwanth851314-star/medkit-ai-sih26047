@@ -50,4 +50,26 @@ describe("Phase 6: Deterministic Summary & PDF Tests", () => {
     const parsed = clinicalSummarySchema.safeParse(aiSummary);
     expect(parsed.success).toBe(true);
   });
+
+  it("validates summary confirmation with clinician provenance and persistence", async () => {
+    const summary = await generateDeterministicSummary(coughCaseId);
+    const confirmed = clinicalSummarySchema.parse({
+      ...summary,
+      hpiNarrative: "Clinician edited narrative: Patient cough improving.",
+      status: "confirmed",
+      confirmedBy: "Dr. Lakshmi Varma",
+      confirmedAt: new Date().toISOString(),
+      editedByClinician: true,
+      providerMeta: {
+        provider: "gemini-2.5-flash",
+        latencyMs: 142,
+      },
+    });
+
+    expect(confirmed.status).toBe("confirmed");
+    expect(confirmed.confirmedBy).toBe("Dr. Lakshmi Varma");
+    expect(confirmed.editedByClinician).toBe(true);
+    expect(confirmed.providerMeta?.provider).toBe("gemini-2.5-flash");
+    expect(confirmed.providerMeta?.latencyMs).toBe(142);
+  });
 });
