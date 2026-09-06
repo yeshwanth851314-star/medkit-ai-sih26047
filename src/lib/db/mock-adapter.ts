@@ -155,6 +155,32 @@ class MockDatabaseAdapter {
     return this.documents.get(id) || null;
   }
 
+  async createDocument(data: Omit<MedicalDocument, "created_at">): Promise<MedicalDocument> {
+    const id = data.id || `doc-${crypto.randomUUID().slice(0, 8)}`;
+    const now = new Date().toISOString();
+    const newDoc: MedicalDocument = {
+      ...data,
+      id,
+      created_at: now,
+    };
+    this.documents.set(id, newDoc);
+    this.recordAudit("system", "UPLOAD_DOCUMENT", "documents", id, { original_filename: newDoc.original_filename });
+    return newDoc;
+  }
+
+  async updateDocument(id: string, updates: Partial<MedicalDocument>): Promise<MedicalDocument | null> {
+    const existing = this.documents.get(id);
+    if (!existing) return null;
+    const updated: MedicalDocument = {
+      ...existing,
+      ...updates,
+      id,
+    };
+    this.documents.set(id, updated);
+    this.recordAudit("system", "UPDATE_DOCUMENT", "documents", id, { processing_status: updated.processing_status });
+    return updated;
+  }
+
   // Consents
   async recordConsent(data: any): Promise<any> {
     const id = data.id || crypto.randomUUID();

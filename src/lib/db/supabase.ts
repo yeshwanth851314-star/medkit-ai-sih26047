@@ -219,4 +219,81 @@ export async function getDocumentById(id: string): Promise<MedicalDocument | nul
   return (data || null) as MedicalDocument | null;
 }
 
+export async function createDocument(payload: Omit<MedicalDocument, "created_at">): Promise<MedicalDocument> {
+  if (env.isDemoMode) {
+    return mockDb.createDocument(payload);
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase.from("documents").insert([payload]).select().single();
+  if (error) {
+    console.error("Supabase createDocument error:", error);
+    throw new Error(`Database error creating document: ${error.message}`);
+  }
+
+  return data as MedicalDocument;
+}
+
+export async function updateDocument(id: string, updates: Partial<MedicalDocument>): Promise<MedicalDocument | null> {
+  if (env.isDemoMode) {
+    return mockDb.updateDocument(id, updates);
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("documents")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Supabase updateDocument error:", error);
+    throw new Error(`Database error updating document ${id}: ${error.message}`);
+  }
+
+  return data as MedicalDocument;
+}
+
+export async function uploadDocumentToStorage(
+  patientId: string,
+  caseId: string | null,
+  docId: string,
+  fileName: string,
+  fileBytes: Uint8Array | ArrayBuffer,
+  mimeType: string
+): Promise<{ storagePath: string }> {
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const caseFolder = caseId || "uncategorized";
+  const storagePath = `patients/${patientId}/cases/${caseFolder}/${docId}/${safeFileName}`;
+
+  const supabase = getSupabaseClient();
+  if (supabase && !env.isDemoMode) {
+    try {
+      const { error } = await supabase.storage
+        .from("clinical-documents")
+        .upload(storagePath, fileBytes, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (error) {
+        console.warn(`Supabase Storage upload warning for ${storagePath}:`, error.message);
+      }
+    } catch (storageErr) {
+      console.warn("Storage upload exception (falling back to relative path):", storageErr);
+    }
+  }
+
+  return { storagePath: `/private/documents/${storagePath}` };
+}
+
 

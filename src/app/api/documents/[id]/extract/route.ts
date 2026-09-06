@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOCRProvider } from "@/features/documents/ocr-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requireDocumentAccess } from "@/lib/auth/object-guard";
+import { updateDocument } from "@/lib/db/supabase";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(
@@ -59,6 +60,13 @@ export async function POST(
       mimeType: body.mimeType,
       fileName: body.fileName,
       mockId: body.mockId,
+    });
+
+    // Persist extraction into database record
+    await updateDocument(id, {
+      extracted_data: extraction.extractedData,
+      ocr_confidence: extraction.confidence,
+      processing_status: extraction.status === "failed" ? "failed" : "extracted",
     });
 
     await logAuditEvent({

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateDocumentFile } from "@/features/documents/document-service";
-import { getDocumentsByPatientId } from "@/lib/db/supabase";
+import { getDocumentsByPatientId, createDocument } from "@/lib/db/supabase";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
@@ -54,19 +54,22 @@ export async function POST(request: Request) {
 
     // Register document in private storage / database
     const docId = `doc-${crypto.randomUUID().slice(0, 8)}`;
-    const newDoc = {
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const newDoc = await createDocument({
       id: docId,
       patient_id: patientId,
-      case_id: null,
+      case_id: body.caseId || null,
       uploaded_by: auth.user.fullName || auth.user.id,
-      storage_path: `/private/documents/${patientId}/${docId}`,
+      storage_path: `/private/documents/${patientId}/${docId}/${safeName}`,
       original_filename: fileName,
       mime_type: mimeType,
       file_size: sizeBytes || 1024,
       document_type: documentType || "prescription",
       processing_status: "uploaded" as const,
-      created_at: new Date().toISOString(),
-    };
+      ocr_confidence: null,
+      extracted_data: null,
+      error_message: null,
+    });
 
     await logAuditEvent({
       actorId: auth.user.id,

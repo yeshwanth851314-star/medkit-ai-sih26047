@@ -1,6 +1,6 @@
 import { MedicalDocument } from "@/types/database";
 import { DocumentExtractionResult, documentExtractionResultSchema } from "./types";
-import { mockDb } from "@/lib/db/mock-adapter";
+import { getDocumentById, updateDocument } from "@/lib/db/supabase";
 
 const ALLOWED_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -85,13 +85,31 @@ export function validateDocumentFile(file: { mimeType: string; sizeBytes: number
 export async function processDocumentExtraction(documentId: string): Promise<DocumentExtractionResult> {
   // Check synthetic registry first for deterministic demo reliability
   if (SYNTHETIC_DOCUMENT_FIXTURES[documentId]) {
-    return documentExtractionResultSchema.parse(SYNTHETIC_DOCUMENT_FIXTURES[documentId]);
+    const fixture = documentExtractionResultSchema.parse(SYNTHETIC_DOCUMENT_FIXTURES[documentId]);
+    return fixture;
+  }
+
+  const doc = await getDocumentById(documentId);
+
+  // If already extracted in DB, load existing verified state
+  if (doc?.extracted_data && Object.keys(doc.extracted_data).length > 0) {
+    const existingData = doc.extracted_data as any;
+    if (existingData.medications || existingData.tests || existingData.doctor_name) {
+      return documentExtractionResultSchema.parse({
+        documentId,
+        documentType: doc.document_type || "prescription",
+        confidence: doc.ocr_confidence || 0.9,
+        extractedData: existingData,
+        disclaimer: "Extracted from uploaded document — verify before use.",
+        status: doc.processing_status === "confirmed" ? "confirmed" : "extracted",
+      });
+    }
   }
 
   // Generic fallback extraction for newly uploaded documents
   const genericResult: DocumentExtractionResult = {
     documentId,
-    documentType: "prescription",
+    documentType: (doc?.document_type as any) || "prescription",
     confidence: 0.88,
     extractedData: {
       medications: [
@@ -109,7 +127,16 @@ export async function processDocumentExtraction(documentId: string): Promise<Doc
     status: "extracted",
   };
 
-  return documentExtractionResultSchema.parse(genericResult);
+  const parsed = documentExtractionResultSchema.parse(genericResult);
+  if (doc) {
+    await updateDocument(documentId, {
+      extracted_data: parsed.extractedData,
+      ocr_confidence: parsed.confidence,
+      processing_status: "extracted",
+    });
+  }
+
+  return parsed;
 }
 
 export async function confirmExtractionMedication(
@@ -126,5 +153,20 @@ export async function confirmExtractionMedication(
   }
 
   result.status = "confirmed";
+
+  // Update in synthetic fixtures if this is a fixture document
+  if (SYNTHETIC_DOCUMENT_FIXTURES[documentId]) {
+    SYNTHETIC_DOCUMENT_FIXTURES[documentId] = {
+      ...result,
+      status: "confirmed",
+    };
+  }
+
+  // Persist confirmed state to database so it survives page reloads
+  await updateDocument(documentId, {
+    extracted_data: result.extractedData,
+    processing_status: "confirmed",
+  });
+
   return result;
 }
