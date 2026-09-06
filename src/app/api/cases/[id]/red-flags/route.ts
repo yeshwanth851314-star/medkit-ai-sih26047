@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCaseById, updateCase } from "@/lib/db/supabase";
+import { getCaseById, updateCase, getSupabaseClient } from "@/lib/db/supabase";
+import { env } from "@/config/env";
 import { evaluateClinicalRedFlags } from "@/features/red-flags/rules-engine";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requireCaseAccess } from "@/lib/auth/object-guard";
@@ -64,6 +65,22 @@ export async function POST(
     });
 
     await updateCase(id, { red_flags: updatedRedFlags });
+
+    const supabase = getSupabaseClient();
+    if (supabase && !env.isDemoMode) {
+      try {
+        await supabase
+          .from("red_flag_events")
+          .update({
+            acknowledged_by: auth.user.fullName || auth.user.id,
+            acknowledged_at: new Date().toISOString(),
+          })
+          .eq("case_id", id)
+          .eq("rule_id", ruleId);
+      } catch (err) {
+        console.warn("Failed to update red_flag_events table:", err);
+      }
+    }
 
     await logAuditEvent({
       actorId: auth.user.id,

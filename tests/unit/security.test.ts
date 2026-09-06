@@ -93,4 +93,28 @@ describe("Phase 14: Security, Privacy & Audit Trail Hardening Tests", () => {
     expect(envContent).not.toContain("eyJhbGciOi"); // No real JWTs
     expect(envContent).toContain('GEMINI_API_KEY="your-gemini-api-key"'); // Safe placeholder
   });
+
+  it("records audit events for consent revocation and offline sync with extended resource types", async () => {
+    const consentLog = await logAuditEvent({
+      actorId: "staff-777",
+      actorRole: "staff",
+      action: "CONSENT_REVOKED",
+      resourceType: "consents",
+      resourceId: "consent-uuid-1234",
+      metadata: { reason: "Patient opted out" },
+    });
+    expect(consentLog.resource_type).toBe("consents");
+    expect(consentLog.action).toBe("CONSENT_REVOKED");
+
+    const syncLog = await logAuditEvent({
+      actorId: "clinician-007",
+      actorRole: "clinician",
+      action: "SYNC_OFFLINE_OPERATION",
+      resourceType: "transcripts",
+      resourceId: "tr-9999",
+      metadata: { recordCount: 1 },
+    });
+    expect(syncLog.resource_type).toBe("transcripts");
+    expect(syncLog.action).toBe("SYNC_OFFLINE_OPERATION");
+  });
 });

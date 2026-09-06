@@ -39,7 +39,7 @@ export const clinicalAuditSchema = z.object({
   actor_id: z.string(),
   actor_role: z.string().optional(),
   action: z.string(),
-  resource_type: z.enum(["patients", "cases", "documents", "auth", "fhir", "consents"]),
+  resource_type: z.enum(["patients", "cases", "documents", "auth", "fhir", "consents", "transcripts"]),
   resource_id: z.string(),
   metadata: z.record(z.any()).optional().nullable(),
   created_at: z.string(),

@@ -1,4 +1,6 @@
 import { mockDb } from "../../lib/db/mock-adapter";
+import { getSupabaseClient } from "../../lib/db/supabase";
+import { env } from "@/config/env";
 import { AuditAction, ClinicalAuditLog, clinicalAuditSchema } from "./types";
 
 /**
@@ -25,14 +27,50 @@ export async function logAuditEvent(params: {
 
   const validated = clinicalAuditSchema.parse(entry);
 
-  // Store in database
-  mockDb.recordAudit(
-    validated.actor_id,
-    validated.action,
-    validated.resource_type,
-    validated.resource_id,
-    validated.metadata || undefined
-  );
+  const supabase = getSupabaseClient();
+  if (supabase && !env.isDemoMode) {
+    try {
+      const { error } = await supabase.from("audit_logs").insert([
+        {
+          id: validated.id,
+          actor_id: validated.actor_id,
+          actor_role: validated.actor_role,
+          action: validated.action,
+          resource_type: validated.resource_type,
+          resource_id: validated.resource_id,
+          metadata: validated.metadata,
+          created_at: validated.created_at,
+        },
+      ]);
+      if (error) {
+        console.warn("Supabase audit log insert error, falling back to mockDb:", error.message);
+        mockDb.recordAudit(
+          validated.actor_id,
+          validated.action,
+          validated.resource_type,
+          validated.resource_id,
+          validated.metadata || undefined
+        );
+      }
+    } catch (err) {
+      console.warn("Audit persistence exception, using mockDb:", err);
+      mockDb.recordAudit(
+        validated.actor_id,
+        validated.action,
+        validated.resource_type,
+        validated.resource_id,
+        validated.metadata || undefined
+      );
+    }
+  } else {
+    mockDb.recordAudit(
+      validated.actor_id,
+      validated.action,
+      validated.resource_type,
+      validated.resource_id,
+      validated.metadata || undefined
+    );
+  }
 
   return validated as ClinicalAuditLog;
 }
@@ -44,6 +82,24 @@ export async function getAuditTrailForResource(
   resourceType: string,
   resourceId: string
 ): Promise<ClinicalAuditLog[]> {
+  const supabase = getSupabaseClient();
+  if (supabase && !env.isDemoMode) {
+    try {
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select("*")
+        .eq("resource_type", resourceType)
+        .eq("resource_id", resourceId)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        return data as ClinicalAuditLog[];
+      }
+    } catch (err) {
+      console.warn("Failed to fetch audit logs from Supabase, falling back to mockDb:", err);
+    }
+  }
+
   const all = mockDb.getAuditLogs();
   return all
     .filter((log) => log.resource_type === resourceType && log.resource_id === resourceId)
@@ -63,6 +119,22 @@ export async function getAuditTrailForResource(
  * Query entire audit trail (for hospital compliance / administrators)
  */
 export async function getAllAuditLogs(): Promise<ClinicalAuditLog[]> {
+  const supabase = getSupabaseClient();
+  if (supabase && !env.isDemoMode) {
+    try {
+      const { data, error } = await supabase
+        .from("audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        return data as ClinicalAuditLog[];
+      }
+    } catch (err) {
+      console.warn("Failed to fetch all audit logs from Supabase, falling back to mockDb:", err);
+    }
+  }
+
   const all = mockDb.getAuditLogs();
   return all
     .map((log) => ({
