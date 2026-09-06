@@ -151,12 +151,30 @@ export function ClinicalSummaryCard({
         </div>
 
         {isEditing ? (
-          <textarea
-            rows={4}
-            value={editedNarrative}
-            onChange={(e) => setEditedNarrative(e.target.value)}
-            className="block w-full rounded-xl border border-surface-200 p-3 text-sm focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
-          />
+          <div className="space-y-2">
+            <textarea
+              rows={4}
+              value={editedNarrative}
+              onChange={(e) => setEditedNarrative(e.target.value)}
+              className="block w-full rounded-xl border border-surface-200 p-3 text-sm focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
+            />
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={handleConfirm}
+                className="inline-flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-semibold shadow-2xs"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Save &amp; Confirm Synopsis
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="text-xs text-slate-500 hover:text-slate-700 font-medium px-2 py-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         ) : (
           <p className="rounded-xl bg-surface-50 p-4 text-xs font-medium leading-relaxed text-slate-900 border border-surface-200">
             {editedNarrative}

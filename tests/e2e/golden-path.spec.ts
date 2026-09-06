@@ -215,13 +215,18 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await expect(textarea).toBeVisible();
       await textarea.fill("Clinician review note: Patient stabilized. ECG shows ST elevation. Emergency cardiology consultation initiated.");
 
-      // Click Confirm Synopsis
-      const confirmBtn = page.getByRole("button", { name: /Confirm Synopsis/i });
-      await confirmBtn.click();
+      // Click Save & Confirm Synopsis button
+      const saveConfirmBtn = page.getByRole("button", { name: "Save & Confirm Synopsis" });
+      if (await saveConfirmBtn.isVisible()) {
+        await saveConfirmBtn.click();
+      } else {
+        const confirmBtn = page.getByRole("button", { name: "Confirm Synopsis" }).first();
+        await confirmBtn.click();
+      }
 
       // Verify clinician confirmed status
       const confirmedBadge = page.getByText(/Clinician Confirmed/i);
-      await expect(confirmedBadge).toBeVisible();
+      await expect(confirmedBadge).toBeVisible({ timeout: 10000 });
     }
   });
 

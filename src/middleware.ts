@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifySessionTokenWeb } from "@/lib/auth/jwt";
-import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { verifySessionTokenWeb, SESSION_COOKIE_NAME } from "@/lib/auth/jwt-web";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

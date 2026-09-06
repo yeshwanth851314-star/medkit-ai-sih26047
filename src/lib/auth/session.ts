@@ -3,7 +3,8 @@ import { AuthUser } from "@/features/auth/types";
 import { parseSessionToken } from "@/features/auth/auth-service";
 import { UserRole } from "@/types/database";
 
-export const SESSION_COOKIE_NAME = "medkit_session_token";
+import { SESSION_COOKIE_NAME } from "./jwt-web";
+export { SESSION_COOKIE_NAME };
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
   const cookieStore = await cookies();
