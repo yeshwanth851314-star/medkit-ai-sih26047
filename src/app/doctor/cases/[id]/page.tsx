@@ -10,6 +10,7 @@ import { ClinicalSummaryCard } from "@/components/summary/clinical-summary-card"
 import { generateDeterministicSummary } from "@/features/summaries/summary-service";
 import { compareConsecutiveVisits } from "@/features/timeline/timeline-service";
 import { VisitComparisonView } from "@/components/timeline/visit-comparison";
+import { ContextualHelp } from "@/components/help/contextual-help";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Stethoscope,
@@ -157,16 +158,28 @@ export default async function CaseDetailsPage({
       )}
 
       {/* Red Flag Alert Notice if present */}
-      {c.red_flags && c.red_flags.length > 0 && (
+      {c.red_flags && c.red_flags.length > 0 ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900 space-y-2" role="alert">
-          <div className="flex items-center gap-2 font-bold text-sm text-red-700">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            CRITICAL CLINICAL RED FLAG
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-sm text-red-700">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              CRITICAL CLINICAL RED FLAG
+            </div>
+            <ContextualHelp topic="red_flags" />
           </div>
           <p className="text-xs font-medium">{c.red_flags[0].message}</p>
           <div className="text-[11px] text-red-600 italic">
             Potential red flag detected — immediate clinical assessment recommended. Non-diagnostic alert.
           </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-surface-200 bg-surface-50/80 p-3.5 text-xs text-slate-600 flex items-center justify-between no-print">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold text-slate-800">No rule-based red flags detected</span>
+            <ContextualHelp topic="red_flags" />
+          </div>
+          <span className="text-[11px] text-slate-400 hidden sm:inline">Deterministic safety check evaluated</span>
         </div>
       )}
 

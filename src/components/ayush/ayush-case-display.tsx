@@ -1,5 +1,6 @@
 import { AyushAssessment } from "@/types/database";
 import { Sparkles, ShieldCheck, CheckCircle2, Leaf, Clock } from "lucide-react";
+import { ContextualHelp } from "@/components/help/contextual-help";
 import { formatDateTime } from "@/lib/utils";
 
 interface AyushCaseDisplayProps {
@@ -30,8 +31,9 @@ export function AyushCaseDisplay({ assessment }: AyushCaseDisplayProps) {
             <Leaf className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               AYUSH Dashavidha Pariksha &amp; Ahara-Vihara
+              <ContextualHelp topic="ayush" />
             </h2>
             <p className="text-xs text-slate-500">
               Ten-fold clinical examination &amp; lifestyle assessment under Ministry of Ayush / AIIA guidelines

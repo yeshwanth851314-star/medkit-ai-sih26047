@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
@@ -18,14 +18,22 @@ import {
   HeartPulse,
   Send,
 } from "lucide-react";
+import { KioskIntro } from "@/components/onboarding/kiosk-intro";
+import { hasCompletedKioskOnboarding } from "@/lib/onboarding/onboarding-state";
 
 export default function PatientKioskIntakePage() {
   const router = useRouter();
 
-  // Intake Stages: 'language' -> 'consent' -> 'interview' -> 'completed'
-  const [stage, setStage] = useState<"language" | "consent" | "interview" | "completed">("language");
+  // Intake Stages: 'intro' -> 'language' -> 'consent' -> 'interview' -> 'completed'
+  const [stage, setStage] = useState<"intro" | "language" | "consent" | "interview" | "completed">("language");
   const [language, setLanguage] = useState<"en" | "te">("en");
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+
+  useEffect(() => {
+    if (!hasCompletedKioskOnboarding()) {
+      setStage("intro");
+    }
+  }, []);
 
   // Interview Session State
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -114,6 +122,20 @@ export default function PatientKioskIntakePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+      {/* STAGE 0: First-Time Patient Kiosk Introduction */}
+      {stage === "intro" && (
+        <KioskIntro
+          onStart={(lang) => {
+            setLanguage(lang);
+            setStage("language");
+          }}
+          onSkip={(lang) => {
+            setLanguage(lang);
+            setStage("language");
+          }}
+        />
+      )}
+
       {/* STAGE 1: Language Selection */}
       {stage === "language" && (
         <div className="rounded-3xl border border-surface-200 bg-white p-8 sm:p-12 shadow-sm text-center space-y-8">

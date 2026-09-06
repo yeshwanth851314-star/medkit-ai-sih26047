@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ClinicalCase, Patient, MedicalDocument } from "@/types/database";
 import { mapCaseToFhirBundle } from "@/features/interoperability/fhir-mapper";
 import { FhirPreviewDrawer } from "@/components/interoperability/fhir-preview-drawer";
+import { ContextualHelp } from "@/components/help/contextual-help";
 import {
   FileCode,
   Printer,
@@ -117,14 +118,17 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
         </Link>
 
         {/* FHIR R4 / ABDM Preview Button */}
-        <button
-          type="button"
-          onClick={() => setIsFhirOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700 transition-colors"
-        >
-          <FileCode className="h-3.5 w-3.5 text-clinical-600" />
-          <span>FHIR R4 / ABDM View</span>
-        </button>
+        <div className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsFhirOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700 transition-colors"
+          >
+            <FileCode className="h-3.5 w-3.5 text-clinical-600" />
+            <span>FHIR R4 / ABDM View</span>
+          </button>
+          <ContextualHelp topic="fhir" />
+        </div>
 
         {/* Finalize Case Button (for draft cases) */}
         {clinicalCase.status === "draft" && (
@@ -141,14 +145,17 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
 
         {/* Post-finalization Amendment Button */}
         {clinicalCase.status === "final" && (
-          <button
-            type="button"
-            onClick={() => setIsAmendModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-2xs hover:bg-amber-100/50 transition-colors"
-          >
-            <FileEdit className="h-3.5 w-3.5 text-amber-600" />
-            <span>Add Addendum</span>
-          </button>
+          <div className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setIsAmendModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-2xs hover:bg-amber-100/50 transition-colors"
+            >
+              <FileEdit className="h-3.5 w-3.5 text-amber-600" />
+              <span>Add Addendum</span>
+            </button>
+            <ContextualHelp topic="addendum" />
+          </div>
         )}
 
         {/* Print Case Sheet */}

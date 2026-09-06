@@ -1,4 +1,5 @@
 import { requireServerAuth } from "@/lib/auth/server-guard";
+import { DoctorTour } from "@/components/onboarding/doctor-tour";
 
 export default async function DoctorLayout({
   children,
@@ -10,5 +11,10 @@ export default async function DoctorLayout({
     allowedRoles: ["doctor", "clinician", "staff", "admin"],
   });
 
-  return <>{children}</>;
+  return (
+    <>
+      <DoctorTour />
+      {children}
+    </>
+  );
 }

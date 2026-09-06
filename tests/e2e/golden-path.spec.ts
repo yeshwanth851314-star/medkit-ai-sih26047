@@ -3,6 +3,25 @@ import { test, expect } from "@playwright/test";
 test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suite", () => {
   test.describe.configure({ mode: "serial" });
 
+  async function dismissDoctorTourIfOpen(page: any) {
+    const skipTourBtn = page.getByRole("button", { name: /Skip for now|Skip Tour|Close Quick Tour/i });
+    if (await skipTourBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await skipTourBtn.click();
+    }
+  }
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    // For standard feature verification tests 1-10, pre-seed completed onboarding
+    // so modal overlays do not disrupt unrelated feature assertions.
+    // Test 11 explicitly tests fresh first-time onboarding and replay.
+    if (!testInfo.title.includes("11.")) {
+      await page.addInitScript(() => {
+        window.localStorage.setItem("medkit_doctor_onboarding_completed_v1", "true");
+        window.localStorage.setItem("medkit_kiosk_onboarding_completed_v1", "true");
+      });
+    }
+  });
+
   test("1. Landing page loads with clinical safety controls, a11y landmarks, and navigation", async ({ page }) => {
     await page.goto("/");
 
@@ -35,6 +54,12 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await page.waitForURL(/\/doctor\/patients/);
     await expect(page).toHaveURL(/\/doctor\/patients/);
 
+    // Dismiss Doctor Tour if it auto-opens on fresh login so it doesn't obstruct background elements
+    const skipTourBtn = page.getByRole("button", { name: /Skip for now|Skip Tour|Done/i });
+    if (await skipTourBtn.isVisible({ timeout: 2500 }).catch(() => false)) {
+      await skipTourBtn.click();
+    }
+
     // Verify patients hub components
     const patientSearch = page.getByPlaceholder(/Search by code/i);
     await expect(patientSearch).toBeVisible();
@@ -46,6 +71,12 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
   test("3. Patient kiosk intake: language selection, consent recording, and adaptive questioning", async ({ page }) => {
     await page.goto("/intake/new");
+
+    // If first-time kiosk intro is visible, click Start Intake
+    const startIntroBtn = page.getByRole("button", { name: /Start Intake/i });
+    if (await startIntroBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await startIntroBtn.click();
+    }
 
     // Stage 1: Select Language
     const englishBtn = page.getByRole("button", { name: /English/i });
@@ -115,6 +146,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Verify Red Flag Warning is displayed prominently
     const redFlagBanner = page.getByText(/CRITICAL CLINICAL RED FLAG/i);
@@ -149,6 +181,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/timeline/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Verify Longitudinal Journey
     const timelineHeader = page.getByText(/Longitudinal Clinical Timeline/i);
@@ -168,6 +201,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/documents/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Verify OCR side-by-side header
     const ocrHeading = page.getByText(/Multimodal Document Digitization & OCR/i);
@@ -200,6 +234,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Check summary card is visible
     const summaryCard = page.getByText(/AI-Assisted Clinical Summary & Physician Copilot Synopsis/i);
@@ -239,6 +274,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c1111111-1111-4111-8111-111111111111/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Click FHIR R4 / ABDM View button
     const fhirBtn = page.getByRole("button", { name: /FHIR R4 \/ ABDM View/i });
@@ -280,6 +316,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c4444444-4444-4444-8444-444444444444/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // Verify AYUSH Stream badge
     const ayushBadge = page.getByText(/ayush Stream/i);
@@ -308,6 +345,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c2222222-2222-4222-8222-222222222222/);
     }
+    await dismissDoctorTourIfOpen(page);
 
     // 1. Verify Longitudinal Delta Analysis signature section is mounted directly on physician case sheet
     const comparisonSection = page.getByText(/What Changed Since the Previous Visit/i);
@@ -338,5 +376,128 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await page.keyboard.press("Escape");
     await expect(modalTitle).not.toBeVisible();
   });
+
+  test("11. First-time user onboarding: Doctor 5-step guided tour, persistent replay menu, bilingual kiosk intro, and contextual help", async ({ page }) => {
+    // 1. Doctor Tour flow on clean preference
+    await page.goto("/doctor/patients");
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/patients/);
+    }
+
+    // Reset onboarding state in localStorage to simulate fresh clinician login
+    await page.evaluate(() => {
+      window.localStorage.removeItem("medkit_doctor_onboarding_completed_v1");
+    });
+    await page.reload();
+
+    // Verify Welcome modal appears
+    const tourDialog = page.locator('div[role="dialog"]');
+    await expect(tourDialog).toBeVisible();
+    await expect(page.getByText(/Welcome to MedKit AI/i)).toBeVisible();
+
+    // Start Quick Tour
+    const startTourBtn = page.getByRole("button", { name: /Start Quick Tour/i });
+    await expect(startTourBtn).toBeVisible();
+    await startTourBtn.click();
+
+    // Step 1: Dashboard & Triage Hub
+    await expect(page.getByText(/Step 1 of 5/i)).toBeVisible();
+    await expect(page.getByText(/Triage & Intake Queue/i)).toBeVisible();
+    const nextBtn1 = page.getByRole("button", { name: /Next:/i });
+    await nextBtn1.click();
+
+    // Step 2: Red Flags
+    await expect(page.getByText(/Step 2 of 5/i)).toBeVisible();
+    await expect(page.getByText(/Rule-Based Safety Alerts/i)).toBeVisible();
+    const nextBtn2 = page.getByRole("button", { name: /Next:/i });
+    await nextBtn2.click();
+
+    // Step 3: What Changed (signature differentiator)
+    await expect(page.getByText(/Step 3 of 5/i)).toBeVisible();
+    await expect(page.getByText(/Primary Differentiator/i).first()).toBeVisible();
+    await expect(page.getByText(/See What Changed/i).first()).toBeVisible();
+    const nextBtn3 = page.getByRole("button", { name: /Next:/i });
+    await nextBtn3.click();
+
+    // Step 4: AI Summary & Provenance
+    await expect(page.getByText(/Step 4 of 5/i)).toBeVisible();
+    await expect(page.getByText(/AI-Assisted Clinical Summary/i).first()).toBeVisible();
+    await expect(page.getByText(/AI assists. The clinician decides./i).first()).toBeVisible();
+    const nextBtn4 = page.getByRole("button", { name: /Next:/i });
+    await nextBtn4.click();
+
+    // Step 5: Finalize & Addenda
+    await expect(page.getByText(/Step 5 of 5/i)).toBeVisible();
+    await expect(page.getByText(/Finalize the Clinical Record/i).first()).toBeVisible();
+    const finishBtn = page.getByRole("button", { name: /Start Using MedKit AI/i });
+    await finishBtn.click();
+
+    // Verify modal is closed
+    await expect(tourDialog).not.toBeVisible();
+
+    // Replay tour via Header Persistent Help Menu
+    const helpMenuBtn = page.getByRole("button", { name: /Clinician Help & Quick Tour Menu/i });
+    await expect(helpMenuBtn).toBeVisible();
+    await helpMenuBtn.click();
+
+    const replayBtn = page.getByRole("menuitem", { name: /Replay Quick Tour/i });
+    await expect(replayBtn).toBeVisible();
+    await replayBtn.click();
+
+    // Tour re-opens directly in tour mode
+    await expect(tourDialog).toBeVisible();
+
+    // Dismiss with Escape key
+    await page.keyboard.press("Escape");
+    await expect(tourDialog).not.toBeVisible();
+
+    // 2. Patient Kiosk First-Time Intro
+    await page.goto("/intake/new");
+    await page.evaluate(() => {
+      window.localStorage.removeItem("medkit_kiosk_onboarding_completed_v1");
+    });
+    await page.reload();
+
+    // Verify Kiosk Intro Card is displayed
+    await expect(page.getByText(/Patient Kiosk Guide/i).first()).toBeVisible();
+    await expect(page.getByText(/Welcome to MedKit AI/i).first()).toBeVisible();
+
+    // Toggle to Telugu
+    const teBtn = page.getByRole("button", { name: /తెలుగు/i });
+    await teBtn.click();
+    await expect(page.getByText(/రోగి కియోస్క్ గైడ్/i).first()).toBeVisible();
+    await expect(page.getByText(/MedKit AI కి స్వాగతం/i).first()).toBeVisible();
+
+    // Switch back to English
+    const enBtn = page.getByRole("button", { name: "English" });
+    await enBtn.click();
+    await expect(page.getByText(/Patient Kiosk Guide/i).first()).toBeVisible();
+
+    // Click Start Intake
+    const kioskStartBtn = page.getByRole("button", { name: /Start Intake/i });
+    await kioskStartBtn.click();
+
+    // Advances to language selection
+    const engSelectBtn = page.getByRole("button", { name: /English/i });
+    await expect(engSelectBtn).toBeVisible();
+
+    // 3. Clinical Contextual Help Verification on Case Sheet
+    await page.goto("/doctor/cases/c2222222-2222-4222-8222-222222222222");
+    const helpBtn = page.getByRole("button", { name: /Help:.*What Changed/i }).first();
+    await expect(helpBtn).toBeVisible();
+    await helpBtn.click();
+
+    // Verify definition popover appears
+    const definitionNotice = page.getByText(/Signature longitudinal synthesis computed deterministically/i).first();
+    await expect(definitionNotice).toBeVisible();
+
+    // Close popover with Escape
+    await page.keyboard.press("Escape");
+    await expect(definitionNotice).not.toBeVisible();
+  });
 });
+
 

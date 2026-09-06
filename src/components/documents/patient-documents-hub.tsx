@@ -85,13 +85,16 @@ export function PatientDocumentsHub({
       ) : (
         <div className="rounded-xl border border-dashed border-surface-300 p-8 text-center bg-surface-50/50">
           <FileText className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-2 text-xs font-semibold text-slate-700">No prior medical records digitized yet.</p>
+          <h3 className="mt-2 text-sm font-semibold text-slate-900">No documents uploaded yet</h3>
+          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+            Upload a prescription, lab report, or supported clinical document to extract reviewable information.
+          </p>
           <button
             type="button"
             onClick={() => setShowUploader(true)}
             className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-clinical-600 hover:text-clinical-700"
           >
-            Upload the first prescription or lab report &rarr;
+            Upload the first document &rarr;
           </button>
         </div>
       )}

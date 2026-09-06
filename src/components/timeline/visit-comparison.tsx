@@ -14,6 +14,8 @@ import {
   Clock,
 } from "lucide-react";
 
+import { ContextualHelp } from "@/components/help/contextual-help";
+
 export function VisitComparisonView({ comparison }: { comparison: VisitComparisonResult }) {
   if (!comparison.hasPreviousVisit) {
     return (
@@ -21,9 +23,9 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
         <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-clinical-100 text-clinical-600 mb-2">
           <HeartPulse className="h-5 w-5" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">Baseline Visit Recorded</h3>
+        <h3 className="text-sm font-semibold text-slate-900">No previous visit available</h3>
         <p className="mt-1 text-xs text-slate-500 max-w-md mx-auto">
-          This is the patient&apos;s initial encounter. Subsequent visits will automatically compute clinical comparisons and highlight delta changes.
+          &ldquo;What Changed Since Last Visit?&rdquo; will appear after this patient has more than one recorded encounter. Baseline visit recorded.
         </p>
       </div>
     );
@@ -54,7 +56,10 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
           </div>
         </div>
 
-        <h2 className="text-lg font-bold text-slate-900">What Changed Since the Previous Visit?</h2>
+        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          What Changed Since the Previous Visit?
+          <ContextualHelp topic="what_changed" />
+        </h2>
         <p className="text-xs text-slate-500 mt-0.5">
           Automated cross-encounter synthesis comparing Encounter on {comparison.previousVisitDate ? formatDateTime(comparison.previousVisitDate) : "prior"} with Current Encounter on {formatDateTime(comparison.currentVisitDate)}
         </p>

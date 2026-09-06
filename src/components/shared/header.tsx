@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, Stethoscope, Users, FileText, ShieldAlert, Sparkles } from "lucide-react";
 import { ProviderBadge } from "./provider-badge";
+import { DoctorHelpMenu } from "@/components/help/doctor-help-menu";
 
 export function Header() {
   return (
@@ -43,6 +44,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-3">
+          <DoctorHelpMenu />
           <ProviderBadge />
 
           <Link

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ClinicalSummary } from "@/features/summaries/types";
+import { ContextualHelp } from "@/components/help/contextual-help";
 import {
   Sparkles,
   ShieldCheck,
@@ -96,8 +97,13 @@ export function ClinicalSummaryCard({
                 Review Required
               </span>
             )}
+
+            <ContextualHelp topic="provenance" />
           </div>
-          <h2 className="mt-2 text-base font-bold text-slate-900">AI-Assisted Clinical Summary &amp; Physician Copilot Synopsis</h2>
+          <h2 className="mt-2 text-base font-bold text-slate-900 flex items-center gap-2">
+            AI-Assisted Clinical Summary &amp; Physician Copilot Synopsis
+            <ContextualHelp topic="summary" />
+          </h2>
         </div>
 
         <div className="flex items-center gap-2">
@@ -176,10 +182,15 @@ export function ClinicalSummaryCard({
               </button>
             </div>
           </div>
-        ) : (
+        ) : editedNarrative?.trim() ? (
           <p className="rounded-xl bg-surface-50 p-4 text-xs font-medium leading-relaxed text-slate-900 border border-surface-200">
             {editedNarrative}
           </p>
+        ) : (
+          <div className="rounded-xl bg-surface-50 p-4 text-xs text-slate-500 border border-surface-200 text-center">
+            <span className="font-semibold text-slate-700 block">No clinical synopsis generated yet</span>
+            <span className="text-[11px] text-slate-400 mt-0.5 block">Generate a structured AI-assisted summary after reviewing the intake.</span>
+          </div>
         )}
       </div>
 
