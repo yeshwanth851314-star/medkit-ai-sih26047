@@ -195,3 +195,28 @@ export async function getDocumentsByPatientId(patientId: string): Promise<Medica
   return (data || []) as MedicalDocument[];
 }
 
+export async function getDocumentById(id: string): Promise<MedicalDocument | null> {
+  if (env.isDemoMode) {
+    return mockDb.getDocumentById(id);
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Supabase getDocumentById error:", error);
+    throw new Error(`Database error fetching document ${id}: ${error.message}`);
+  }
+
+  return (data || null) as MedicalDocument | null;
+}
+
+

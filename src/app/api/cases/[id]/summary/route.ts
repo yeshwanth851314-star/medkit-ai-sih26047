@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateDeterministicSummary } from "@/features/summaries/summary-service";
 import { getAIProvider } from "@/features/ai/ai-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requireCaseAccess } from "@/lib/auth/object-guard";
 
 export async function GET(
   request: Request,
@@ -14,6 +15,11 @@ export async function GET(
 
   try {
     const { id } = await params;
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
+    }
+
     const summary = await generateDeterministicSummary(id);
     return NextResponse.json({ summary });
   } catch (err: any) {
@@ -33,6 +39,11 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
+    }
+
     const body = await request.json().catch(() => ({}));
     const useAI = body.type === "ai_assisted";
 

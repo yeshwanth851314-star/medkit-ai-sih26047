@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { getCasesByPatientId, getDocumentsByPatientId } from "@/lib/db/supabase";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requirePatientAccess } from "@/lib/auth/object-guard";
 
 export async function GET(
   request: Request,
@@ -14,11 +15,11 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const patient = await getPatientDetails(id);
-
-    if (!patient) {
-      return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+    const accessCheck = await requirePatientAccess(auth.user, id);
+    if (!accessCheck.authorized) {
+      return accessCheck.errorResponse;
     }
+    const patient = accessCheck.data;
 
     const [cases, documents] = await Promise.all([
       getCasesByPatientId(id),

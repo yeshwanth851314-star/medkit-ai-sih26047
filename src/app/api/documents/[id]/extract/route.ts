@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOCRProvider } from "@/features/documents/ocr-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requireDocumentAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(
@@ -12,6 +13,11 @@ export async function GET(
 
   try {
     const { id } = await params;
+    const docCheck = await requireDocumentAccess(auth.user, id);
+    if (!docCheck.authorized) {
+      return docCheck.errorResponse;
+    }
+
     const ocrProvider = getOCRProvider();
     const extraction = await ocrProvider.extract({ documentId: id });
 
@@ -40,6 +46,11 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const docCheck = await requireDocumentAccess(auth.user, id);
+    if (!docCheck.authorized) {
+      return docCheck.errorResponse;
+    }
+
     const body = await request.json().catch(() => ({}));
     const ocrProvider = getOCRProvider();
     const extraction = await ocrProvider.extract({

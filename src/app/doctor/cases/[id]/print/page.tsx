@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireServerAuth } from "@/lib/auth/server-guard";
 import { getCaseDetails } from "@/features/cases/case-service";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -10,6 +11,7 @@ export default async function PrintCaseSheetPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const c = await getCaseDetails(id);
   if (!c) notFound();

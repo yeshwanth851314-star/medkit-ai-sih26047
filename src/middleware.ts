@@ -1,17 +1,30 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifySessionTokenWeb } from "@/lib/auth/jwt";
+import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protected paths requiring clinical authentication
   if (pathname.startsWith("/doctor")) {
-    const sessionCookie = request.cookies.get("medkit_session_token")?.value;
+    const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
     if (!sessionCookie) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirectTo", pathname);
       return NextResponse.redirect(loginUrl);
+    }
+
+    // Cryptographically verify session signature, expiration, and clinical role
+    const user = await verifySessionTokenWeb(sessionCookie);
+    if (!user || !["doctor", "clinician", "staff", "admin"].includes(user.role)) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirectTo", pathname);
+      loginUrl.searchParams.set("error", "invalid_session");
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete(SESSION_COOKIE_NAME);
+      return response;
     }
   }
 
@@ -21,3 +34,4 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/doctor/:path*"],
 };
+

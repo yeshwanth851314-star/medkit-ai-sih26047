@@ -20,6 +20,7 @@ export interface Patient {
   address?: string | null;
   blood_group?: string | null;
   abha_id?: string | null;
+  facility_id?: string | null;
   emergency_contact?: {
     name: string;
     relationship: string;

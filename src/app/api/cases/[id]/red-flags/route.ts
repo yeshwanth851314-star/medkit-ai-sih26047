@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaseById, updateCase } from "@/lib/db/supabase";
 import { evaluateClinicalRedFlags } from "@/features/red-flags/rules-engine";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requireCaseAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(
@@ -13,8 +14,11 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const c = await getCaseById(id);
-    if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
+    }
+    const c = caseCheck.data;
 
     const redFlags = evaluateClinicalRedFlags({
       chiefComplaint: c.chief_complaint,
@@ -39,11 +43,13 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
+    }
+    const c = caseCheck.data;
     const body = await request.json();
     const { ruleId } = body;
-
-    const c = await getCaseById(id);
-    if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
     const currentRedFlags = c.red_flags || [];
     const updatedRedFlags = currentRedFlags.map((rf) => {

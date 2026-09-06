@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireServerAuth } from "@/lib/auth/server-guard";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { getCasesByPatientId, getDocumentsByPatientId } from "@/lib/db/supabase";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -24,6 +25,7 @@ export default async function PatientProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const patient = await getPatientDetails(id);
 

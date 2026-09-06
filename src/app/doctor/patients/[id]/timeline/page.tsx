@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireServerAuth } from "@/lib/auth/server-guard";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { buildPatientTimeline, compareConsecutiveVisits } from "@/features/timeline/timeline-service";
 import { ClinicalTimelineView } from "@/components/timeline/clinical-timeline";
@@ -12,6 +13,7 @@ export default async function PatientTimelinePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const patient = await getPatientDetails(id);
 

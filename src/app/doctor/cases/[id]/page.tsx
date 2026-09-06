@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireServerAuth } from "@/lib/auth/server-guard";
 import { getCaseDetails } from "@/features/cases/case-service";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { getDocumentsByPatientId } from "@/lib/db/supabase";
@@ -28,6 +29,7 @@ export default async function CaseDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const c = await getCaseDetails(id);
 

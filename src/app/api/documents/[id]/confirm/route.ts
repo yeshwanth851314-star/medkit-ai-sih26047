@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
 import { confirmExtractionMedication } from "@/features/documents/document-service";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requireDocumentAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireApiAuth(request);
+  const auth = await requireApiAuth(request, { allowedRoles: ["doctor", "clinician", "admin"] });
   if ("errorResponse" in auth) return auth.errorResponse;
 
   try {
     const { id } = await params;
+    const docCheck = await requireDocumentAccess(auth.user, id);
+    if (!docCheck.authorized) {
+      return docCheck.errorResponse;
+    }
     const body = await request.json();
     const { medicationName } = body;
 

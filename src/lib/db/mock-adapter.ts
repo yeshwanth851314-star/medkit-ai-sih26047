@@ -29,6 +29,7 @@ class MockDatabaseAdapter {
           phone: p.phone,
           address: p.address,
           blood_group: p.blood_group,
+          facility_id: p.facility_id || "fac-hyd-01",
           emergency_contact: p.emergency_contact,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -148,6 +149,10 @@ class MockDatabaseAdapter {
   // Documents
   async getDocumentsByPatientId(patientId: string): Promise<MedicalDocument[]> {
     return Array.from(this.documents.values()).filter((d) => d.patient_id === patientId);
+  }
+
+  async getDocumentById(id: string): Promise<MedicalDocument | null> {
+    return this.documents.get(id) || null;
   }
 
   // Consents

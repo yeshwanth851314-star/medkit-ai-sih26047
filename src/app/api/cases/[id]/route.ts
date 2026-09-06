@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaseDetails, updateCaseDraft, finalizeCase, addCaseAmendment } from "@/features/cases/case-service";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requireCaseAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(
@@ -14,11 +15,11 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const clinicalCase = await getCaseDetails(id);
-
-    if (!clinicalCase) {
-      return NextResponse.json({ error: "Case not found" }, { status: 404 });
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
     }
+    const clinicalCase = caseCheck.data;
 
     return NextResponse.json({ case: clinicalCase });
   } catch (err) {
@@ -38,6 +39,10 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    const caseCheck = await requireCaseAccess(auth.user, id);
+    if (!caseCheck.authorized) {
+      return caseCheck.errorResponse;
+    }
     const body = await request.json();
 
     // Finalization strictly requires doctor or clinician role

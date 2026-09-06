@@ -176,4 +176,153 @@ describe("Phase 1: API & Session Authorization Security Invariants", () => {
       }
     });
   });
+
+  describe("Production Session Secret & Legacy Token Hardening", () => {
+    it("strictly rejects forged demo-session tokens when APP_MODE is production", () => {
+      const prevMode = process.env.APP_MODE;
+      const prevNextDemo = process.env.NEXT_PUBLIC_DEMO_MODE;
+      try {
+        process.env.APP_MODE = "production";
+        process.env.NEXT_PUBLIC_DEMO_MODE = "false";
+
+        const forgedPayload = Buffer.from(
+          JSON.stringify({ id: "hacker", email: "hacker@evil.com", role: "doctor" })
+        ).toString("base64");
+        const forgedToken = `demo-session-${forgedPayload}`;
+
+        const verified = verifySessionToken(forgedToken);
+        expect(verified).toBeNull();
+      } finally {
+        process.env.APP_MODE = prevMode;
+        process.env.NEXT_PUBLIC_DEMO_MODE = prevNextDemo;
+      }
+    });
+
+    it("verifies session tokens using WebCrypto async verifier (middleware engine)", async () => {
+      const { verifySessionTokenWeb } = await import("../../src/lib/auth/jwt");
+      const token = signSessionToken(doctorUser);
+      const verified = await verifySessionTokenWeb(token);
+
+      expect(verified).not.toBeNull();
+      expect(verified?.id).toBe(doctorUser.id);
+      expect(verified?.role).toBe("doctor");
+
+      // Verify tampered fails
+      const tampered = `${token.split(".")[0]}.${token.split(".")[1]}.invalidsig`;
+      const tamperedVerified = await verifySessionTokenWeb(tampered);
+      expect(tamperedVerified).toBeNull();
+    });
+
+    it("throws when SESSION_SECRET is missing and no test secret is set", async () => {
+      const { getSessionSecret, setSessionSecretForTesting } = await import("../../src/lib/auth/jwt");
+      const prevSecret = process.env.SESSION_SECRET;
+      try {
+        setSessionSecretForTesting(null);
+        delete process.env.SESSION_SECRET;
+        expect(() => getSessionSecret()).toThrow("SESSION_SECRET is required");
+      } finally {
+        process.env.SESSION_SECRET = prevSecret;
+      }
+    });
+
+    it("supports explicit test secret injection via setSessionSecretForTesting", async () => {
+      const { getSessionSecret, setSessionSecretForTesting } = await import("../../src/lib/auth/jwt");
+      try {
+        setSessionSecretForTesting("custom-injected-test-secret-12345");
+        expect(getSessionSecret()).toBe("custom-injected-test-secret-12345");
+      } finally {
+        setSessionSecretForTesting(null);
+      }
+    });
+  });
+
+  describe("Object-Level Clinical Authorization Guards", () => {
+    it("requirePatientAccess permits access to patient within same facility", async () => {
+      const { requirePatientAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requirePatientAccess(doctorUser, "11111111-1111-4111-8111-111111111111");
+
+      expect(result.authorized).toBe(true);
+      if (result.authorized) {
+        expect(result.data.id).toBe("11111111-1111-4111-8111-111111111111");
+      }
+    });
+
+    it("requirePatientAccess rejects cross-facility access with 403", async () => {
+      const { requirePatientAccess } = await import("../../src/lib/auth/object-guard");
+      const otherFacilityDoctor: AuthUser = {
+        ...doctorUser,
+        id: "usr-doc-delhi",
+        facilityId: "fac-delhi-99", // Different facility
+      };
+
+      const result = await requirePatientAccess(otherFacilityDoctor, "11111111-1111-4111-8111-111111111111");
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(403);
+      }
+    });
+
+    it("requirePatientAccess returns 404 for non-existent patient", async () => {
+      const { requirePatientAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requirePatientAccess(doctorUser, "non-existent-patient-id");
+
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(404);
+      }
+    });
+
+    it("requireCaseAccess succeeds for valid patient case", async () => {
+      const { requireCaseAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requireCaseAccess(doctorUser, "c1111111-1111-4111-8111-111111111111");
+
+      expect(result.authorized).toBe(true);
+      if (result.authorized) {
+        expect(result.data.id).toBe("c1111111-1111-4111-8111-111111111111");
+      }
+    });
+
+    it("requireCaseAccess returns 404 for non-existent case", async () => {
+      const { requireCaseAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requireCaseAccess(doctorUser, "non-existent-case-id");
+
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(404);
+      }
+    });
+
+    it("requireCaseBelongsToPatient rejects cross-patient case association with 400", async () => {
+      const { requireCaseBelongsToPatient } = await import("../../src/lib/auth/object-guard");
+      // c1111111-1111-4111-8111-111111111111 belongs to 11111111-1111-4111-8111-111111111111
+      const wrongPatientId = "22222222-2222-4222-8222-222222222222";
+      const result = await requireCaseBelongsToPatient("c1111111-1111-4111-8111-111111111111", wrongPatientId);
+
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(400);
+      }
+    });
+
+    it("requireDocumentAccess succeeds for valid document", async () => {
+      const { requireDocumentAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requireDocumentAccess(doctorUser, "doc-0001");
+
+      expect(result.authorized).toBe(true);
+      if (result.authorized) {
+        expect(result.data.id).toBe("doc-0001");
+      }
+    });
+
+    it("requireDocumentAccess returns 404 for non-existent document", async () => {
+      const { requireDocumentAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requireDocumentAccess(doctorUser, "doc-non-existent");
+
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(404);
+      }
+    });
+  });
 });
+
