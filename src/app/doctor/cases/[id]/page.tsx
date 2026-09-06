@@ -8,6 +8,8 @@ import { CaseActionsBar } from "@/components/cases/case-actions-bar";
 import { AyushCaseDisplay } from "@/components/ayush/ayush-case-display";
 import { ClinicalSummaryCard } from "@/components/summary/clinical-summary-card";
 import { generateDeterministicSummary } from "@/features/summaries/summary-service";
+import { compareConsecutiveVisits } from "@/features/timeline/timeline-service";
+import { VisitComparisonView } from "@/components/timeline/visit-comparison";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Stethoscope,
@@ -39,10 +41,11 @@ export default async function CaseDetailsPage({
     notFound();
   }
 
-  const [patient, documents, initialSummary] = await Promise.all([
+  const [patient, documents, initialSummary, visitComparison] = await Promise.all([
     getPatientDetails(c.patient_id),
     getDocumentsByPatientId(c.patient_id),
     generateDeterministicSummary(c.id).catch(() => null),
+    compareConsecutiveVisits(c.patient_id, c.id).catch(() => null),
   ]);
 
   if (initialSummary && c.assessment_plan?.summary) {
@@ -145,6 +148,13 @@ export default async function CaseDetailsPage({
           </div>
         )}
       </div>
+
+      {/* Signature Longitudinal Feature: What Changed Since Previous Visit */}
+      {visitComparison && visitComparison.hasPreviousVisit && (
+        <div className="no-print">
+          <VisitComparisonView comparison={visitComparison} />
+        </div>
+      )}
 
       {/* Red Flag Alert Notice if present */}
       {c.red_flags && c.red_flags.length > 0 && (

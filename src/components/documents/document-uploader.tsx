@@ -153,11 +153,20 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
 
       {/* Dropzone */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Upload prior medical document file"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all ${
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all focus:outline-hidden focus:ring-2 focus:ring-clinical-500 ${
           isDragging
             ? "border-clinical-500 bg-clinical-50/50"
             : selectedFile
@@ -171,6 +180,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
           accept=".pdf,image/png,image/jpeg,image/jpg"
           onChange={handleFileChange}
           className="hidden"
+          aria-hidden="true"
         />
 
         {selectedFile ? (
@@ -184,12 +194,13 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
             </div>
             <button
               type="button"
+              aria-label="Remove selected file"
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
-              className="ml-2 rounded-full p-1 text-slate-400 hover:bg-surface-200 hover:text-slate-700"
+              className="ml-2 rounded-full p-1 text-slate-400 hover:bg-surface-200 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-clinical-500"
             >
               <X className="h-4 w-4" />
             </button>
@@ -210,8 +221,11 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
       {selectedFile && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-700">Document Classification:</label>
+            <label htmlFor="document-classification-select" className="text-xs font-semibold text-slate-700">
+              Document Classification:
+            </label>
             <select
+              id="document-classification-select"
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value as any)}
               className="rounded-lg border border-surface-200 bg-white py-1.5 px-2.5 text-xs text-slate-800 focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"

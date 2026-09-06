@@ -297,4 +297,46 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     const aharaHeading = page.getByText(/Ahara-Vihara \(Diet & Regimen Analysis\)/i);
     await expect(aharaHeading).toBeVisible();
   });
+
+  test("10. Longitudinal 'What Changed Since Previous Visit' delta badges and case finalization addendum workflow", async ({ page }) => {
+    // Navigate to follow-up encounter c2222222-2222-4222-8222-222222222222
+    await page.goto("/doctor/cases/c2222222-2222-4222-8222-222222222222");
+
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', "doctor123");
+      await page.click('button[type="submit"]');
+      await page.waitForURL(/\/doctor\/cases\/c2222222-2222-4222-8222-222222222222/);
+    }
+
+    // 1. Verify Longitudinal Delta Analysis signature section is mounted directly on physician case sheet
+    const comparisonSection = page.getByText(/What Changed Since the Previous Visit/i);
+    await expect(comparisonSection).toBeVisible();
+
+    // 2. Verify Symptom progression badges
+    const newSymptomsBadge = page.getByText(/New Symptoms/i);
+    await expect(newSymptomsBadge).toBeVisible();
+
+    const resolvedBadge = page.getByText(/Resolved/i).first();
+    await expect(resolvedBadge).toBeVisible();
+
+    // 3. Verify Medication titration delta table
+    const medTableHeading = page.getByText(/Medication Changes & Titration Delta/i);
+    await expect(medTableHeading).toBeVisible();
+
+    // 4. Test Finalized Case immutability & Addendum modal on finalized case c1111111-1111-4111-8111-111111111111
+    await page.goto("/doctor/cases/c1111111-1111-4111-8111-111111111111");
+    const addendumBtn = page.getByRole("button", { name: /Add Addendum/i });
+    await expect(addendumBtn).toBeVisible();
+    await addendumBtn.click();
+
+    // Verify modal appears with a11y dialog semantics
+    const modalTitle = page.getByText(/Append Clinical Addendum to Case/i);
+    await expect(modalTitle).toBeVisible();
+
+    // Dismiss with Escape key (testing our new a11y keyboard listener)
+    await page.keyboard.press("Escape");
+    await expect(modalTitle).not.toBeVisible();
+  });
 });
+

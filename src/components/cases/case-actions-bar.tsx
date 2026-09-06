@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ClinicalCase, Patient, MedicalDocument } from "@/types/database";
@@ -33,6 +33,17 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
   const [isSubmittingAmend, setIsSubmittingAmend] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [amendError, setAmendError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAmendModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsAmendModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAmendModalOpen]);
 
   const handleFinalizeCase = async () => {
     setIsFinalizing(true);
@@ -160,19 +171,28 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
 
       {/* Amendment Modal */}
       {isAmendModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="addendum-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAmendModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+        >
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-surface-200 pb-3">
               <div className="flex items-center gap-2">
                 <History className="h-5 w-5 text-amber-600" />
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 id="addendum-modal-title" className="text-sm font-bold text-slate-900">
                   Append Clinical Addendum to Case
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsAmendModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-surface-100 hover:text-slate-700"
+                aria-label="Close addendum modal"
+                className="rounded-lg p-1 text-slate-400 hover:bg-surface-100 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               >
                 <X className="h-4 w-4" />
               </button>

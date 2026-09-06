@@ -23,6 +23,19 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
   const [activeTab, setActiveTab] = useState<"summary" | "json">("summary");
   const [copied, setCopied] = useState(false);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleCopyJson = () => {
@@ -51,18 +64,27 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
   }, {} as Record<string, number>);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fhir-drawer-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
+    >
       <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl transition-all">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">FHIR R4 / ABDM Record Preview</h3>
+            <h3 id="fhir-drawer-title" className="text-lg font-bold text-slate-900">FHIR R4 / ABDM Record Preview</h3>
             <p className="text-xs text-slate-500 font-mono">Bundle ID: {bundle.id}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Close FHIR preview ✕"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-clinical-500"
           >
             ✕
           </button>
@@ -83,6 +105,7 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
         <div className="flex border-b border-slate-200 px-6">
           <button
             type="button"
+            aria-pressed={activeTab === "summary"}
             onClick={() => setActiveTab("summary")}
             className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === "summary"
@@ -94,6 +117,7 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
           </button>
           <button
             type="button"
+            aria-pressed={activeTab === "json"}
             onClick={() => setActiveTab("json")}
             className={`py-3 px-4 text-xs font-semibold border-b-2 transition-colors ${
               activeTab === "json"

@@ -156,6 +156,7 @@ export function ClinicalSummaryCard({
               rows={4}
               value={editedNarrative}
               onChange={(e) => setEditedNarrative(e.target.value)}
+              aria-label="Synthesized Clinical History narrative"
               className="block w-full rounded-xl border border-surface-200 p-3 text-sm focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
             />
             <div className="flex items-center gap-2 justify-end">

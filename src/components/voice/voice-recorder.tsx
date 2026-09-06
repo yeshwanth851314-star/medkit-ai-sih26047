@@ -31,9 +31,17 @@ export function VoiceRecorder({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (_) {}
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
     };
   }, []);
 
@@ -65,6 +73,7 @@ export function VoiceRecorder({
       mediaRecorder.onstop = async () => {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
         }
 
         const mimeType = mediaRecorder.mimeType || "audio/webm";
@@ -176,7 +185,8 @@ export function VoiceRecorder({
             <button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
-              className={`relative flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-all ${
+              aria-label={isRecording ? "Stop audio recording" : "Start audio recording"}
+              className={`relative flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-all focus:outline-hidden focus:ring-4 focus:ring-clinical-300 ${
                 isRecording ? "bg-red-600 hover:bg-red-700" : "bg-clinical-600 hover:bg-clinical-700"
               }`}
             >
@@ -244,7 +254,7 @@ export function VoiceRecorder({
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label htmlFor="voice-transcript-input" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Captured Transcript (Editable by Patient / Clinician)
               </label>
               <span className="text-xs text-slate-500">
@@ -252,9 +262,11 @@ export function VoiceRecorder({
               </span>
             </div>
             <textarea
+              id="voice-transcript-input"
               rows={3}
               value={editedTranscript}
               onChange={(e) => setEditedTranscript(e.target.value)}
+              aria-label="Captured Transcript"
               className="block w-full rounded-xl border border-surface-200 p-3 text-sm focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
             />
           </div>
