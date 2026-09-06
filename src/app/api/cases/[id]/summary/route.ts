@@ -3,6 +3,7 @@ import { generateDeterministicSummary } from "@/features/summaries/summary-servi
 import { getAIProvider } from "@/features/ai/ai-provider";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requireCaseAccess } from "@/lib/auth/object-guard";
+import { checkRateLimit, createRateLimitResponse, getRateLimitKey } from "@/lib/security/rate-limiter";
 
 export async function GET(
   request: Request,
@@ -68,6 +69,13 @@ export async function POST(
       });
 
       return NextResponse.json({ success: true, summary: confirmedSummary });
+    }
+
+    // Rate limit summary generation calls to prevent LLM quota exhaustion
+    const rateLimitKey = getRateLimitKey(request, "summary_gen", auth.user.id);
+    const rateCheck = checkRateLimit(rateLimitKey, { windowMs: 60 * 1000, maxRequests: 15 });
+    if (!rateCheck.allowed) {
+      return createRateLimitResponse(rateCheck.resetTimeMs, "Summary generation rate limit exceeded. Please wait a moment.");
     }
 
     const useAI = body.type === "ai_assisted";

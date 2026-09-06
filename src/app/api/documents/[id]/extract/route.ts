@@ -4,6 +4,18 @@ import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requireDocumentAccess } from "@/lib/auth/object-guard";
 import { updateDocument } from "@/lib/db/supabase";
 import { logAuditEvent } from "@/features/security/audit-service";
+import { checkRateLimit, createRateLimitResponse, getRateLimitKey } from "@/lib/security/rate-limiter";
+
+const ALLOWED_DOCUMENT_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/tiff",
+]);
+
+const MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 
 export async function GET(
   request: Request,
@@ -52,7 +64,34 @@ export async function POST(
       return docCheck.errorResponse;
     }
 
+    // Rate limiting: 20 extractions per minute per user
+    const rateLimitKey = getRateLimitKey(request, "doc_extract", auth.user.id);
+    const rateCheck = checkRateLimit(rateLimitKey, { windowMs: 60 * 1000, maxRequests: 20 });
+    if (!rateCheck.allowed) {
+      return createRateLimitResponse(rateCheck.resetTimeMs, "Document extraction rate limit exceeded. Please wait a moment.");
+    }
+
     const body = await request.json().catch(() => ({}));
+
+    // Check MIME type if provided
+    if (body.mimeType && !ALLOWED_DOCUMENT_MIMES.has(body.mimeType.toLowerCase())) {
+      return NextResponse.json(
+        { error: `Unsupported document MIME type: ${body.mimeType}. Allowed formats: PDF, JPEG, PNG, WEBP, TIFF` },
+        { status: 415 }
+      );
+    }
+
+    // Check payload size if base64 image provided
+    if (body.imageBase64) {
+      const approximateBytes = Math.ceil((body.imageBase64.length * 3) / 4);
+      if (approximateBytes > MAX_DOCUMENT_SIZE_BYTES) {
+        return NextResponse.json(
+          { error: "Document payload exceeds maximum 15MB limit" },
+          { status: 413 }
+        );
+      }
+    }
+
     const ocrProvider = getOCRProvider();
     const extraction = await ocrProvider.extract({
       documentId: id,
