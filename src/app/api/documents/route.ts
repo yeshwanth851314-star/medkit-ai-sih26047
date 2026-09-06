@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   if ("errorResponse" in auth) return auth.errorResponse;
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { patientId, fileName, mimeType, sizeBytes, documentType } = body;
 
     if (!patientId || !fileName || !mimeType) {

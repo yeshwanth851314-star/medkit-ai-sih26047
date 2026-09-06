@@ -43,7 +43,7 @@ export async function PATCH(
     if (!caseCheck.authorized) {
       return caseCheck.errorResponse;
     }
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
 
     // Finalization strictly requires doctor or clinician role
     if (body.action === "finalize") {

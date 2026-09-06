@@ -51,6 +51,13 @@ export async function requirePatientAccess(
   user: AuthUser,
   patientId: string
 ): Promise<ObjectGuardResult<Patient>> {
+  if (!patientId || typeof patientId !== "string" || patientId.trim().length === 0) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json({ error: "Invalid or missing patient identifier" }, { status: 400 }),
+    };
+  }
+
   const patient = await getPatientById(patientId);
   if (!patient) {
     return {
@@ -80,6 +87,13 @@ export async function requireCaseAccess(
   user: AuthUser,
   caseId: string
 ): Promise<ObjectGuardResult<ClinicalCase>> {
+  if (!caseId || typeof caseId !== "string" || caseId.trim().length === 0) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json({ error: "Invalid or missing case identifier" }, { status: 400 }),
+    };
+  }
+
   const clinicalCase = await getCaseById(caseId);
   if (!clinicalCase) {
     return {
@@ -104,6 +118,13 @@ export async function requireDocumentAccess(
   user: AuthUser,
   documentId: string
 ): Promise<ObjectGuardResult<MedicalDocument>> {
+  if (!documentId || typeof documentId !== "string" || documentId.trim().length === 0) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json({ error: "Invalid or missing document identifier" }, { status: 400 }),
+    };
+  }
+
   const doc = await getDocumentById(documentId);
   if (!doc) {
     return {

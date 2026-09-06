@@ -206,4 +206,31 @@ describe("Phase 12: Rigorous Security Negative & Fail-Closed Tests", () => {
       expect(result.providerMeta.provider).toBe("deterministic-demo");
     });
   });
+
+  describe("6. Edge Cases & Request Input Validation", () => {
+    it("rejects empty or whitespace patient identifier with 400", async () => {
+      const result = await requirePatientAccess(doctorHyd, "   ");
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(400);
+      }
+    });
+
+    it("rejects empty or whitespace case identifier with 400", async () => {
+      const result = await requireCaseAccess(doctorHyd, "");
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(400);
+      }
+    });
+
+    it("rejects empty or whitespace document identifier with 400", async () => {
+      const { requireDocumentAccess } = await import("../../src/lib/auth/object-guard");
+      const result = await requireDocumentAccess(doctorHyd, " ");
+      expect(result.authorized).toBe(false);
+      if (!result.authorized) {
+        expect(result.errorResponse.status).toBe(400);
+      }
+    });
+  });
 });

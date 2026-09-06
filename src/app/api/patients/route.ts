@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if ("errorResponse" in auth) return auth.errorResponse;
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const validated = patientRegistrationSchema.safeParse(body);
 
     if (!validated.success) {

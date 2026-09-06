@@ -5,7 +5,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const validated = loginSchema.safeParse(body);
 
     if (!validated.success) {

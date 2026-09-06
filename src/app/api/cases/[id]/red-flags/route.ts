@@ -49,7 +49,7 @@ export async function POST(
       return caseCheck.errorResponse;
     }
     const c = caseCheck.data;
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { ruleId } = body;
 
     const currentRedFlags = c.red_flags || [];
