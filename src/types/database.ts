@@ -121,9 +121,20 @@ export interface ClinicalCase {
   ayush_assessment?: AyushAssessment | null;
   red_flags?: RedFlagAlert[] | null;
   provenance?: ClinicalProvenance | null;
+  amendments?: CaseAmendment[] | null;
   created_at: string;
   updated_at?: string;
   finalized_at?: string | null;
+}
+
+export interface CaseAmendment {
+  id: string;
+  version: number;
+  actor_id: string;
+  actor_name: string;
+  timestamp: string;
+  reason: string;
+  notes: string;
 }
 
 export interface MedicalDocument {

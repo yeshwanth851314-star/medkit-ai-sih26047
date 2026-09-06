@@ -22,11 +22,16 @@ export function VoiceRecorder({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
@@ -40,13 +45,42 @@ export function VoiceRecorder({
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       setHasPermission(true);
       setIsRecording(true);
       setRecordingDuration(0);
+      audioChunksRef.current = [];
 
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        }
+
+        const mimeType = mediaRecorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+        if (audioBlob.size > 0) {
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = () => {
+            const base64Data = (reader.result as string)?.split(",")[1];
+            fetchTranscription(undefined, base64Data, mimeType);
+          };
+        } else {
+          fetchTranscription();
+        }
+      };
+
+      mediaRecorder.start(250); // Slice into 250ms chunks
 
       timerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
@@ -57,20 +91,16 @@ export function VoiceRecorder({
     }
   };
 
-  const stopRecording = async () => {
+  const stopRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
     }
-
-    // Call transcription endpoint
-    fetchTranscription();
   };
 
-  const fetchTranscription = async (mockId?: string) => {
+  const fetchTranscription = async (mockId?: string, audioBase64?: string, mimeType?: string) => {
     setIsTranscribing(true);
     setErrorMessage(null);
 
@@ -78,7 +108,12 @@ export function VoiceRecorder({
       const res = await fetch("/api/voice/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, mockId }),
+        body: JSON.stringify({
+          language,
+          mockId,
+          audioBase64,
+          mimeType: mimeType || "audio/webm",
+        }),
       });
 
       const data = await res.json();

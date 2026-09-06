@@ -114,3 +114,45 @@ export async function getCaseDetails(id: string): Promise<ClinicalCase | null> {
 export async function getPatientCases(patientId: string): Promise<ClinicalCase[]> {
   return getCasesByPatientId(patientId);
 }
+
+export async function addCaseAmendment(
+  caseId: string,
+  amendment: {
+    actorId: string;
+    actorName: string;
+    reason: string;
+    notes: string;
+  }
+): Promise<ClinicalCase> {
+  const existing = await getCaseById(caseId);
+  if (!existing) {
+    throw new Error("Case not found");
+  }
+
+  if (existing.status !== "final") {
+    throw new Error("CANNOT_AMEND_DRAFT: Amendments can only be appended to finalized clinical records.");
+  }
+
+  const existingAmendments = existing.amendments || [];
+  const version = existingAmendments.length + 1;
+
+  const newAmendment = {
+    id: `amend-${crypto.randomUUID().slice(0, 8)}`,
+    version,
+    actor_id: amendment.actorId,
+    actor_name: amendment.actorName,
+    timestamp: new Date().toISOString(),
+    reason: amendment.reason,
+    notes: amendment.notes,
+  };
+
+  const updated = await updateCase(caseId, {
+    amendments: [...existingAmendments, newAmendment],
+  });
+
+  if (!updated) {
+    throw new Error("Failed to record clinical amendment");
+  }
+
+  return updated;
+}

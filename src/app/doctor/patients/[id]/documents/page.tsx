@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { getDocumentsByPatientId } from "@/lib/db/supabase";
 import { processDocumentExtraction } from "@/features/documents/document-service";
-import { DocumentExtractionViewer } from "@/components/documents/document-extraction-viewer";
-import { FileText, ArrowLeft, Upload, ShieldCheck } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { PatientDocumentsHub } from "@/components/documents/patient-documents-hub";
+import { ArrowLeft } from "lucide-react";
 
 export default async function PatientDocumentsPage({
   params,
@@ -50,29 +49,12 @@ export default async function PatientDocumentsPage({
         </div>
       </div>
 
-      {/* Active Document Selector Tabs */}
-      {documents.length > 1 && (
-        <div className="flex flex-wrap gap-2 border-b border-surface-200 pb-3">
-          {documents.map((d) => (
-            <Link
-              key={d.id}
-              href={`/doctor/patients/${patient.id}/documents?docId=${d.id}`}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                activeDocId === d.id
-                  ? "bg-clinical-600 text-white shadow-xs"
-                  : "bg-white border border-surface-200 text-slate-700 hover:bg-surface-50"
-              }`}
-            >
-              {d.original_filename} ({d.document_type})
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Side-by-Side Verification Component */}
-      <DocumentExtractionViewer
-        initialExtraction={activeExtraction}
-        filename={documents.find((d) => d.id === activeDocId)?.original_filename || "prescription.pdf"}
+      {/* Patient Documents Hub with Upload Dropzone and Extraction Viewer */}
+      <PatientDocumentsHub
+        patientId={patient.id}
+        documents={documents}
+        activeDocId={activeDocId}
+        activeExtraction={activeExtraction}
       />
     </div>
   );

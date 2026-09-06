@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   Plus,
   Trash2,
+  WifiOff,
 } from "lucide-react";
+import { offlineQueue } from "@/features/offline/offline-queue";
 
 const SECTIONS = [
   { id: "complaint", label: "1. Chief Complaint" },
@@ -142,6 +144,14 @@ export default function NewCasePage() {
     setErrorMsg(null);
     setIsSaving(true);
 
+    // If browser is offline, enqueue directly
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      offlineQueue.enqueue("cases", "create", buildPayload("draft"));
+      setLastSavedTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " (Offline Queued)");
+      setIsSaving(false);
+      return;
+    }
+
     try {
       if (savedCaseId) {
         // Update existing draft
@@ -165,7 +175,13 @@ export default function NewCasePage() {
 
       setLastSavedTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to save draft");
+      // Network error fallback to offline queue
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        offlineQueue.enqueue("cases", "create", buildPayload("draft"));
+        setLastSavedTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " (Offline Queued)");
+      } else {
+        setErrorMsg(err.message || "Failed to save draft");
+      }
     } finally {
       setIsSaving(false);
     }

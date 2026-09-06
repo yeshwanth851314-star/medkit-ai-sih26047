@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/shared/header";
+import { OfflineSyncIndicator } from "@/components/shared/offline-sync-indicator";
 
 export const metadata: Metadata = {
   title: "MedKit AI — Intelligent Multimodal Clinical Intake & Physician Copilot",
@@ -21,6 +22,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
+        <OfflineSyncIndicator />
         <Header />
         <main id="main-content" className="flex-1" tabIndex={-1}>
           {children}

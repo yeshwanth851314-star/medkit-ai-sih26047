@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCaseDetails } from "@/features/cases/case-service";
 import { getPatientDetails } from "@/features/patients/patient-service";
+import { getDocumentsByPatientId } from "@/lib/db/supabase";
+import { CaseActionsBar } from "@/components/cases/case-actions-bar";
+import { AyushCaseDisplay } from "@/components/ayush/ayush-case-display";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Stethoscope,
@@ -17,6 +20,7 @@ import {
   Heart,
   CheckCircle2,
   Sparkles,
+  History,
 } from "lucide-react";
 
 export default async function CaseDetailsPage({
@@ -31,12 +35,15 @@ export default async function CaseDetailsPage({
     notFound();
   }
 
-  const patient = await getPatientDetails(c.patient_id);
+  const [patient, documents] = await Promise.all([
+    getPatientDetails(c.patient_id),
+    getDocumentsByPatientId(c.patient_id),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-      {/* Navigation Breadcrumbs */}
-      <div className="flex items-center justify-between no-print">
+      {/* Navigation Breadcrumbs & Top Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Link href="/doctor/patients" className="hover:text-slate-800">
             Patients
@@ -53,13 +60,9 @@ export default async function CaseDetailsPage({
           <span>Case Sheet</span>
         </div>
 
-        <Link
-          href={`/doctor/cases/${c.id}/print`}
-          target="_blank"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50"
-        >
-          <Printer className="h-3.5 w-3.5 text-slate-500" /> Print Case Sheet
-        </Link>
+        {patient && (
+          <CaseActionsBar clinicalCase={c} patient={patient} documents={documents} />
+        )}
       </div>
 
       {/* Case Header Card */}
@@ -336,6 +339,42 @@ export default async function CaseDetailsPage({
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Dedicated AYUSH Assessment Display if AYUSH case */}
+        {c.case_type === "ayush" && c.ayush_assessment && (
+          <AyushCaseDisplay assessment={c.ayush_assessment} />
+        )}
+
+        {/* Post-finalization Clinical Addenda / Amendments */}
+        {c.amendments && c.amendments.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-6 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-amber-200 pb-3">
+              <History className="h-5 w-5 text-amber-700" />
+              <h2 className="text-sm font-bold text-amber-950 uppercase tracking-wider">
+                Clinical Addenda &amp; Revisions ({c.amendments.length})
+              </h2>
+            </div>
+
+            <div className="space-y-3">
+              {c.amendments.map((amend) => (
+                <div key={amend.id} className="rounded-lg bg-white p-4 border border-amber-200 shadow-2xs space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span className="font-bold text-slate-900">
+                      Addendum #{amend.version} — {amend.reason}
+                    </span>
+                    <span>{formatDateTime(amend.timestamp)}</span>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-line">
+                    {amend.notes}
+                  </p>
+                  <div className="text-[11px] text-slate-400 font-medium pt-1">
+                    Signed by: {amend.actor_name} • Permanent audit record
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -5,6 +5,7 @@ import {
   finalizeCase,
   getCaseDetails,
   getPatientCases,
+  addCaseAmendment,
 } from "../../src/features/cases/case-service";
 
 describe("Phase 4: Case-Taking MVP Tests", () => {
@@ -93,5 +94,51 @@ describe("Phase 4: Case-Taking MVP Tests", () => {
       const nextTime = new Date(cases[i + 1].created_at).getTime();
       expect(currentTime).toBeGreaterThanOrEqual(nextTime);
     }
+  });
+
+  it("appends an amendment to a finalized case with version number, timestamp, and actor", async () => {
+    const draft = await createCaseDraft({
+      patientId: testPatientId,
+      caseType: "general",
+      patientLanguage: "en",
+      chiefComplaint: "Acute bronchitis under management",
+      status: "draft",
+    });
+
+    const finalized = await finalizeCase(draft.id, "usr-doc-0001");
+    expect(finalized.status).toBe("final");
+
+    const amended = await addCaseAmendment(finalized.id, {
+      actorId: "usr-doc-0001",
+      actorName: "Dr. Sharma",
+      reason: "Follow-up chest X-ray showed resolution of infiltrates",
+      notes: "Patient completed course of antibiotics. Cough resolved. Discharged to routine follow-up.",
+    });
+
+    expect(amended.amendments).toBeDefined();
+    expect(amended.amendments?.length).toBe(1);
+    expect(amended.amendments?.[0].version).toBe(1);
+    expect(amended.amendments?.[0].actor_name).toBe("Dr. Sharma");
+    expect(amended.amendments?.[0].reason).toContain("chest X-ray");
+    expect(amended.status).toBe("final"); // Still final
+  });
+
+  it("rejects amending a draft case", async () => {
+    const draft = await createCaseDraft({
+      patientId: testPatientId,
+      caseType: "general",
+      patientLanguage: "en",
+      chiefComplaint: "Unfinalized headache",
+      status: "draft",
+    });
+
+    await expect(
+      addCaseAmendment(draft.id, {
+        actorId: "usr-doc-0001",
+        actorName: "Dr. Sharma",
+        reason: "Premature addendum",
+        notes: "Notes",
+      })
+    ).rejects.toThrow("CANNOT_AMEND_DRAFT");
   });
 });

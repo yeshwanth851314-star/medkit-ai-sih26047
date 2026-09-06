@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCaseDetails, updateCaseDraft, finalizeCase } from "@/features/cases/case-service";
+import { getCaseDetails, updateCaseDraft, finalizeCase, addCaseAmendment } from "@/features/cases/case-service";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
@@ -61,6 +61,32 @@ export async function PATCH(
       });
 
       return NextResponse.json({ success: true, case: finalized });
+    }
+
+    // Amendment on finalized case
+    if (body.action === "amend") {
+      if (!["doctor", "clinician"].includes(auth.user.role)) {
+        return NextResponse.json(
+          { error: "FORBIDDEN: Only doctors or clinicians can amend finalized medical records" },
+          { status: 403 }
+        );
+      }
+
+      if (!body.reason || !body.notes) {
+        return NextResponse.json(
+          { error: "VALIDATION_ERROR: Reason and amendment notes are required" },
+          { status: 400 }
+        );
+      }
+
+      const amended = await addCaseAmendment(id, {
+        actorId: auth.user.id,
+        actorName: auth.user.fullName || "Attending Physician",
+        reason: body.reason,
+        notes: body.notes,
+      });
+
+      return NextResponse.json({ success: true, case: amended });
     }
 
     // Standard draft update
