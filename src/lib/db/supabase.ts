@@ -3,20 +3,84 @@ import { env } from "@/config/env";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { Patient, ClinicalCase, MedicalDocument } from "@/types/database";
 
-let supabaseClient: SupabaseClient | null = null;
+/**
+ * Create an ephemeral, request-bound Supabase client.
+ * In a serverless/multi-user Node.js environment, persistSession MUST be false
+ * to eliminate cross-request auth leakage and guarantee immutable per-request identity.
+ */
+export function createRequestSupabaseClient(
+  accessToken?: string,
+  configOverride?: { supabaseUrl?: string; supabaseAnonKey?: string }
+): SupabaseClient | null {
+  const url = configOverride?.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || env.supabaseUrl;
+  const anonKey = configOverride?.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.supabaseAnonKey;
 
-export function getSupabaseClient(): SupabaseClient | null {
-  if (supabaseClient) return supabaseClient;
-
-  if (env.supabaseUrl && env.supabaseAnonKey) {
-    try {
-      supabaseClient = createClient(env.supabaseUrl, env.supabaseAnonKey);
-      return supabaseClient;
-    } catch (err) {
-      console.warn("Failed to initialize Supabase client, falling back to mock adapter", err);
-    }
+  if (!url || !anonKey) {
+    return null;
   }
-  return null;
+
+  try {
+    return createClient(url, anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      global: accessToken
+        ? {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        : undefined,
+    });
+  } catch (err) {
+    console.warn("Failed to initialize request-bound Supabase client:", err);
+    return null;
+  }
+}
+
+/**
+ * Server-only service role client for authoritative operations (e.g. audit logs, amendments).
+ * Strictly enforces persistSession: false. Never exposes service role key to client.
+ */
+export function getServiceSupabaseClient(
+  configOverride?: { supabaseUrl?: string; serviceKey?: string }
+): SupabaseClient | null {
+  const url = configOverride?.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || env.supabaseUrl;
+  const serviceKey =
+    configOverride?.serviceKey ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    env.supabaseServiceKey ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    env.supabaseAnonKey;
+
+  if (!url || !serviceKey) {
+    return null;
+  }
+
+  try {
+    return createClient(url, serviceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+  } catch (err) {
+    console.warn("Failed to initialize service-role Supabase client:", err);
+    return null;
+  }
+}
+
+/**
+ * Standard database client getter. Returns a fresh, unpolluted request-bound client.
+ */
+export function getSupabaseClient(
+  accessToken?: string,
+  configOverride?: { supabaseUrl?: string; supabaseAnonKey?: string }
+): SupabaseClient | null {
+  return createRequestSupabaseClient(accessToken, configOverride);
 }
 
 // Unified Data Access Interface for Patients

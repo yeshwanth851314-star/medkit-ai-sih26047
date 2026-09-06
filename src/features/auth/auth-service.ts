@@ -45,8 +45,9 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
       return null;
     }
 
-    // Fetch profile role from profiles table
-    const { data: profile } = await supabase
+    // Fetch profile role from profiles table using request-bound client with user access token
+    const authenticatedClient = getSupabaseClient(data.session?.access_token) || supabase;
+    const { data: profile } = await authenticatedClient
       .from("profiles")
       .select("full_name, role, facility_id")
       .eq("id", data.user.id)
