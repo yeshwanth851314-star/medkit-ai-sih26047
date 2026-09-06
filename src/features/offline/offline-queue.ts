@@ -33,10 +33,33 @@ class OfflineQueueManager {
   enqueue(
     entity: OfflineEntity,
     action: "create" | "update",
-    payload: Record<string, any>
+    payload: Record<string, any>,
+    idempotencyKey?: string
   ): OfflineQueueItem {
+    const ALLOWED_ENTITIES: OfflineEntity[] = ["cases", "patients", "transcripts", "documents"];
+    if (!ALLOWED_ENTITIES.includes(entity)) {
+      throw new Error(`UNSUPPORTED_ENTITY: Entity type '${entity}' is not supported for offline sync.`);
+    }
+
+    if (action === "update") {
+      const targetId =
+        payload.id || payload.caseId || payload.patientId || payload.case_id || payload.patient_id;
+      if (!targetId) {
+        throw new Error("INVALID_PAYLOAD: Update operation requires target record ID.");
+      }
+    }
+
+    // Idempotency check: if an item with the same idempotencyKey already exists, return existing
+    if (idempotencyKey) {
+      const existing = this.queue.find((i) => i.idempotencyKey === idempotencyKey);
+      if (existing) {
+        return existing;
+      }
+    }
+
     const item: OfflineQueueItem = {
       id: crypto.randomUUID(),
+      idempotencyKey: idempotencyKey || crypto.randomUUID(),
       entity,
       action,
       payload,
@@ -50,6 +73,24 @@ class OfflineQueueManager {
     this.queue.push(validated as OfflineQueueItem);
     this.persist();
     return validated as OfflineQueueItem;
+  }
+
+  minimizePayloadForAudit(item: OfflineQueueItem): Record<string, any> {
+    return {
+      queueId: item.id,
+      idempotencyKey: item.idempotencyKey,
+      entity: item.entity,
+      action: item.action,
+      recordId:
+        item.payload?.id ||
+        item.payload?.caseId ||
+        item.payload?.patientId ||
+        item.payload?.case_id ||
+        item.payload?.patient_id ||
+        null,
+      fieldCount: item.payload ? Object.keys(item.payload).length : 0,
+      timestamp: item.timestamp,
+    };
   }
 
   getPendingItems(): OfflineQueueItem[] {

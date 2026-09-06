@@ -76,4 +76,55 @@ describe("Phase 16: Performance, Offline Caching & Fallback Resilience Tests", (
     expect(items[0].retryCount).toBe(3);
     expect(items[0].syncStatus).toBe("failed");
   });
+
+  it("enforces idempotency and prevents duplicate items with identical idempotencyKey", () => {
+    const key = "idempotency-token-12345";
+    const first = offlineQueue.enqueue(
+      "cases",
+      "create",
+      { chief_complaint: "Intermittent palpitations" },
+      key
+    );
+
+    const second = offlineQueue.enqueue(
+      "cases",
+      "create",
+      { chief_complaint: "Intermittent palpitations" },
+      key
+    );
+
+    expect(first.id).toBe(second.id);
+    expect(offlineQueue.getAllItems().length).toBe(1);
+  });
+
+  it("rejects unsupported entity types with clean error", () => {
+    expect(() => {
+      offlineQueue.enqueue("billing" as any, "create", { amount: 500 });
+    }).toThrow(/UNSUPPORTED_ENTITY/i);
+  });
+
+  it("rejects update operations missing target record ID", () => {
+    expect(() => {
+      offlineQueue.enqueue("cases", "update", { notes: "Missing case ID" });
+    }).toThrow(/INVALID_PAYLOAD/i);
+  });
+
+  it("minimizes payload for PHI-safe audit logging", () => {
+    const item = offlineQueue.enqueue("patients", "create", {
+      full_name: "Venkat Rao",
+      phone: "+91-98765-43210",
+      patient_id: "pat-999",
+      address: "Private address",
+    });
+
+    const minimized = offlineQueue.minimizePayloadForAudit(item);
+    expect(minimized.queueId).toBe(item.id);
+    expect(minimized.entity).toBe("patients");
+    expect(minimized.recordId).toBe("pat-999");
+    expect(minimized.fieldCount).toBe(4);
+    // Verified PHI fields are not exposed in minimized metadata
+    expect(minimized.full_name).toBeUndefined();
+    expect(minimized.phone).toBeUndefined();
+    expect(minimized.address).toBeUndefined();
+  });
 });

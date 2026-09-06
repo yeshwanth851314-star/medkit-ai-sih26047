@@ -4,6 +4,7 @@ export type OfflineEntity = "cases" | "patients" | "transcripts" | "documents";
 
 export interface OfflineQueueItem {
   id: string;
+  idempotencyKey?: string;
   entity: OfflineEntity;
   action: "create" | "update";
   payload: Record<string, any>;
@@ -15,6 +16,7 @@ export interface OfflineQueueItem {
 
 export const offlineQueueItemSchema = z.object({
   id: z.string().uuid(),
+  idempotencyKey: z.string().optional(),
   entity: z.enum(["cases", "patients", "transcripts", "documents"]),
   action: z.enum(["create", "update"]),
   payload: z.record(z.any()),

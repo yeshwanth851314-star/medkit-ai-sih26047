@@ -8,7 +8,7 @@ export async function logAuditEvent(params: {
   actorId: string;
   actorRole?: string;
   action: AuditAction;
-  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents";
+  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts";
   resourceId: string;
   metadata?: Record<string, any>;
 }): Promise<ClinicalAuditLog> {

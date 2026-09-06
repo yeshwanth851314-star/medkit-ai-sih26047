@@ -19,7 +19,8 @@ export type AuditAction =
   | "CONSENT_REVOKED"
   | "VERIFY_AYUSH"
   | "VERIFY_MULTILINGUAL"
-  | "EXPORT_FHIR";
+  | "EXPORT_FHIR"
+  | "SYNC_OFFLINE_OPERATION";
 
 
 export interface ClinicalAuditLog {
@@ -27,7 +28,7 @@ export interface ClinicalAuditLog {
   actor_id: string;
   actor_role?: string;
   action: AuditAction;
-  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents";
+  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts";
   resource_id: string;
   metadata?: Record<string, any> | null;
   created_at: string;
