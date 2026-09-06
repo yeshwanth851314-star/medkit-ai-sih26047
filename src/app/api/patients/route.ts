@@ -13,7 +13,11 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("search") || undefined;
-    const patients = await searchPatients(q);
+    const allPatients = await searchPatients(q);
+    // Enforce facility boundary scoping
+    const patients = auth.user.facilityId
+      ? allPatients.filter((p) => !p.facility_id || p.facility_id === auth.user.facilityId)
+      : allPatients;
     return NextResponse.json({ patients });
   } catch (err) {
     console.error("GET /api/patients error:", err);

@@ -25,11 +25,16 @@ export default async function PatientProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
+  const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const patient = await getPatientDetails(id);
 
   if (!patient) {
+    notFound();
+  }
+
+  // Enforce facility boundary check on server-rendered patient page
+  if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
     notFound();
   }
 

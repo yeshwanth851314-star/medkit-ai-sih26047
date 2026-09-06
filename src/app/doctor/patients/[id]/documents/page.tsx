@@ -14,12 +14,17 @@ export default async function PatientDocumentsPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ docId?: string }>;
 }) {
-  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
+  const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const { docId } = await searchParams;
 
   const patient = await getPatientDetails(id);
   if (!patient) notFound();
+
+  // Enforce facility boundary check on server-rendered documents page
+  if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
+    notFound();
+  }
 
   const documents = await getDocumentsByPatientId(id);
   const activeDocId = docId || (documents.length > 0 ? documents[0].id : "doc-0001");

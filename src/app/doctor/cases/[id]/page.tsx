@@ -34,7 +34,7 @@ export default async function CaseDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
+  const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
   const c = await getCaseDetails(id);
 
@@ -48,6 +48,11 @@ export default async function CaseDetailsPage({
     generateDeterministicSummary(c.id).catch(() => null),
     compareConsecutiveVisits(c.patient_id, c.id).catch(() => null),
   ]);
+
+  // Enforce facility boundary check on server-rendered case page
+  if (user.facilityId && patient?.facility_id && user.facilityId !== patient.facility_id) {
+    notFound();
+  }
 
   if (initialSummary && c.assessment_plan?.summary) {
     initialSummary.hpiNarrative = c.assessment_plan.summary;

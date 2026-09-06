@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validateDocumentFile } from "@/features/documents/document-service";
 import { getDocumentsByPatientId, createDocument } from "@/lib/db/supabase";
 import { requireApiAuth } from "@/lib/auth/api-guard";
+import { requirePatientAccess, requireCaseBelongsToPatient } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
 
 export async function GET(request: Request) {
@@ -14,6 +15,11 @@ export async function GET(request: Request) {
 
     if (!patientId) {
       return NextResponse.json({ error: "patientId is required" }, { status: 400 });
+    }
+
+    const patientAccess = await requirePatientAccess(auth.user, patientId);
+    if (!patientAccess.authorized) {
+      return patientAccess.errorResponse;
     }
 
     const documents = await getDocumentsByPatientId(patientId);
@@ -40,10 +46,22 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const { patientId, fileName, mimeType, sizeBytes, documentType } = body;
+    const { patientId, fileName, mimeType, sizeBytes, documentType, caseId } = body;
 
     if (!patientId || !fileName || !mimeType) {
       return NextResponse.json({ error: "Missing required document metadata" }, { status: 400 });
+    }
+
+    const patientAccess = await requirePatientAccess(auth.user, patientId);
+    if (!patientAccess.authorized) {
+      return patientAccess.errorResponse;
+    }
+
+    if (caseId) {
+      const caseMatch = await requireCaseBelongsToPatient(caseId, patientId);
+      if (!caseMatch.authorized) {
+        return caseMatch.errorResponse;
+      }
     }
 
     // Validate file
