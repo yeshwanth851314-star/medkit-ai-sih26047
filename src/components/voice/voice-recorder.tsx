@@ -6,10 +6,12 @@ import { TranscriptionResult } from "@/features/voice/types";
 
 export function VoiceRecorder({
   language = "en",
+  intakeToken,
   onTranscriptionConfirmed,
   onCancel,
 }: {
   language?: "en" | "te" | "hi";
+  intakeToken?: string | null;
   onTranscriptionConfirmed: (transcript: string, translation?: string) => void;
   onCancel?: () => void;
 }) {
@@ -107,7 +109,10 @@ export function VoiceRecorder({
     try {
       const res = await fetch("/api/voice/transcribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(intakeToken ? { "x-intake-token": intakeToken } : {}),
+        },
         body: JSON.stringify({
           language,
           mockId,

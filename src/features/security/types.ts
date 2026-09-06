@@ -16,6 +16,7 @@ export type AuditAction =
   | "CONFIRM_DOCUMENT_OCR"
   | "READ_TIMELINE"
   | "CONSENT_RECORDED"
+  | "CONSENT_REVOKED"
   | "VERIFY_AYUSH"
   | "VERIFY_MULTILINGUAL"
   | "EXPORT_FHIR";
@@ -26,7 +27,7 @@ export interface ClinicalAuditLog {
   actor_id: string;
   actor_role?: string;
   action: AuditAction;
-  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir";
+  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents";
   resource_id: string;
   metadata?: Record<string, any> | null;
   created_at: string;
@@ -37,7 +38,7 @@ export const clinicalAuditSchema = z.object({
   actor_id: z.string(),
   actor_role: z.string().optional(),
   action: z.string(),
-  resource_type: z.enum(["patients", "cases", "documents", "auth", "fhir"]),
+  resource_type: z.enum(["patients", "cases", "documents", "auth", "fhir", "consents"]),
   resource_id: z.string(),
   metadata: z.record(z.any()).optional().nullable(),
   created_at: z.string(),

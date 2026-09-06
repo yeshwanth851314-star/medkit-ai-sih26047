@@ -136,7 +136,16 @@ export function verifySessionToken(token: string, customSecret?: string): AuthUs
   if (!isMatch) return null;
 
   try {
+    const header = JSON.parse(base64UrlDecode(encodedHeader));
+    if (header.typ !== "JWT") {
+      return null;
+    }
+
     const payload: JwtPayload = JSON.parse(base64UrlDecode(encodedPayload));
+    if (!payload.sub || !payload.role) {
+      return null;
+    }
+
     const now = Math.floor(Date.now() / 1000);
 
     // Check expiration
@@ -216,10 +225,16 @@ export async function verifySessionTokenWeb(token: string, secret?: string): Pro
     const isValid = await globalThis.crypto.subtle.verify("HMAC", cryptoKey, rawSig, data);
     if (!isValid) return null;
 
+    let b64Header = encodedHeader.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64Header.length % 4) b64Header += "=";
+    const header = JSON.parse(atob(b64Header));
+    if (header.typ !== "JWT") return null;
+
     let b64Payload = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
     while (b64Payload.length % 4) b64Payload += "=";
     const payloadJson = atob(b64Payload);
     const parsed: JwtPayload = JSON.parse(payloadJson);
+    if (!parsed.sub || !parsed.role) return null;
 
     const now = Math.floor(Date.now() / 1000);
     if (parsed.exp && parsed.exp < now) return null;

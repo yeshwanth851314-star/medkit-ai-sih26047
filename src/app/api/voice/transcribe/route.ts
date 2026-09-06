@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { getSpeechProvider } from "@/features/voice/speech-provider";
+import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 
 export async function POST(request: Request) {
+  const auth = await requireIntakeOrClinicalAuth(request, {
+    requiredScope: "voice:transcribe",
+  });
+  if (!auth.authorized) {
+    return auth.errorResponse;
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const speechProvider = getSpeechProvider();

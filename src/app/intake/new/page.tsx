@@ -29,6 +29,7 @@ export default function PatientKioskIntakePage() {
 
   // Interview Session State
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [intakeToken, setIntakeToken] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionNode | null>(null);
   const [inputMode, setInputMode] = useState<"choice" | "voice" | "text">("choice");
   const [textInput, setTextInput] = useState("");
@@ -56,6 +57,7 @@ export default function PatientKioskIntakePage() {
       const data = await res.json();
       if (res.ok && data.sessionId) {
         setSessionId(data.sessionId);
+        setIntakeToken(data.intakeToken || null);
         setCurrentQuestion(data.currentQuestion);
         setStage("interview");
       }
@@ -75,7 +77,10 @@ export default function PatientKioskIntakePage() {
     try {
       const res = await fetch(`/api/interviews/${sessionId}/answer`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(intakeToken ? { "x-intake-token": intakeToken } : {}),
+        },
         body: JSON.stringify({ answer: answerText.trim(), inputMode: mode }),
       });
 
@@ -88,6 +93,9 @@ export default function PatientKioskIntakePage() {
         // Compile to case
         const submitRes = await fetch(`/api/interviews/${sessionId}/submit`, {
           method: "POST",
+          headers: {
+            ...(intakeToken ? { "x-intake-token": intakeToken } : {}),
+          },
         });
         const submitData = await submitRes.json();
         if (submitRes.ok && submitData.case) {
@@ -303,6 +311,7 @@ export default function PatientKioskIntakePage() {
             {inputMode === "voice" && (
               <VoiceRecorder
                 language={language}
+                intakeToken={intakeToken}
                 onTranscriptionConfirmed={(transcript) => handleAnswer(transcript, "voice")}
                 onCancel={() => setInputMode("choice")}
               />

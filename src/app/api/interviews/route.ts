@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createInterviewSession, getCurrentQuestion } from "@/features/interview/interview-service";
 import { recordPatientConsent } from "@/features/consent/consent-service";
+import { signIntakeCapabilityToken } from "@/lib/auth/kiosk-capability";
 
 export async function POST(request: Request) {
   try {
@@ -22,11 +23,19 @@ export async function POST(request: Request) {
     const session = createInterviewSession(patientId, language, consentId);
     const initialQuestion = getCurrentQuestion(session);
 
+    // Issue cryptographic short-lived capability token scoped to this patient intake session
+    const intakeToken = signIntakeCapabilityToken({
+      sessionId: session.id,
+      patientId,
+      scope: ["intake:answer", "intake:submit", "voice:transcribe", "consent:grant"],
+    });
+
     return NextResponse.json({
       sessionId: session.id,
       consentId,
       session,
       currentQuestion: initialQuestion,
+      intakeToken,
     });
   } catch (err: any) {
     console.error("POST /api/interviews error:", err);

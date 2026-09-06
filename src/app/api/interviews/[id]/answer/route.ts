@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { submitInterviewAnswer } from "@/features/interview/interview-service";
+import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
+  const auth = await requireIntakeOrClinicalAuth(request, {
+    requiredScope: "intake:answer",
+    targetSessionId: id,
+  });
+  if (!auth.authorized) {
+    return auth.errorResponse;
+  }
+
   try {
-    const { id } = await params;
     const body = await request.json();
     const { answer, inputMode } = body;
 
