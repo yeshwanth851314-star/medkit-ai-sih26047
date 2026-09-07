@@ -26,10 +26,13 @@ export function ClinicalSummaryCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editedNarrative, setEditedNarrative] = useState(summary.hpiNarrative);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isConfirmed, setIsConfirmed] = useState(summary.status === "confirmed");
 
   const handleRegenerate = async (useAI = false) => {
     setIsRegenerating(true);
+    setConfirmError(null);
     try {
       const res = await fetch(`/api/cases/${caseId}/summary`, {
         method: "POST",
@@ -49,6 +52,8 @@ export function ClinicalSummaryCard({
   };
 
   const handleConfirm = async () => {
+    setIsConfirming(true);
+    setConfirmError(null);
     try {
       const res = await fetch(`/api/cases/${caseId}/summary`, {
         method: "POST",
@@ -63,18 +68,21 @@ export function ClinicalSummaryCard({
       const data = await res.json();
       if (res.ok && data.summary) {
         setSummary(data.summary);
+        setIsEditing(false);
+        setIsConfirmed(true);
+        setConfirmError(null);
       } else {
-        setSummary({ ...summary, hpiNarrative: editedNarrative, status: "confirmed" });
+        setConfirmError(data?.error || "Failed to persist clinical confirmation. Please try again.");
       }
     } catch {
-      setSummary({ ...summary, hpiNarrative: editedNarrative, status: "confirmed" });
+      setConfirmError("Network error: Failed to confirm clinical synopsis. Please check connection and retry.");
+    } finally {
+      setIsConfirming(false);
     }
-    setIsEditing(false);
-    setIsConfirmed(true);
   };
 
   return (
-    <div className="rounded-2xl border border-clinical-200 bg-white p-6 shadow-xs space-y-6">
+    <div className="rounded-2xl border border-clinical-200 bg-white p-6 shadow-sm space-y-6">
       {/* Header & Badges */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-surface-200 pb-4">
         <div>
@@ -110,8 +118,8 @@ export function ClinicalSummaryCard({
           <button
             type="button"
             onClick={() => handleRegenerate(true)}
-            disabled={isRegenerating || isConfirmed}
-            className="inline-flex items-center gap-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 disabled:opacity-40"
+            disabled={isRegenerating || isConfirmed || isConfirming}
+            className="inline-flex items-center gap-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 disabled:opacity-40"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isRegenerating ? "animate-spin" : ""}`} />
             Regenerate AI
@@ -121,14 +129,33 @@ export function ClinicalSummaryCard({
             <button
               type="button"
               onClick={handleConfirm}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700"
+              disabled={isConfirming}
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Confirm Synopsis
+              <CheckCircle2 className={`h-3.5 w-3.5 ${isConfirming ? "animate-spin" : ""}`} />
+              {isConfirming ? "Confirming..." : "Confirm Synopsis"}
             </button>
           )}
         </div>
       </div>
+
+      {/* Confirmation Error Banner with Retry */}
+      {confirmError && (
+        <div role="alert" className="flex items-center justify-between rounded-xl bg-red-50 border border-red-200 p-3.5 text-xs text-red-800">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+            <span>{confirmError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isConfirming}
+            className="ml-3 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Mandatory Safety Notice */}
       <div className="flex items-start gap-2 rounded-lg bg-clinical-50 border border-clinical-200 p-3 text-xs text-clinical-900">
@@ -169,9 +196,10 @@ export function ClinicalSummaryCard({
               <button
                 type="button"
                 onClick={handleConfirm}
-                className="inline-flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-semibold shadow-2xs"
+                disabled={isConfirming}
+                className="inline-flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-semibold shadow-sm disabled:opacity-50"
               >
-                <CheckCircle2 className="h-3.5 w-3.5" /> Save &amp; Confirm Synopsis
+                <CheckCircle2 className={`h-3.5 w-3.5 ${isConfirming ? "animate-spin" : ""}`} /> {isConfirming ? "Saving..." : "Save & Confirm Synopsis"}
               </button>
               <button
                 type="button"

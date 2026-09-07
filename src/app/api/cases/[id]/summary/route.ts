@@ -68,6 +68,22 @@ export async function POST(
         },
       });
 
+      const { logAuditEvent } = await import("@/features/security/audit-service");
+      await logAuditEvent({
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
+        action: "CONFIRM_SUMMARY",
+        resourceType: "cases",
+        resourceId: id,
+        metadata: {
+          confirmedBy: confirmedSummary.confirmedBy,
+          confirmedAt: confirmedSummary.confirmedAt,
+          editedByClinician: confirmedSummary.editedByClinician,
+          provider: confirmedSummary.providerMeta?.provider || "deterministic",
+          model: confirmedSummary.providerMeta?.model || "rule-engine",
+        },
+      });
+
       return NextResponse.json({ success: true, summary: confirmedSummary });
     }
 
