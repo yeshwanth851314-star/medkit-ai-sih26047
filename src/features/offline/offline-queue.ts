@@ -136,6 +136,26 @@ class OfflineQueueManager {
     return { syncedCount, failedCount };
   }
 
+  markSynced(id: string): void {
+    const item = this.queue.find((i) => i.id === id);
+    if (item) {
+      item.syncStatus = "synced";
+      this.persist();
+    }
+  }
+
+  markFailed(id: string, error: string): void {
+    const item = this.queue.find((i) => i.id === id);
+    if (item) {
+      item.retryCount += 1;
+      item.lastError = error;
+      if (item.retryCount >= 3) {
+        item.syncStatus = "failed";
+      }
+      this.persist();
+    }
+  }
+
   clearSynced(): void {
     this.queue = this.queue.filter((i) => i.syncStatus !== "synced");
     this.persist();

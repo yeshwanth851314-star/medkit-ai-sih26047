@@ -22,28 +22,35 @@ export function OfflineSyncIndicator() {
       const pending = offlineQueue.getPendingItems();
       if (pending.length > 0) {
         setIsSyncing(true);
-        const { syncedCount } = await offlineQueue.processSync(async (item) => {
-          try {
-            if (item.entity === "cases") {
-              const res = await fetch("/api/cases", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(item.payload),
-              });
-              return res.ok;
+        let syncedCount = 0;
+        try {
+          const res = await fetch("/api/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: pending }),
+          });
+          const data = await res.json();
+          if (res.ok && data.succeeded) {
+            syncedCount = data.succeeded.length;
+            for (const id of data.succeeded) {
+              offlineQueue.markSynced(id);
             }
-            return true;
-          } catch {
-            return false;
+            if (data.failed) {
+              for (const f of data.failed) {
+                offlineQueue.markFailed(f.id, f.error);
+              }
+            }
           }
-        });
+        } catch (err) {
+          console.error("Offline sync error:", err);
+        }
 
         offlineQueue.clearSynced();
         setIsSyncing(false);
         setPendingCount(offlineQueue.getPendingItems().length);
 
         if (syncedCount > 0) {
-          setSyncedNotice(`Synchronized ${syncedCount} queued record(s) to server.`);
+          setSyncedNotice(`Synchronized ${syncedCount} queued record(s) via secure sync endpoint.`);
           setTimeout(() => setSyncedNotice(null), 5000);
         }
       }

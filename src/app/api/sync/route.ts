@@ -5,10 +5,7 @@ import { offlineQueue } from "@/features/offline/offline-queue";
 import { logAuditEvent } from "@/features/security/audit-service";
 import { createCaseDraft, updateCaseDraft } from "@/features/cases/case-service";
 import { registerPatient } from "@/features/patients/patient-service";
-import { createDocument, updateDocument } from "@/lib/db/supabase";
-
-// Global cache to ensure idempotency across replay attempts
-const processedIdempotencyKeys = new Set<string>();
+import { createDocument, updateDocument, isIdempotencyKeyProcessed, recordProcessedIdempotencyKey } from "@/lib/db/supabase";
 
 export async function POST(request: Request) {
   const auth = await requireApiAuth(request, {
@@ -39,41 +36,64 @@ export async function POST(request: Request) {
 
       const item = parseResult.data;
 
-      // Idempotency check: if already processed, report success without re-executing
-      if (item.idempotencyKey && processedIdempotencyKeys.has(item.idempotencyKey)) {
-        succeeded.push(item.id);
-        continue;
+      // Server-side persistent idempotency check: survives process restarts and cold starts
+      if (item.idempotencyKey) {
+        const alreadyDone = await isIdempotencyKeyProcessed(item.idempotencyKey);
+        if (alreadyDone) {
+          succeeded.push(item.id);
+          continue;
+        }
       }
 
       try {
+        let targetResourceId = item.payload?.id || item.payload?.caseId || item.payload?.patientId;
+
         if (item.entity === "cases") {
           if (item.action === "create") {
-            await createCaseDraft(item.payload as any, auth.user.id);
+            const created = await createCaseDraft(item.payload as any, auth.user.id);
+            targetResourceId = created?.id || targetResourceId;
           } else if (item.action === "update") {
             const caseId = item.payload.id || item.payload.caseId;
+            if (!caseId) {
+              throw new Error("INVALID_PAYLOAD: Update operation requires caseId.");
+            }
             await updateCaseDraft(caseId, item.payload);
+            targetResourceId = caseId;
           }
         } else if (item.entity === "patients") {
           if (item.action === "create") {
-            await registerPatient(item.payload as any);
+            const registered = await registerPatient(item.payload as any);
+            targetResourceId = registered?.patient?.id || targetResourceId;
           } else {
             throw new Error("Patient updates are not permitted via offline sync.");
           }
         } else if (item.entity === "documents") {
           if (item.action === "create") {
-            await createDocument(item.payload as any);
+            const doc = await createDocument(item.payload as any);
+            targetResourceId = doc?.id || targetResourceId;
           } else if (item.action === "update") {
             const docId = item.payload.id || item.payload.documentId;
+            if (!docId) {
+              throw new Error("INVALID_PAYLOAD: Update operation requires documentId.");
+            }
             await updateDocument(docId, item.payload);
+            targetResourceId = docId;
           }
         } else if (item.entity === "transcripts") {
           // Transcripts are captured within case or draft intake
         } else {
-          throw new Error(`UNSUPPORTED_ENTITY: Entity type '${item.entity}' is not supported.`);
+          throw new Error(`UNSUPPORTED_ENTITY: Entity type '${item.entity}' is not supported for offline sync.`);
         }
 
         if (item.idempotencyKey) {
-          processedIdempotencyKeys.add(item.idempotencyKey);
+          await recordProcessedIdempotencyKey({
+            key: item.idempotencyKey,
+            userId: auth.user.id,
+            entity: item.entity,
+            action: item.action,
+            resourceId: targetResourceId,
+            status: "completed",
+          });
         }
 
         succeeded.push(item.id);
@@ -88,6 +108,18 @@ export async function POST(request: Request) {
           metadata: offlineQueue.minimizePayloadForAudit(item as OfflineQueueItem),
         });
       } catch (err: any) {
+        if (item.idempotencyKey) {
+          await recordProcessedIdempotencyKey({
+            key: item.idempotencyKey,
+            userId: auth.user.id,
+            entity: item.entity,
+            action: item.action,
+            resourceId: item.payload?.id || item.payload?.caseId,
+            status: "failed",
+            errorMessage: err.message,
+          });
+        }
+
         failed.push({
           id: item.id,
           error: err.message || "Failed to process sync item",

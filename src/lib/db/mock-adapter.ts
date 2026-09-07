@@ -6,6 +6,7 @@ class MockDatabaseAdapter {
   private cases: Map<string, ClinicalCase> = new Map();
   private documents: Map<string, MedicalDocument> = new Map();
   private consents: Map<string, any> = new Map();
+  private syncMutations: Map<string, any> = new Map();
   private auditLogs: AuditLogEntry[] = [];
   private isInitialized = false;
 
@@ -218,6 +219,30 @@ class MockDatabaseAdapter {
     };
     this.consents.set(id, updated);
     return updated;
+  }
+
+  // Sync Mutations & Idempotency
+  isIdempotencyKeyProcessed(key: string): boolean {
+    const item = this.syncMutations.get(key);
+    return Boolean(item && item.status === "completed");
+  }
+
+  recordSyncMutation(mutation: {
+    idempotency_key: string;
+    user_id: string;
+    entity: string;
+    action: string;
+    resource_id?: string;
+    status?: "completed" | "failed";
+    error_message?: string;
+  }): void {
+    this.syncMutations.set(mutation.idempotency_key, {
+      id: crypto.randomUUID(),
+      ...mutation,
+      status: mutation.status || "completed",
+      created_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+    });
   }
 
   // Audit Logs

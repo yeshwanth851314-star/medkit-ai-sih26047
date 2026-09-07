@@ -127,4 +127,35 @@ describe("Phase 16: Performance, Offline Caching & Fallback Resilience Tests", (
     expect(minimized.phone).toBeUndefined();
     expect(minimized.address).toBeUndefined();
   });
+
+  it("updates individual item sync status using markSynced and markFailed", () => {
+    const item1 = offlineQueue.enqueue("cases", "create", {
+      patient_id: "patient-1",
+      status: "draft",
+    });
+    const item2 = offlineQueue.enqueue("cases", "create", {
+      patient_id: "patient-2",
+      status: "draft",
+    });
+
+    // markSynced
+    offlineQueue.markSynced(item1.id);
+    let all = offlineQueue.getAllItems();
+    const found1 = all.find((i) => i.id === item1.id);
+    expect(found1?.syncStatus).toBe("synced");
+
+    // markFailed
+    offlineQueue.markFailed(item2.id, "Network timeout 504");
+    all = offlineQueue.getAllItems();
+    const found2 = all.find((i) => i.id === item2.id);
+    expect(found2?.retryCount).toBe(1);
+    expect(found2?.lastError).toContain("504");
+    expect(found2?.syncStatus).toBe("pending");
+
+    // Clear synced leaves only pending/failed
+    offlineQueue.clearSynced();
+    expect(offlineQueue.getAllItems().length).toBe(1);
+    expect(offlineQueue.getAllItems()[0].id).toBe(item2.id);
+  });
 });
+

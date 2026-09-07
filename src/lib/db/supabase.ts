@@ -390,5 +390,85 @@ export async function getDocumentSignedUrl(
   return data.signedUrl;
 }
 
+/**
+ * Server-Side Idempotency Helpers (Sync Mutations)
+ * Guarantees duplicate mutations replayed across restarts or workers are never executed more than once.
+ */
+export async function isIdempotencyKeyProcessed(key: string): Promise<boolean> {
+  if (env.isDemoMode) {
+    return mockDb.isIdempotencyKeyProcessed(key);
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from("sync_mutations")
+      .select("id, status")
+      .eq("idempotency_key", key)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Error querying sync_mutations table:", error.message);
+      return false;
+    }
+
+    return Boolean(data && data.status === "completed");
+  } catch (err) {
+    console.warn("Exception checking sync mutation idempotency:", err);
+    return false;
+  }
+}
+
+export async function recordProcessedIdempotencyKey(params: {
+  key: string;
+  userId: string;
+  entity: string;
+  action: string;
+  resourceId?: string;
+  status?: "completed" | "failed";
+  errorMessage?: string;
+}): Promise<void> {
+  if (env.isDemoMode) {
+    mockDb.recordSyncMutation({
+      idempotency_key: params.key,
+      user_id: params.userId,
+      entity: params.entity,
+      action: params.action,
+      resource_id: params.resourceId,
+      status: params.status || "completed",
+      error_message: params.errorMessage,
+    });
+    return;
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    const { error } = await supabase.from("sync_mutations").upsert(
+      {
+        idempotency_key: params.key,
+        user_id: params.userId,
+        entity: params.entity,
+        action: params.action,
+        resource_id: params.resourceId || null,
+        status: params.status || "completed",
+        error_message: params.errorMessage || null,
+        completed_at: new Date().toISOString(),
+      },
+      { onConflict: "idempotency_key" }
+    );
+
+    if (error) {
+      console.warn("Failed to record sync mutation in Supabase:", error.message);
+    }
+  } catch (err) {
+    console.warn("Exception recording sync mutation:", err);
+  }
+}
+
+
 
 
