@@ -19,7 +19,7 @@ import {
   Send,
 } from "lucide-react";
 import { KioskIntro } from "@/components/onboarding/kiosk-intro";
-import { hasCompletedKioskOnboarding } from "@/lib/onboarding/onboarding-state";
+import { hasCompletedKioskOnboarding, resetKioskOnboarding } from "@/lib/onboarding/onboarding-state";
 
 export default function PatientKioskIntakePage() {
   const router = useRouter();
@@ -385,7 +385,7 @@ export default function PatientKioskIntakePage() {
             {createdCaseId && (
               <Link
                 href={`/doctor/cases/${createdCaseId}`}
-                className="rounded-xl bg-clinical-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-clinical-700"
+                className="rounded-xl bg-clinical-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700"
               >
                 View Structured Case in Doctor Portal &rarr;
               </Link>
@@ -393,8 +393,10 @@ export default function PatientKioskIntakePage() {
             <button
               type="button"
               onClick={() => {
-                setStage("language");
+                resetKioskOnboarding();
+                setStage("intro");
                 setSessionId(null);
+                setIntakeToken(null);
                 setQuestionsAnswered(0);
                 setConsentAcknowledged(false);
               }}

@@ -91,7 +91,7 @@ const TOUR_STEPS: TourStep[] = [
     highlight: true,
     note: "MedKit AI's primary differentiator: automatically computes clinical deltas between visits.",
     preview: (
-      <div className="rounded-xl border-2 border-clinical-400 bg-linear-to-b from-clinical-50/50 to-white p-4 space-y-2.5 text-xs shadow-xs">
+      <div className="rounded-xl border-2 border-clinical-400 bg-gradient-to-b from-clinical-50/50 to-white p-4 space-y-2.5 text-xs shadow-sm">
         <div className="flex items-center justify-between">
           <span className="font-bold text-clinical-900 flex items-center gap-1.5 text-xs uppercase tracking-wider">
             <TrendingUp className="h-4 w-4 text-clinical-600" />
@@ -126,7 +126,7 @@ const TOUR_STEPS: TourStep[] = [
     copy: "MedKit AI organizes verified case information into a structured summary. Review, edit, and confirm it before use.",
     note: "AI assists. The clinician decides.",
     preview: (
-      <div className="rounded-xl border border-surface-200 bg-white p-4 space-y-2 text-xs shadow-2xs">
+      <div className="rounded-xl border border-surface-200 bg-white p-4 space-y-2 text-xs shadow-sm">
         <div className="flex items-center justify-between">
           <span className="inline-flex items-center gap-1 rounded-full bg-clinical-100 px-2 py-0.5 text-[10px] font-bold text-clinical-800">
             <Sparkles className="h-3 w-3 text-clinical-600" /> Live Gemini 2.5 Flash
@@ -215,13 +215,41 @@ export function DoctorTour() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
         handleDismiss();
+        return;
+      }
+
+      if (e.key === "Tab") {
+        if (!dialogRef.current) return;
+        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) {
+          e.preventDefault();
+          return;
+        }
+
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement || document.activeElement === dialogRef.current) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen]);
+  }, [isOpen, mode, currentStepIndex]);
 
   const handleStartTour = () => {
     setMode("tour");
@@ -258,12 +286,12 @@ export function DoctorTour() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="tour-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200 motion-reduce:animate-none motion-reduce:transition-none"
     >
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className={`w-full max-w-lg rounded-2xl bg-white p-6 sm:p-8 shadow-2xl transition-all focus:outline-hidden ${
+        className={`w-full max-w-lg rounded-2xl bg-white p-6 sm:p-8 shadow-2xl transition-all focus:outline-none motion-reduce:transition-none ${
           currentStep?.highlight && mode === "tour"
             ? "border-2 border-clinical-500 ring-4 ring-clinical-100"
             : "border border-surface-200"
@@ -272,7 +300,7 @@ export function DoctorTour() {
         {/* WELCOME PROMPT */}
         {mode === "welcome" && (
           <div className="text-center space-y-5">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-xs">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-sm">
               <Stethoscope className="h-7 w-7" />
             </div>
 
@@ -313,7 +341,7 @@ export function DoctorTour() {
               <button
                 type="button"
                 onClick={handleStartTour}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-clinical-600 px-6 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-clinical-700 transition-colors"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-clinical-600 px-6 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors"
               >
                 <span>Start Quick Tour</span>
                 <ArrowRight className="h-4 w-4" />
@@ -395,7 +423,7 @@ export function DoctorTour() {
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-clinical-700"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700"
                 >
                   {currentStepIndex === TOUR_STEPS.length - 1 ? (
                     <>

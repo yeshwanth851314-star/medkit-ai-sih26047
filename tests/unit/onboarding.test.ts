@@ -22,9 +22,18 @@ const localStorageMock = {
   clear: () => { storage.clear(); },
 };
 
+const sessionStorageMap = new Map<string, string>();
+const sessionStorageMock = {
+  getItem: (key: string) => sessionStorageMap.get(key) ?? null,
+  setItem: (key: string, val: string) => { sessionStorageMap.set(key, String(val)); },
+  removeItem: (key: string) => { sessionStorageMap.delete(key); },
+  clear: () => { sessionStorageMap.clear(); },
+};
+
 const listeners = new Map<string, Array<(e: any) => void>>();
 const mockWindow = {
   localStorage: localStorageMock,
+  sessionStorage: sessionStorageMock,
   addEventListener: (event: string, cb: any) => {
     if (!listeners.has(event)) listeners.set(event, []);
     listeners.get(event)!.push(cb);
@@ -84,6 +93,18 @@ describe("Lightweight Client Onboarding & Help System", () => {
       expect(hasCompletedDoctorOnboarding()).toBe(false);
     });
 
+    it("scopes doctor onboarding state per clinician ID", () => {
+      expect(hasCompletedDoctorOnboarding("doc-alpha")).toBe(false);
+      expect(hasCompletedDoctorOnboarding("doc-beta")).toBe(false);
+
+      completeDoctorOnboarding("doc-alpha");
+      expect(hasCompletedDoctorOnboarding("doc-alpha")).toBe(true);
+      expect(hasCompletedDoctorOnboarding("doc-beta")).toBe(false);
+
+      resetDoctorOnboarding("doc-alpha");
+      expect(hasCompletedDoctorOnboarding("doc-alpha")).toBe(false);
+    });
+
     it("dispatches REPLAY_TOUR_EVENT window event when triggerDoctorTourReplay is invoked", () => {
       let eventFired = false;
       const handler = () => {
@@ -99,21 +120,26 @@ describe("Lightweight Client Onboarding & Help System", () => {
   });
 
   describe("Patient Kiosk Onboarding State", () => {
+    beforeEach(() => {
+      sessionStorageMap.clear();
+    });
+
     it("reports incomplete on first patient arrival", () => {
       expect(hasCompletedKioskOnboarding()).toBe(false);
     });
 
-    it("stores completion when patient starts or skips intro", () => {
+    it("stores completion when patient starts or skips intro in sessionStorage", () => {
       completeKioskOnboarding();
-      expect(window.localStorage.getItem(KIOSK_ONBOARDING_KEY)).toBe("true");
+      expect(window.sessionStorage.getItem(KIOSK_ONBOARDING_KEY)).toBe("true");
       expect(hasCompletedKioskOnboarding()).toBe(true);
     });
 
-    it("resets kiosk completion cleanly", () => {
+    it("resets kiosk completion cleanly for subsequent patient session", () => {
       completeKioskOnboarding();
       expect(hasCompletedKioskOnboarding()).toBe(true);
       resetKioskOnboarding();
       expect(hasCompletedKioskOnboarding()).toBe(false);
+      expect(window.sessionStorage.getItem(KIOSK_ONBOARDING_KEY)).toBeNull();
     });
   });
 
