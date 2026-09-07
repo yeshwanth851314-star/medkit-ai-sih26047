@@ -88,7 +88,22 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
       "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact"
     );
     expect(bundle.abdmComplianceNotice).toBe(ABDM_COMPLIANCE_DISCLAIMER);
-    expect(bundle.entry.length).toBeGreaterThanOrEqual(6);
+    expect(bundle.entry.length).toBeGreaterThanOrEqual(7);
+
+    // FHIR R4 Document Rule: First entry MUST be Composition
+    expect(bundle.entry[0].resource.resourceType).toBe("Composition");
+    expect((bundle.entry[0].resource as any).title).toContain("Clinical Consultation Summary");
+  });
+
+  it("enforces FHIR R4 document bundle semantics with Composition as first resource", () => {
+    const bundle = mapCaseToFhirBundle({ clinicalCase: mockCase, patient: mockPatient });
+    const firstEntry = bundle.entry[0];
+    expect(firstEntry.resource.resourceType).toBe("Composition");
+    const comp = firstEntry.resource as any;
+    expect(comp.status).toBe("final");
+    expect(comp.subject.reference).toBe(`urn:uuid:${mockPatient.id}`);
+    expect(comp.encounter.reference).toBe(`urn:uuid:enc-${mockCase.id}`);
+    expect(comp.section.length).toBeGreaterThanOrEqual(2);
   });
 
   it("correctly maps Patient resource with ABHA identifier", () => {

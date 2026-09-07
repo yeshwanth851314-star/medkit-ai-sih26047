@@ -1,6 +1,7 @@
 import { ClinicalCase, Patient, MedicalDocument } from "../../types/database";
 import {
   FhirR4Bundle,
+  FhirCompositionResource,
   FhirPatientResource,
   FhirEncounterResource,
   FhirConditionResource,
@@ -21,8 +22,62 @@ export function mapCaseToFhirBundle(params: {
   const { clinicalCase, patient, documents = [] } = params;
   const entries: FhirBundleEntry[] = [];
   const timestamp = clinicalCase.finalized_at || clinicalCase.created_at || new Date().toISOString();
+  const encounterId = `enc-${clinicalCase.id}`;
+  const compositionId = `comp-${clinicalCase.id}`;
 
-  // 1. Patient Resource
+  // 1. Composition Resource (MANDATORY entry[0] for FHIR R4 document bundles)
+  const fhirComposition: FhirCompositionResource = {
+    resourceType: "Composition",
+    id: compositionId,
+    status: clinicalCase.status === "final" ? "final" : "preliminary",
+    type: {
+      coding: [
+        {
+          system: "http://snomed.info/sct",
+          code: "371530004",
+          display: "Clinical consultation report",
+        },
+      ],
+      text: clinicalCase.case_type === "ayush" ? "AYUSH Clinical Encounter Record" : "Clinical Consultation Record",
+    },
+    subject: {
+      reference: `urn:uuid:${patient.id}`,
+      display: patient.full_name,
+    },
+    encounter: {
+      reference: `urn:uuid:${encounterId}`,
+    },
+    date: timestamp,
+    author: [
+      {
+        reference: `urn:uuid:${clinicalCase.created_by || "clinician-default"}`,
+        display: "Attending Clinician",
+      },
+    ],
+    title: clinicalCase.case_type === "ayush"
+      ? `AYUSH Clinical Case Record - ${patient.full_name}`
+      : `Clinical Consultation Summary - ${patient.full_name}`,
+    section: [
+      {
+        title: "Chief Complaint",
+        entry: clinicalCase.chief_complaint ? [{ reference: `urn:uuid:cond-${clinicalCase.id}` }] : undefined,
+      },
+      {
+        title: "Assessment & Plan",
+        text: {
+          status: "generated",
+          div: `<div xmlns="http://www.w3.org/1999/xhtml"><p>${clinicalCase.assessment_plan?.summary || clinicalCase.chief_complaint}</p></div>`,
+        },
+      },
+    ],
+  };
+
+  entries.push({
+    fullUrl: `urn:uuid:${compositionId}`,
+    resource: fhirComposition,
+  });
+
+  // 2. Patient Resource
   const fhirPatient: FhirPatientResource = {
     resourceType: "Patient",
     id: patient.id,
@@ -66,8 +121,7 @@ export function mapCaseToFhirBundle(params: {
     resource: fhirPatient,
   });
 
-  // 2. Encounter Resource
-  const encounterId = `enc-${clinicalCase.id}`;
+  // 3. Encounter Resource
   const fhirEncounter: FhirEncounterResource = {
     resourceType: "Encounter",
     id: encounterId,

@@ -121,9 +121,33 @@ export interface FhirMedicationStatementResource {
   }>;
 }
 
+export interface FhirCompositionSection {
+  title: string;
+  code?: FhirCodeableConcept;
+  text?: {
+    status: "generated" | "extensions" | "additional" | "empty";
+    div: string;
+  };
+  entry?: FhirReference[];
+}
+
+export interface FhirCompositionResource {
+  resourceType: "Composition";
+  id: string;
+  status: "preliminary" | "final" | "amended" | "entered-in-error";
+  type: FhirCodeableConcept;
+  subject: FhirReference;
+  encounter?: FhirReference;
+  date: string;
+  author: FhirReference[];
+  title: string;
+  section?: FhirCompositionSection[];
+}
+
 export interface FhirBundleEntry {
   fullUrl: string;
   resource:
+    | FhirCompositionResource
     | FhirPatientResource
     | FhirEncounterResource
     | FhirConditionResource
