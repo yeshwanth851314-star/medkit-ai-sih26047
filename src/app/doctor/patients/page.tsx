@@ -134,7 +134,7 @@ export default function PatientsHubPage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by code (e.g. MED-2026-0001), name, or phone..."
-            className="block w-full rounded-xl border border-surface-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
+            className="block w-full rounded-xl border border-surface-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-clinical-600 focus:ring-1 focus:ring-clinical-600"
           />
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function PatientsHubPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-xs">
+          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-surface-200">
               <thead className="bg-surface-50 text-left text-xs font-semibold text-slate-600">
                 <tr>
@@ -208,7 +208,7 @@ export default function PatientsHubPage() {
 
       {/* Registration Modal / Drawer */}
       {isRegisterOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-slate-900">Register New Clinical Patient</h2>
             <p className="text-xs text-slate-500 mt-0.5">Generates a permanent clinical code and records intake consent</p>

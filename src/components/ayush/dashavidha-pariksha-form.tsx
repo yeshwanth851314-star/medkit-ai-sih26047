@@ -47,7 +47,7 @@ export function DashavidhaParikshaForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-ayush-600/30 bg-white p-6 shadow-xs space-y-6">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-ayush-600/30 bg-white p-6 shadow-sm space-y-6">
       <div className="border-b border-surface-200 pb-4">
         <div className="flex items-center gap-2 text-xs font-bold text-ayush-700 uppercase tracking-wider mb-1">
           <Feather className="h-4 w-4" />
@@ -240,7 +240,7 @@ export function DashavidhaParikshaForm({
         <button
           type="submit"
           disabled={isSaving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-ayush-700 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-ayush-900 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-ayush-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-ayush-900 disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" />
           {isSaving ? "Saving Assessment..." : "Save AYUSH Assessment"}

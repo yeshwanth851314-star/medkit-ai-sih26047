@@ -6,7 +6,7 @@ export default function HomePage() {
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       {/* Hero Banner */}
       <div className="rounded-2xl border border-clinical-200 bg-gradient-to-b from-clinical-50 to-white p-8 shadow-sm sm:p-12 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-clinical-200 bg-white px-3 py-1 text-xs font-semibold text-clinical-700 shadow-xs mb-4">
+        <div className="inline-flex items-center gap-2 rounded-full border border-clinical-200 bg-white px-3 py-1 text-xs font-semibold text-clinical-700 shadow-sm mb-4">
           <HeartPulse className="h-3.5 w-3.5 text-clinical-600" />
           SIH26047 — Patient Case-Taking Software
         </div>
@@ -31,7 +31,7 @@ export default function HomePage() {
           </Link>
           <Link
             href="/intake/new"
-            className="flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-xs hover:bg-surface-50 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
           >
             <Sparkles className="h-4 w-4 text-amber-500" />
             Start Patient Kiosk Intake
@@ -49,7 +49,7 @@ export default function HomePage() {
 
       {/* Core Workflow Pillars */}
       <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-clinical-100 text-clinical-700 mb-4">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -59,7 +59,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 mb-4">
             <FileSearch className="h-5 w-5" />
           </div>
@@ -69,7 +69,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 mb-4">
             <Clock className="h-5 w-5" />
           </div>

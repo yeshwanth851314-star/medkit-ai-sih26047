@@ -65,7 +65,7 @@ export function DoctorHelpMenu() {
         aria-expanded={isOpen}
         aria-haspopup="true"
         aria-label="Clinician Help & Quick Tour Menu"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-clinical-500"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 hover:text-clinical-700 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
       >
         <HelpCircle className="h-4 w-4 text-clinical-600" />
         <span className="hidden sm:inline">Help</span>
@@ -75,7 +75,7 @@ export function DoctorHelpMenu() {
         <div
           role="menu"
           aria-orientation="vertical"
-          className="absolute right-0 z-50 mt-2 w-72 sm:w-80 origin-top-right rounded-2xl border border-surface-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-hidden animate-in fade-in duration-150"
+          className="absolute right-0 z-50 mt-2 w-72 sm:w-80 origin-top-right rounded-2xl border border-surface-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-none animate-in fade-in duration-150"
         >
           {/* Menu Header */}
           <div className="flex items-center justify-between border-b border-surface-100 pb-2.5 px-2">

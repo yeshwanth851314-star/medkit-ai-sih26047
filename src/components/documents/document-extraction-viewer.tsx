@@ -48,7 +48,7 @@ export function DocumentExtractionViewer({
   const tests = extraction.extractedData.tests || [];
 
   return (
-    <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs space-y-6">
+    <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm space-y-6">
       {/* Header with Mandatory Safety Disclaimer */}
       <div>
         <div className="flex items-center justify-between border-b border-surface-200 pb-3">
@@ -146,7 +146,7 @@ export function DocumentExtractionViewer({
                 {meds.map((m: any, i: number) => (
                   <div
                     key={i}
-                    className="rounded-xl border border-surface-200 p-3 bg-white hover:border-clinical-300 transition-all text-xs flex items-center justify-between gap-3 shadow-2xs"
+                    className="rounded-xl border border-surface-200 p-3 bg-white hover:border-clinical-300 transition-all text-xs flex items-center justify-between gap-3 shadow-sm"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export function DocumentExtractionViewer({
                           type="button"
                           disabled={verifyingMed === m.name}
                           onClick={() => handleVerifyMedication(m.name)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-clinical-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-clinical-700 disabled:opacity-40"
+                          className="inline-flex items-center gap-1 rounded-lg bg-clinical-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700 disabled:opacity-40"
                         >
                           <FileCheck className="h-3.5 w-3.5" />
                           {verifyingMed === m.name ? "Verifying..." : "Verify & Confirm"}

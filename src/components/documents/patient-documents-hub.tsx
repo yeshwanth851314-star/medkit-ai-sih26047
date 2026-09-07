@@ -47,7 +47,7 @@ export function PatientDocumentsHub({
         <button
           type="button"
           onClick={() => setShowUploader(!showUploader)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-clinical-700 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors"
         >
           {showUploader ? "Close Upload" : (
             <>
@@ -74,7 +74,7 @@ export function PatientDocumentsHub({
               href={`/doctor/patients/${patientId}/documents?docId=${d.id}`}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                 activeDocId === d.id
-                  ? "bg-clinical-600 text-white shadow-xs"
+                  ? "bg-clinical-600 text-white shadow-sm"
                   : "bg-white border border-surface-200 text-slate-700 hover:bg-surface-50"
               }`}
             >

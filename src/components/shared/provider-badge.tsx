@@ -65,7 +65,7 @@ export function ProviderBadge() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold tracking-tight transition-all border shadow-2xs ${
+        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold tracking-tight transition-all border shadow-sm ${
           isLive
             ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
             : "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"

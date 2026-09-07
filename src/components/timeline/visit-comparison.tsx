@@ -19,7 +19,7 @@ import { ContextualHelp } from "@/components/help/contextual-help";
 export function VisitComparisonView({ comparison }: { comparison: VisitComparisonResult }) {
   if (!comparison.hasPreviousVisit) {
     return (
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs text-center">
+      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm text-center">
         <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-clinical-100 text-clinical-600 mb-2">
           <HeartPulse className="h-5 w-5" />
         </div>
@@ -37,7 +37,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
     (comparison.symptomChanges?.resolved?.length ?? 0) > 0;
 
   return (
-    <div className="rounded-2xl border border-clinical-300/80 bg-linear-to-b from-clinical-50/30 via-white to-white p-6 shadow-xs space-y-6">
+    <div className="rounded-2xl border border-clinical-300/80 bg-gradient-to-b from-clinical-50/30 via-white to-white p-6 shadow-sm space-y-6">
       {/* Signature Header */}
       <div className="border-b border-surface-200 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
@@ -98,7 +98,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
               <ArrowRight className="h-4 w-4" />
             </div>
           </div>
-          <div className="flex-1 rounded-lg bg-white p-3 border border-clinical-300 shadow-2xs">
+          <div className="flex-1 rounded-lg bg-white p-3 border border-clinical-300 shadow-sm">
             <span className="text-clinical-600 block text-[10px] font-semibold uppercase">Current Visit (Evolution)</span>
             <span className="font-bold text-slate-900 mt-0.5 block">{comparison.currentComplaint}</span>
           </div>
@@ -129,7 +129,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
                   {comparison.symptomChanges.added.map((sym, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-emerald-700 border border-emerald-300 shadow-2xs"
+                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-emerald-700 border border-emerald-300 shadow-sm"
                     >
                       <Plus className="h-2.5 w-2.5" /> {sym}
                     </span>
@@ -151,7 +151,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
                   {comparison.symptomChanges.persisting.map((sym, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-700 border border-slate-300 shadow-2xs"
+                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-700 border border-slate-300 shadow-sm"
                     >
                       <ArrowRight className="h-2.5 w-2.5 text-slate-400" /> {sym}
                     </span>
@@ -173,7 +173,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
                   {comparison.symptomChanges.resolved.map((sym, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-sky-700 border border-sky-300 shadow-2xs line-through"
+                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-semibold text-sky-700 border border-sky-300 shadow-sm line-through"
                     >
                       <Check className="h-2.5 w-2.5" /> {sym}
                     </span>
@@ -246,7 +246,7 @@ export function VisitComparisonView({ comparison }: { comparison: VisitCompariso
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             {comparison.vitalsComparison.map((v, i) => (
-              <div key={i} className="rounded-xl border border-surface-200 p-3 bg-surface-50/50 hover:bg-white hover:shadow-2xs transition-all">
+              <div key={i} className="rounded-xl border border-surface-200 p-3 bg-surface-50/50 hover:bg-white hover:shadow-sm transition-all">
                 <span className="text-slate-500 font-medium block text-[11px]">{v.metric}</span>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="font-bold text-slate-900 text-sm">{v.currentValue}</span>

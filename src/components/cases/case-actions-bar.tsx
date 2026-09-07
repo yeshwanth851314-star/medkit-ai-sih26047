@@ -111,7 +111,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
         {/* Longitudinal Timeline CTA */}
         <Link
           href={`/doctor/patients/${patient.id}/timeline`}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 hover:text-clinical-700 transition-colors"
         >
           <TrendingUp className="h-3.5 w-3.5 text-clinical-600" />
           <span>Timeline &amp; What Changed</span>
@@ -122,7 +122,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
           <button
             type="button"
             onClick={() => setIsFhirOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 hover:text-clinical-700 transition-colors"
           >
             <FileCode className="h-3.5 w-3.5 text-clinical-600" />
             <span>FHIR R4 / ABDM View</span>
@@ -136,7 +136,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
             type="button"
             onClick={handleFinalizeCase}
             disabled={isFinalizing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100 transition-colors disabled:opacity-50"
           >
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
             <span>{isFinalizing ? "Finalizing..." : "Finalize Case"}</span>
@@ -149,7 +149,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
             <button
               type="button"
               onClick={() => setIsAmendModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-2xs hover:bg-amber-100/50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-100/50 transition-colors"
             >
               <FileEdit className="h-3.5 w-3.5 text-amber-600" />
               <span>Add Addendum</span>
@@ -162,7 +162,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
         <Link
           href={`/doctor/cases/${clinicalCase.id}/print`}
           target="_blank"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50"
         >
           <Printer className="h-3.5 w-3.5 text-slate-500" />
           <span>Print Case Sheet</span>
@@ -185,7 +185,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsAmendModalOpen(false);
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 motion-reduce:animate-none"
         >
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-surface-200 pb-3">
@@ -199,7 +199,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
                 type="button"
                 onClick={() => setIsAmendModalOpen(false)}
                 aria-label="Close addendum modal"
-                className="rounded-lg p-1 text-slate-400 hover:bg-surface-100 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                className="rounded-lg p-1 text-slate-400 hover:bg-surface-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -256,7 +256,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
                 <button
                   type="submit"
                   disabled={isSubmittingAmend}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
                 >
                   <ShieldCheck className="h-3.5 w-3.5" />
                   {isSubmittingAmend ? "Recording..." : "Sign & Append Addendum"}

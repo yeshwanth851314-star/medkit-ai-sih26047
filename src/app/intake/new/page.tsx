@@ -139,7 +139,7 @@ export default function PatientKioskIntakePage() {
       {/* STAGE 1: Language Selection */}
       {stage === "language" && (
         <div className="rounded-3xl border border-surface-200 bg-white p-8 sm:p-12 shadow-sm text-center space-y-8">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-xs">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-sm">
             <Languages className="h-8 w-8" />
           </div>
 
@@ -159,7 +159,7 @@ export default function PatientKioskIntakePage() {
             <button
               type="button"
               onClick={() => handleSelectLanguage("en")}
-              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-xs group"
+              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
             >
               <div className="text-lg font-bold text-slate-900 group-hover:text-clinical-700">English</div>
               <div className="text-xs text-slate-500 mt-1">Standard clinical intake</div>
@@ -168,7 +168,7 @@ export default function PatientKioskIntakePage() {
             <button
               type="button"
               onClick={() => handleSelectLanguage("te")}
-              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-xs group"
+              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
             >
               <div className="text-lg font-bold text-slate-900 group-hover:text-clinical-700">తెలుగు (Telugu)</div>
               <div className="text-xs text-slate-500 mt-1">ప్రాంతీయ భాషలో సంభాషణ</div>
@@ -354,7 +354,7 @@ export default function PatientKioskIntakePage() {
                     type="button"
                     disabled={!textInput.trim() || isSubmitting}
                     onClick={() => handleAnswer(textInput, "text")}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-clinical-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-clinical-700 shadow-xs"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-clinical-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-clinical-700 shadow-sm"
                   >
                     <Send className="h-3.5 w-3.5" /> Submit Response
                   </button>
@@ -368,7 +368,7 @@ export default function PatientKioskIntakePage() {
       {/* STAGE 4: Completed & Handoff */}
       {stage === "completed" && (
         <div className="rounded-3xl border border-surface-200 bg-white p-8 sm:p-12 shadow-sm text-center space-y-6">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-xs">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm">
             <CheckCircle2 className="h-8 w-8" />
           </div>
 

@@ -51,7 +51,7 @@ export function ClinicalTimelineView({ milestones }: { milestones: TimelineMiles
           </div>
 
           {/* Timeline Card */}
-          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-2xs hover:shadow-xs hover:border-clinical-400 transition-all">
+          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-sm hover:shadow hover:border-clinical-400 transition-all">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 border-b border-surface-100 pb-3">
               <div>
                 <div className="flex items-center gap-2">

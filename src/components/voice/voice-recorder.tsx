@@ -186,7 +186,7 @@ export function VoiceRecorder({
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
               aria-label={isRecording ? "Stop audio recording" : "Start audio recording"}
-              className={`relative flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-all focus:outline-hidden focus:ring-4 focus:ring-clinical-300 ${
+              className={`relative flex h-16 w-16 items-center justify-center rounded-full text-white shadow-lg transition-all focus:outline-none focus:ring-4 focus:ring-clinical-300 ${
                 isRecording ? "bg-red-600 hover:bg-red-700" : "bg-clinical-600 hover:bg-clinical-700"
               }`}
             >
@@ -303,7 +303,7 @@ export function VoiceRecorder({
               <button
                 type="button"
                 onClick={handleConfirm}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-clinical-700 shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-clinical-700 shadow-sm"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Confirm Transcript

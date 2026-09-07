@@ -33,7 +33,7 @@ export default async function PrintCaseSheetPage({
           onClick={() => {
             if (typeof window !== "undefined") window.print();
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-clinical-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700"
         >
           <Printer className="h-4 w-4" /> Print / Save as PDF
         </button>

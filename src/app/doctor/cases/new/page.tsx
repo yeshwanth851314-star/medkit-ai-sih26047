@@ -276,7 +276,7 @@ export default function NewCasePage() {
             type="button"
             onClick={handleSaveDraft}
             disabled={isSaving}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 disabled:opacity-50 transition-colors"
           >
             <Save className="h-3.5 w-3.5 text-clinical-600" />
             {isSaving ? "Saving..." : "Save Draft"}
@@ -286,7 +286,7 @@ export default function NewCasePage() {
             type="button"
             onClick={handleFinalize}
             disabled={isSaving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             <CheckCircle2 className="h-4 w-4" />
             Finalize Case
@@ -302,7 +302,7 @@ export default function NewCasePage() {
       )}
 
       {/* Progress & Section Navigation */}
-      <div className="rounded-xl border border-surface-200 bg-white p-2 shadow-2xs">
+      <div className="rounded-xl border border-surface-200 bg-white p-2 shadow-sm">
         <nav className="flex flex-wrap gap-1">
           {SECTIONS.map((sec, idx) => (
             <button
@@ -310,7 +310,7 @@ export default function NewCasePage() {
               onClick={() => setActiveSection(idx)}
               className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
                 activeSection === idx
-                  ? "bg-clinical-600 text-white shadow-xs"
+                  ? "bg-clinical-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-surface-100"
               }`}
             >
@@ -321,7 +321,7 @@ export default function NewCasePage() {
       </div>
 
       {/* Section Content */}
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs sm:p-8">
+      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm sm:p-8">
         {/* SECTION 0: Chief Complaint */}
         {activeSection === 0 && (
           <div className="space-y-6">
@@ -776,7 +776,7 @@ export default function NewCasePage() {
               type="button"
               onClick={handleFinalize}
               disabled={isSaving}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700"
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
             >
               <CheckCircle2 className="h-4 w-4" /> Finalize Consultation
             </button>

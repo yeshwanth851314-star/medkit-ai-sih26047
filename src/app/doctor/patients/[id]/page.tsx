@@ -53,7 +53,7 @@ export default async function PatientProfilePage({
       </div>
 
       {/* Patient Profile Header Card */}
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs sm:p-8">
+      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-700 font-bold text-xl">
@@ -116,7 +116,7 @@ export default async function PatientProfilePage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Cases Column (Span 2) */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-surface-200 pb-4">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Clock className="h-4 w-4 text-clinical-600" />
@@ -177,7 +177,7 @@ export default async function PatientProfilePage({
 
                       <Link
                         href={`/doctor/cases/${c.id}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-surface-50 hover:text-clinical-700"
+                        className="inline-flex items-center gap-1 rounded-md border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 hover:text-clinical-700"
                       >
                         Open Case <ChevronRight className="h-3.5 w-3.5" />
                       </Link>
@@ -191,7 +191,7 @@ export default async function PatientProfilePage({
 
         {/* Right Column: Digitized Medical Documents */}
         <div className="space-y-6">
-          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-surface-200 pb-4">
               <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-clinical-600" />

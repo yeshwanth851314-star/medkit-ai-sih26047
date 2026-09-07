@@ -24,7 +24,7 @@ export function AyushCaseDisplay({ assessment }: AyushCaseDisplayProps) {
   const aharaVihara = assessment.ahara_vihara;
 
   return (
-    <div className="rounded-2xl border border-ayush-200 bg-linear-to-br from-white to-ayush-50/30 p-6 shadow-xs space-y-6">
+    <div className="rounded-2xl border border-ayush-200 bg-gradient-to-br from-white to-ayush-50/30 p-6 shadow-sm space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-ayush-200 pb-4">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-ayush-100 text-ayush-700">
@@ -55,7 +55,7 @@ export function AyushCaseDisplay({ assessment }: AyushCaseDisplayProps) {
           {parikshaItems.map((item, idx) => (
             <div
               key={idx}
-              className="rounded-xl border border-surface-200 bg-white p-3.5 shadow-2xs space-y-1"
+              className="rounded-xl border border-surface-200 bg-white p-3.5 shadow-sm space-y-1"
             >
               <span className="text-[10px] font-semibold uppercase text-slate-400 block tracking-wider">
                 {item.label}
@@ -70,7 +70,7 @@ export function AyushCaseDisplay({ assessment }: AyushCaseDisplayProps) {
 
       {/* Ahara & Vihara Lifestyle Factors */}
       {aharaVihara && (aharaVihara.dietary_habits || aharaVihara.daily_routine) && (
-        <div className="rounded-xl bg-white p-4 border border-surface-200 space-y-3 shadow-2xs">
+        <div className="rounded-xl bg-white p-4 border border-surface-200 space-y-3 shadow-sm">
           <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
             Ahara-Vihara (Diet &amp; Regimen Analysis)
           </h3>

@@ -55,11 +55,11 @@ export function RedFlagBanner({
       {localAlerts.map((alert) => (
         <div
           key={alert.ruleId}
-          className="rounded-2xl border-2 border-red-500 bg-red-50/90 p-5 shadow-xs text-red-950 transition-all"
+          className="rounded-2xl border-2 border-red-500 bg-red-50/90 p-5 shadow-sm text-red-950 transition-all"
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-white shrink-0 mt-0.5 shadow-xs" aria-hidden="true">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-white shrink-0 mt-0.5 shadow-sm" aria-hidden="true">
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div>
@@ -91,7 +91,7 @@ export function RedFlagBanner({
                   type="button"
                   disabled={isAcknowledging === alert.ruleId}
                   onClick={() => handleAcknowledge(alert.ruleId)}
-                  className="inline-flex items-center justify-center min-h-[44px] min-w-[120px] rounded-lg bg-red-700 px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center justify-center min-h-[44px] min-w-[120px] rounded-lg bg-red-700 px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 transition-colors disabled:opacity-50"
                   aria-label={`Acknowledge red flag ${alert.ruleId}: ${alert.message}`}
                 >
                   {isAcknowledging === alert.ruleId ? "Recording..." : "Acknowledge Signal"}

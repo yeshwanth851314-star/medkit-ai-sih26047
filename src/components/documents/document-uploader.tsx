@@ -125,7 +125,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
   };
 
   return (
-    <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs space-y-4">
+    <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm space-y-4">
       <div className="flex items-center justify-between border-b border-surface-200 pb-3">
         <div className="flex items-center gap-2">
           <Upload className="h-4 w-4 text-clinical-600" />
@@ -167,7 +167,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
             fileInputRef.current?.click();
           }
         }}
-        className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all focus:outline-hidden focus:ring-2 focus:ring-clinical-500 ${
+        className={`rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-clinical-500 ${
           isDragging
             ? "border-clinical-500 bg-clinical-50/50"
             : selectedFile
@@ -201,7 +201,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
                 setSelectedFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
-              className="ml-2 rounded-full p-1 text-slate-400 hover:bg-surface-200 hover:text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-clinical-500"
+              className="ml-2 rounded-full p-1 text-slate-400 hover:bg-surface-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-clinical-500"
             >
               <X className="h-4 w-4" />
             </button>
@@ -242,7 +242,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
             type="button"
             disabled={isUploading}
             onClick={handleUploadAndExtract}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-clinical-700 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700 disabled:opacity-50 transition-colors"
           >
             {isUploading ? (
               <>

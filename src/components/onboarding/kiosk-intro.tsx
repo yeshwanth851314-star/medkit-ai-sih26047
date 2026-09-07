@@ -91,7 +91,7 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
       {/* Top Banner with Language Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-surface-200 pb-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-xs">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-600 shadow-sm">
             <HeartPulse className="h-6 w-6" />
           </div>
           <div>
@@ -112,7 +112,7 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
             aria-pressed={selectedLang === "en"}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
               selectedLang === "en"
-                ? "bg-white text-slate-900 shadow-xs"
+                ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -124,7 +124,7 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
             aria-pressed={selectedLang === "te"}
             className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
               selectedLang === "te"
-                ? "bg-white text-clinical-800 shadow-xs font-bold"
+                ? "bg-white text-clinical-800 shadow-sm font-bold"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -152,9 +152,9 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
         {steps.map((step) => (
           <div
             key={step.num}
-            className="flex items-start gap-3 rounded-2xl border border-surface-200 bg-surface-50/60 p-4 transition-all hover:bg-white hover:shadow-xs"
+            className="flex items-start gap-3 rounded-2xl border border-surface-200 bg-surface-50/60 p-4 transition-all hover:bg-white hover:shadow-sm"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-surface-200 shadow-2xs">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white border border-surface-200 shadow-sm">
               {step.icon}
             </div>
             <div className="space-y-0.5">
@@ -195,7 +195,7 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
         <button
           type="button"
           onClick={handleStart}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-clinical-600 px-6 py-3 text-sm font-semibold text-white shadow-xs hover:bg-clinical-700 transition-colors"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-clinical-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors"
         >
           <span>{isTelugu ? "ప్రారంభించండి (Start)" : "Start Intake"}</span>
           <ArrowRight className="h-4 w-4" />

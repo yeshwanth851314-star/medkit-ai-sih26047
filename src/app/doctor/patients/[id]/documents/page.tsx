@@ -42,7 +42,7 @@ export default async function PatientDocumentsPage({
       </div>
 
       {/* Patient Header */}
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-slate-900">{patient.full_name}</h1>

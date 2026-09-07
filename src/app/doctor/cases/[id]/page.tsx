@@ -87,7 +87,7 @@ export default async function CaseDetailsPage({
       </div>
 
       {/* Case Header Card */}
-      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-xs sm:p-8">
+      <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm sm:p-8">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-surface-200 pb-5">
           <div>
             <div className="flex items-center gap-2.5">
@@ -197,7 +197,7 @@ export default async function CaseDetailsPage({
       <div className="space-y-6">
         {/* HPI Section */}
         {c.hpi && (
-          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-surface-200 pb-3 mb-4">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                 History of Present Illness (HPI)
@@ -258,7 +258,7 @@ export default async function CaseDetailsPage({
 
         {/* Medications & Allergies */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                 <Pill className="h-4 w-4 text-clinical-600" /> Home &amp; Extracted Medications
@@ -280,7 +280,7 @@ export default async function CaseDetailsPage({
             )}
           </div>
 
-          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-5 shadow-sm">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <AlertTriangle className="h-4 w-4 text-rose-500" /> Allergies
             </h3>
@@ -300,7 +300,7 @@ export default async function CaseDetailsPage({
 
         {/* Physical Examination */}
         {c.examination && (
-          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 border-b border-surface-200 pb-3">
               Examination Findings
             </h2>
@@ -340,7 +340,7 @@ export default async function CaseDetailsPage({
 
         {/* Assessment & Plan */}
         {c.assessment_plan && (
-          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-xs">
+          <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 border-b border-surface-200 pb-3">
               Clinician Assessment &amp; Treatment Plan
             </h2>
@@ -372,7 +372,7 @@ export default async function CaseDetailsPage({
 
         {/* Post-finalization Clinical Addenda / Amendments */}
         {c.amendments && c.amendments.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-6 shadow-xs space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-amber-200 pb-3">
               <History className="h-5 w-5 text-amber-700" />
               <h2 className="text-sm font-bold text-amber-950 uppercase tracking-wider">
@@ -382,7 +382,7 @@ export default async function CaseDetailsPage({
 
             <div className="space-y-3">
               {c.amendments.map((amend) => (
-                <div key={amend.id} className="rounded-lg bg-white p-4 border border-amber-200 shadow-2xs space-y-2 text-xs">
+                <div key={amend.id} className="rounded-lg bg-white p-4 border border-amber-200 shadow-sm space-y-2 text-xs">
                   <div className="flex items-center justify-between text-slate-500">
                     <span className="font-bold text-slate-900">
                       Addendum #{amend.version} — {amend.reason}

@@ -71,7 +71,7 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 motion-reduce:animate-none"
     >
       <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl transition-all">
         {/* Header */}
@@ -84,7 +84,7 @@ export function FhirPreviewDrawer({ bundle, isOpen, onClose }: FhirPreviewDrawer
             type="button"
             onClick={onClose}
             aria-label="Close FHIR preview ✕"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-clinical-500"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-clinical-500"
           >
             ✕
           </button>
