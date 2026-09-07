@@ -117,4 +117,35 @@ describe("Phase 14: Security, Privacy & Audit Trail Hardening Tests", () => {
     expect(syncLog.resource_type).toBe("transcripts");
     expect(syncLog.action).toBe("SYNC_OFFLINE_OPERATION");
   });
+
+  it("fails closed on critical audit logging failure in production mode", async () => {
+    const { env } = await import("../../src/config/env");
+    const { CRITICAL_AUDIT_ACTIONS } = await import("../../src/features/security/audit-service");
+
+    expect(CRITICAL_AUDIT_ACTIONS.has("FINALIZE_CASE")).toBe(true);
+    expect(CRITICAL_AUDIT_ACTIONS.has("AMEND_CASE")).toBe(true);
+    expect(CRITICAL_AUDIT_ACTIONS.has("CONFIRM_DOCUMENT_OCR")).toBe(true);
+    expect(CRITICAL_AUDIT_ACTIONS.has("CONFIRM_SUMMARY")).toBe(true);
+    expect(CRITICAL_AUDIT_ACTIONS.has("CONSENT_REVOKED")).toBe(true);
+    expect(CRITICAL_AUDIT_ACTIONS.has("ACKNOWLEDGE_RED_FLAG")).toBe(true);
+
+    // Verify critical audit failure throws in non-demo mode when supabase is unavailable
+    const originalDemoMode = env.isDemoMode;
+    try {
+      (env as any).isDemoMode = false;
+      await expect(
+        logAuditEvent({
+          actorId: "doc-999",
+          actorRole: "doctor",
+          action: "CONFIRM_SUMMARY",
+          resourceType: "cases",
+          resourceId: "case-999",
+          metadata: { note: "test" },
+        })
+      ).rejects.toThrow(/CRITICAL_AUDIT_FAILURE/i);
+    } finally {
+      (env as any).isDemoMode = originalDemoMode;
+    }
+  });
 });
+

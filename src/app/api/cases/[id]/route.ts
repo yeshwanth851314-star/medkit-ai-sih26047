@@ -91,6 +91,18 @@ export async function PATCH(
         notes: body.notes,
       });
 
+      await logAuditEvent({
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
+        action: "AMEND_CASE",
+        resourceType: "cases",
+        resourceId: id,
+        metadata: {
+          reason: body.reason,
+          version: amended.amendments?.length,
+        },
+      });
+
       return NextResponse.json({ success: true, case: amended });
     }
 

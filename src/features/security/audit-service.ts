@@ -4,6 +4,21 @@ import { env } from "@/config/env";
 import { AuditAction, ClinicalAuditLog, clinicalAuditSchema } from "./types";
 
 /**
+ * Critical clinical and legal audit actions that MUST be durably persisted
+ * in production. If the durable storage write fails, these actions fail closed
+ * and throw an error rather than silently degrading to transient memory.
+ */
+export const CRITICAL_AUDIT_ACTIONS = new Set<AuditAction>([
+  "CONSENT_RECORDED",
+  "CONSENT_REVOKED",
+  "FINALIZE_CASE",
+  "AMEND_CASE",
+  "CONFIRM_DOCUMENT_OCR",
+  "CONFIRM_SUMMARY",
+  "ACKNOWLEDGE_RED_FLAG",
+]);
+
+/**
  * Record an immutable audit log entry.
  */
 export async function logAuditEvent(params: {
@@ -26,9 +41,27 @@ export async function logAuditEvent(params: {
   };
 
   const validated = clinicalAuditSchema.parse(entry);
+  const isCritical = CRITICAL_AUDIT_ACTIONS.has(validated.action as AuditAction);
 
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
+  if (!env.isDemoMode) {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      if (isCritical) {
+        throw new Error(
+          `CRITICAL_AUDIT_FAILURE: Durable audit store is unavailable in production for mandatory action '${validated.action}'. Refusing operation to preserve legal audit trail.`
+        );
+      }
+      console.warn("Audit store unavailable in production for non-critical action, recording to fallback:", validated.action);
+      mockDb.recordAudit(
+        validated.actor_id,
+        validated.action,
+        validated.resource_type,
+        validated.resource_id,
+        validated.metadata || undefined
+      );
+      return validated as ClinicalAuditLog;
+    }
+
     try {
       const { error } = await supabase.from("audit_logs").insert([
         {
@@ -43,7 +76,12 @@ export async function logAuditEvent(params: {
         },
       ]);
       if (error) {
-        console.warn("Supabase audit log insert error, falling back to mockDb:", error.message);
+        console.error("Supabase audit log insert error:", error.message);
+        if (isCritical) {
+          throw new Error(
+            `CRITICAL_AUDIT_FAILURE: Failed to persist mandatory clinical audit action '${validated.action}' to durable storage: ${error.message}`
+          );
+        }
         mockDb.recordAudit(
           validated.actor_id,
           validated.action,
@@ -52,8 +90,13 @@ export async function logAuditEvent(params: {
           validated.metadata || undefined
         );
       }
-    } catch (err) {
-      console.warn("Audit persistence exception, using mockDb:", err);
+    } catch (err: any) {
+      if (isCritical) {
+        throw err instanceof Error
+          ? err
+          : new Error(`CRITICAL_AUDIT_FAILURE: Exception persisting mandatory audit action '${validated.action}'.`);
+      }
+      console.warn("Audit persistence exception, using fallback for non-critical action:", err);
       mockDb.recordAudit(
         validated.actor_id,
         validated.action,
@@ -63,6 +106,7 @@ export async function logAuditEvent(params: {
       );
     }
   } else {
+    // In demo mode, in-memory mockDb provides an isolated mock audit trail
     mockDb.recordAudit(
       validated.actor_id,
       validated.action,
