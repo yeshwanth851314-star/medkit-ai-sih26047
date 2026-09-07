@@ -148,7 +148,10 @@ export class ResilientOCRProvider implements OCRProvider {
   }
 
   async extract(options: OCRExtractionOptions): Promise<OCRExtractionResponse> {
-    if (options.mockId) {
+    const hasRealImage = Boolean(options.imageBase64 && options.imageBase64.trim().length > 50);
+
+    // If client requested mockId explicitly without real image, bypass live API directly (demo fixtures only)
+    if (options.mockId && !hasRealImage) {
       return this.fallback.extract(options);
     }
 
@@ -162,6 +165,18 @@ export class ResilientOCRProvider implements OCRProvider {
     try {
       return await Promise.race([this.primary.extract(options), timeoutPromise]);
     } catch (err: any) {
+      // CRITICAL CLINICAL SAFETY:
+      // If real patient document image was submitted, NEVER silently substitute fabricated synthetic medications or lab values.
+      // Doing so could inject false diagnoses, allergies, or dosages into the patient's permanent record.
+      if (hasRealImage) {
+        console.error(
+          `[Clinical Safety Alert] OCR provider failed on real document: ${err.message}. Refusing synthetic fallback.`
+        );
+        throw new Error(
+          `Document OCR extraction unavailable (${err.message}). For patient safety, live medical records cannot fall back to synthetic clinical fixtures. Please enter clinical details manually or retry.`
+        );
+      }
+
       console.warn(`OCR provider '${this.primary.name}' failed: ${err.message}. Falling back to demo provider.`);
       const fallbackResult = await this.fallback.extract(options);
       return {

@@ -153,7 +153,10 @@ export interface MedicalDocument {
   ocr_confidence?: number | null;
   extracted_data?: Record<string, any> | null;
   error_message?: string | null;
+  verified_by?: string | null;
+  verified_at?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface PatientConsent {

@@ -350,14 +350,45 @@ export async function uploadDocumentToStorage(
         });
 
       if (error) {
-        console.warn(`Supabase Storage upload warning for ${storagePath}:`, error.message);
+        console.error(`Supabase Storage upload error for ${storagePath}:`, error.message);
+        throw new Error(`Supabase Storage upload failed: ${error.message}`);
       }
-    } catch (storageErr) {
-      console.warn("Storage upload exception (falling back to relative path):", storageErr);
+    } catch (storageErr: any) {
+      console.error("Storage upload exception:", storageErr);
+      throw new Error(`Failed to persist document to private storage: ${storageErr.message}`);
     }
   }
 
   return { storagePath: `/private/documents/${storagePath}` };
 }
+
+/**
+ * Generate a private, short-lived signed URL for an authorized clinician to view or download a document.
+ * Unrestricted public URLs are strictly prohibited.
+ */
+export async function getDocumentSignedUrl(
+  storagePath: string,
+  expiresInSeconds: number = 300
+): Promise<string | null> {
+  if (env.isDemoMode) {
+    return `/api/documents/mock-file?path=${encodeURIComponent(storagePath)}`;
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  const cleanPath = storagePath.replace(/^\/private\/documents\//, "");
+  const { data, error } = await supabase.storage
+    .from("clinical-documents")
+    .createSignedUrl(cleanPath, expiresInSeconds);
+
+  if (error) {
+    console.error("Failed to create signed document URL:", error);
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
 
 

@@ -83,9 +83,20 @@ describe("Phase 10: Document Intelligence & OCR Tests", () => {
       mime_type: "application/pdf",
       file_size: 2048,
       document_type: "prescription",
-      processing_status: "uploaded",
-      ocr_confidence: null,
-      extracted_data: null,
+      processing_status: "extracted",
+      ocr_confidence: 0.94,
+      extracted_data: {
+        medications: [
+          {
+            name: "Amoxicillin 500mg",
+            dosage: "1 capsule TID x 5 days",
+            duration: "5 days",
+            pageRef: 1,
+            confidence: 0.94,
+            status: "candidate",
+          },
+        ],
+      },
       error_message: null,
     });
 
@@ -94,20 +105,27 @@ describe("Phase 10: Document Intelligence & OCR Tests", () => {
     expect(fetched).toBeDefined();
     expect(fetched?.original_filename).toBe("rx.pdf");
 
-    // Extract candidates
+    // Extract candidates from database
     const extracted = await processDocumentExtraction("doc-test-persist-01");
     expect(extracted.extractedData.medications?.length).toBeGreaterThan(0);
     expect(extracted.extractedData.medications![0].status).toBe("candidate");
 
     // Doctor confirms medication
-    const confirmed = await confirmExtractionMedication("doc-test-persist-01", "Amoxicillin 500mg");
+    const confirmed = await confirmExtractionMedication("doc-test-persist-01", "Amoxicillin 500mg", "doctor-101");
     expect(confirmed.status).toBe("confirmed");
     expect(confirmed.extractedData.medications![0].status).toBe("verified");
+    expect(confirmed.extractedData.medications![0].verified_by).toBe("doctor-101");
+    expect(confirmed.extractedData.medications![0].verified_at).toBeDefined();
 
     // Simulate page reload: fetch fresh extraction from DB
     const reloaded = await processDocumentExtraction("doc-test-persist-01");
     expect(reloaded.status).toBe("confirmed");
     expect(reloaded.extractedData.medications![0].status).toBe("verified");
+
+    // Verify DB record has verified_by and verified_at
+    const updatedDoc = await getDocumentById("doc-test-persist-01");
+    expect(updatedDoc?.verified_by).toBe("doctor-101");
+    expect(updatedDoc?.verified_at).toBeDefined();
 
     // Verify private storage path format
     const storageResult = await uploadDocumentToStorage(
@@ -119,5 +137,62 @@ describe("Phase 10: Document Intelligence & OCR Tests", () => {
       "application/pdf"
     );
     expect(storageResult.storagePath).toContain("patients/11111111-1111-4111-8111-111111111111/cases/case-test-01/doc-storage-01/prescription_scan__1.pdf");
+  });
+
+  it("fails closed on unextracted uploaded document and never fabricates synthetic medications", async () => {
+    const { createDocument } = await import("../../src/lib/db/supabase");
+    await createDocument({
+      id: "doc-unextracted-01",
+      patient_id: "11111111-1111-4111-8111-111111111111",
+      case_id: null,
+      uploaded_by: "Dr. Lakshmi Varma",
+      storage_path: "/private/documents/patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-unextracted-01/raw.pdf",
+      original_filename: "raw.pdf",
+      mime_type: "application/pdf",
+      file_size: 1024,
+      document_type: "prescription",
+      processing_status: "uploaded",
+      ocr_confidence: null,
+      extracted_data: null,
+      error_message: null,
+    });
+
+    const result = await processDocumentExtraction("doc-unextracted-01");
+    expect(result.status).toBe("review");
+    expect(result.extractedData).toEqual({});
+    expect(result.extractedData.medications).toBeUndefined();
+    expect(result.disclaimer).toContain("manual review required");
+  });
+
+  it("CRITICAL CLINICAL SAFETY: ResilientOCRProvider fails closed on real document bytes and never returns demo fixtures", async () => {
+    const { ResilientOCRProvider, DeterministicDemoOCRProvider } = await import("../../src/features/documents/ocr-provider");
+
+    const failingPrimary = {
+      name: "gemini-vision" as const,
+      extract: async () => {
+        throw new Error("Downstream Gemini Vision 503 Service Unavailable");
+      },
+    };
+    const demoFallback = new DeterministicDemoOCRProvider();
+    const resilient = new ResilientOCRProvider(failingPrimary, demoFallback);
+
+    // Real document base64
+    const realDocumentBytes = Buffer.from("fake-real-prescription-image-content-long-string-over-50-chars").toString("base64");
+
+    await expect(
+      resilient.extract({
+        documentId: "doc-live-fail-test",
+        imageBase64: realDocumentBytes,
+        mimeType: "image/jpeg",
+      })
+    ).rejects.toThrow(/Document OCR extraction unavailable.*For patient safety/);
+
+    // Explicit demo mode without real bytes DOES allow demo fallback
+    const demoResult = await resilient.extract({
+      documentId: "doc-0001",
+      mockId: "doc-0001",
+    });
+    expect(demoResult.documentId).toBe("doc-0001");
+    expect(demoResult.extractedData.medications).toBeDefined();
   });
 });

@@ -24,7 +24,7 @@ export async function POST(
       return NextResponse.json({ error: "medicationName is required" }, { status: 400 });
     }
 
-    const updated = await confirmExtractionMedication(id, medicationName);
+    const updated = await confirmExtractionMedication(id, medicationName, auth.user.id);
 
     await logAuditEvent({
       actorId: auth.user.id,

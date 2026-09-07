@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateDocumentFile } from "@/features/documents/document-service";
-import { getDocumentsByPatientId, createDocument } from "@/lib/db/supabase";
+import { getDocumentsByPatientId, createDocument, uploadDocumentToStorage } from "@/lib/db/supabase";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requirePatientAccess, requireCaseBelongsToPatient } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json().catch(() => ({}));
-    const { patientId, fileName, mimeType, sizeBytes, documentType, caseId } = body;
+    const { patientId, fileName, mimeType, sizeBytes, documentType, caseId, fileBase64 } = body;
 
     if (!patientId || !fileName || !mimeType) {
       return NextResponse.json({ error: "Missing required document metadata" }, { status: 400 });
@@ -64,24 +64,49 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validate file
+    // Validate file metadata
     const validation = validateDocumentFile({ mimeType, sizeBytes: sizeBytes || 1024 });
     if (!validation.valid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    // Register document in private storage / database
     const docId = `doc-${crypto.randomUUID().slice(0, 8)}`;
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+    // 1. Upload file bytes to private Supabase Storage first
+    // If storage upload fails, fail closed — do NOT create an orphaned or fake document record.
+    let storagePath = `/private/documents/${patientId}/${docId}/${safeName}`;
+    if (fileBase64) {
+      try {
+        const fileBuffer = Buffer.from(fileBase64, "base64");
+        const uploadRes = await uploadDocumentToStorage(
+          patientId,
+          caseId || null,
+          docId,
+          fileName,
+          fileBuffer,
+          mimeType
+        );
+        storagePath = uploadRes.storagePath;
+      } catch (uploadErr: any) {
+        console.error("Failed to upload document bytes to private storage:", uploadErr);
+        return NextResponse.json(
+          { error: `Document storage failure: ${uploadErr.message || "Failed to persist document to private storage."}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // 2. Persist document record referencing the verified storage object
     const newDoc = await createDocument({
       id: docId,
       patient_id: patientId,
-      case_id: body.caseId || null,
+      case_id: caseId || null,
       uploaded_by: auth.user.fullName || auth.user.id,
-      storage_path: `/private/documents/${patientId}/${docId}/${safeName}`,
+      storage_path: storagePath,
       original_filename: fileName,
       mime_type: mimeType,
-      file_size: sizeBytes || 1024,
+      file_size: sizeBytes || (fileBase64 ? Math.ceil((fileBase64.length * 3) / 4) : 1024),
       document_type: documentType || "prescription",
       processing_status: "uploaded" as const,
       ocr_confidence: null,

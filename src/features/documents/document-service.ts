@@ -106,42 +106,25 @@ export async function processDocumentExtraction(documentId: string): Promise<Doc
     }
   }
 
-  // Generic fallback extraction for newly uploaded documents
-  const genericResult: DocumentExtractionResult = {
+  // For newly uploaded documents without live OCR extraction yet, fail closed with review requirement.
+  // NEVER fabricate synthetic medications (e.g. Amoxicillin) onto a real patient's record.
+  const emptyResult: DocumentExtractionResult = {
     documentId,
     documentType: (doc?.document_type as any) || "prescription",
-    confidence: 0.88,
-    extractedData: {
-      medications: [
-        {
-          name: "Amoxicillin 500mg",
-          dosage: "1 capsule TID x 5 days",
-          duration: "5 days",
-          pageRef: 1,
-          confidence: 0.88,
-          status: "candidate",
-        },
-      ],
-    },
-    disclaimer: "Extracted from uploaded document — verify before use.",
-    status: "extracted",
+    confidence: doc?.ocr_confidence || 0.0,
+    extractedData: {},
+    disclaimer: "Document uploaded — automated extraction pending or unavailable. Clinician manual review required.",
+    status: doc?.processing_status === "failed" ? "failed" : "review",
+    errorMessage: doc?.error_message || "Automated extraction not yet performed. Please review document manually.",
   };
 
-  const parsed = documentExtractionResultSchema.parse(genericResult);
-  if (doc) {
-    await updateDocument(documentId, {
-      extracted_data: parsed.extractedData,
-      ocr_confidence: parsed.confidence,
-      processing_status: "extracted",
-    });
-  }
-
-  return parsed;
+  return documentExtractionResultSchema.parse(emptyResult);
 }
 
 export async function confirmExtractionMedication(
   documentId: string,
-  medicationName: string
+  medicationName: string,
+  verifierId?: string
 ): Promise<DocumentExtractionResult> {
   const result = await processDocumentExtraction(documentId);
   const meds = result.extractedData.medications || [];
@@ -149,6 +132,8 @@ export async function confirmExtractionMedication(
   for (const m of meds) {
     if (m.name.toLowerCase() === medicationName.toLowerCase()) {
       m.status = "verified";
+      if (verifierId) m.verified_by = verifierId;
+      m.verified_at = new Date().toISOString();
     }
   }
 
@@ -162,11 +147,15 @@ export async function confirmExtractionMedication(
     };
   }
 
-  // Persist confirmed state to database so it survives page reloads
+  // Persist confirmed state with verifier audit metadata to database so it survives page reloads
   await updateDocument(documentId, {
     extracted_data: result.extractedData,
     processing_status: "confirmed",
+    verified_by: verifierId || "clinician",
+    verified_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   });
 
   return result;
 }
+

@@ -89,6 +89,7 @@ export function DocumentUploader({ patientId, onDocumentUploaded }: DocumentUplo
           mimeType: selectedFile.type,
           sizeBytes: selectedFile.size,
           documentType,
+          fileBase64: base64Data,
         }),
       });
 
