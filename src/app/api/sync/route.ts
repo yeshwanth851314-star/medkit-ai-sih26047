@@ -10,11 +10,14 @@ import {
   createDocument,
   updateDocument,
   getDocumentById,
+  getCaseById,
   reserveIdempotencyKey,
   updateSyncMutationStatus,
   recordProcessedIdempotencyKey,
   executeIdempotentMutation,
+  verifyStorageObjectExists,
 } from "@/lib/db/supabase";
+import { validateCanonicalStoragePath } from "@/lib/storage/document-storage-validator";
 import { requirePatientAccess, requireCaseAccess } from "@/lib/auth/object-guard";
 import { MedicalDocument } from "@/types/database";
 import { env } from "@/config/env";
@@ -50,10 +53,19 @@ export async function POST(request: Request) {
 
       // Correction 3: Strict atomic document offline sync validation
       if (item.entity === "documents") {
-        const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed"];
+        const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed", "reviewed", "rejected"];
         const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
 
         if (item.action === "create") {
+          const status = item.payload?.processing_status || item.payload?.processingStatus || "uploaded";
+          if (forbiddenStatuses.includes(status) || !allowedStatuses.includes(status)) {
+            failed.push({
+              id: item.id,
+              error: `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status '${status}'`,
+            });
+            continue;
+          }
+
           const storagePath = item.payload?.storage_path || item.payload?.storagePath;
           if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
             failed.push({
@@ -63,11 +75,43 @@ export async function POST(request: Request) {
             continue;
           }
 
-          const status = item.payload?.processing_status || item.payload?.processingStatus || "uploaded";
-          if (forbiddenStatuses.includes(status) || !allowedStatuses.includes(status)) {
+          const patientId = item.payload?.patientId || item.payload?.patient_id;
+          if (!patientId) {
             failed.push({
               id: item.id,
-              error: `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status '${status}'`,
+              error: "INVALID_PAYLOAD: Document creation requires patientId.",
+            });
+            continue;
+          }
+
+          let validated;
+          try {
+            validated = validateCanonicalStoragePath(storagePath, patientId);
+          } catch (pathErr: any) {
+            failed.push({
+              id: item.id,
+              error: pathErr.message || "Invalid storage path",
+            });
+            continue;
+          }
+
+          if (validated.caseId) {
+            const caseRecord = await getCaseById(validated.caseId, auth.user);
+            if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
+              failed.push({
+                id: item.id,
+                error: `STORAGE_PATH_CASE_MISMATCH: Referenced case '${validated.caseId}' does not exist for patient '${validated.patientId}'`,
+              });
+              continue;
+            }
+          }
+
+          try {
+            await verifyStorageObjectExists(validated.normalizedPath, auth.user);
+          } catch (storageErr: any) {
+            failed.push({
+              id: item.id,
+              error: storageErr.message || "Storage object does not exist",
             });
             continue;
           }
@@ -278,9 +322,10 @@ export async function POST(request: Request) {
             if (!patientCheck.authorized) {
               throw new Error("FACILITY_ACCESS_DENIED: Cannot mutate document for patient outside assigned facility.");
             }
+            const validated = validateCanonicalStoragePath(storagePath, patientId);
             const doc = await createDocument({
               ...item.payload,
-              storage_path: storagePath.trim(),
+              storage_path: validated.normalizedPath,
             } as any, auth.user);
             targetResourceId = doc?.id || targetResourceId;
           }

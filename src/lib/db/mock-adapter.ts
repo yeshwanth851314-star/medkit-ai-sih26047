@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { Patient, ClinicalCase, MedicalDocument, AuditLogEntry, IntakeSessionRecord } from "@/types/database";
+import { validateCanonicalStoragePath } from "@/lib/storage/document-storage-validator";
 
 // In-memory data store seeded from synthetic fixtures
 class MockDatabaseAdapter {
@@ -120,6 +121,16 @@ class MockDatabaseAdapter {
           error_message: d.error_message,
           created_at: new Date().toISOString(),
         });
+        this.saveStorageFile(
+          `/private/documents/${d.id}`,
+          Buffer.from("Synthetic document binary data"),
+          "application/pdf"
+        );
+        this.saveStorageFile(
+          `/private/documents/patients/${d.patient_id}/cases/uncategorized/${d.id}/${d.original_filename}`,
+          Buffer.from("Synthetic document binary data"),
+          "application/pdf"
+        );
       }
 
       this.isInitialized = true;
@@ -342,6 +353,30 @@ class MockDatabaseAdapter {
     return updated;
   }
 
+  saveStorageFile(path: string, bytes: Buffer, mimeType: string): void {
+    const normalized = this.normalizeStoragePath(path);
+    this.storageFiles.set(normalized, { bytes, mimeType });
+  }
+
+  getStorageFile(path: string): { bytes: Buffer; mimeType: string } | null {
+    const normalized = this.normalizeStoragePath(path);
+    return this.storageFiles.get(normalized) || null;
+  }
+
+  hasStorageFile(path: string): boolean {
+    const normalized = this.normalizeStoragePath(path);
+    return this.storageFiles.has(normalized);
+  }
+
+  deleteStorageFile(path: string): boolean {
+    const normalized = this.normalizeStoragePath(path);
+    return this.storageFiles.delete(normalized);
+  }
+
+  private normalizeStoragePath(path: string): string {
+    return path.replace(/\/+/g, "/").replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
+  }
+
   // Consents
   async recordConsent(data: any): Promise<any> {
     const id = data.id || crypto.randomUUID();
@@ -503,19 +538,6 @@ class MockDatabaseAdapter {
     });
   }
 
-  // In-Memory Storage Simulation
-  saveStorageFile(path: string, bytes: Buffer, mimeType: string) {
-    this.storageFiles.set(path, { bytes, mimeType });
-  }
-
-  getStorageFile(path: string): { bytes: Buffer; mimeType: string } | null {
-    return this.storageFiles.get(path) || null;
-  }
-
-  deleteStorageFile(path: string) {
-    this.storageFiles.delete(path);
-  }
-
   getAuditLogs(): AuditLogEntry[] {
     return [...this.auditLogs];
   }
@@ -632,12 +654,46 @@ class MockDatabaseAdapter {
     return session;
   }
 
+  async revokeKioskSession(params: {
+    kioskId: string;
+    kioskSecret: string;
+    sessionId: string;
+    reason?: string;
+    targetStatus?: "abandoned" | "submitted";
+  }): Promise<void> {
+    const kiosk = await this.verifyKioskCredentials(params.kioskId, params.kioskSecret);
+    if (!kiosk) {
+      throw new Error("UNAUTHORIZED: Active kiosk instance required");
+    }
+
+    const session = this.intakeSessions.get(params.sessionId);
+    if (!session) {
+      this.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked", params.targetStatus || "abandoned");
+      return;
+    }
+
+    if (session.facility_id && kiosk.facility_id && session.facility_id !== kiosk.facility_id) {
+      throw new Error("FORBIDDEN: Session facility does not match kiosk facility");
+    }
+
+    const targetStatus = params.targetStatus || "abandoned";
+    session.status = targetStatus;
+    session.completed_at = new Date().toISOString();
+    this.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked", targetStatus);
+    this.recordAudit(`kiosk:${params.kioskId}`, "KIOSK_SESSION_REVOKED", "intake_sessions", params.sessionId, {
+      reason: params.reason,
+      targetStatus,
+      facilityId: kiosk.facility_id,
+    });
+  }
+
   async registerKioskInstance(instance: {
     id?: string;
     facility_id?: string;
     name: string;
     secret?: string;
     secretHash?: string;
+    secret_hash?: string;
     status?: "active" | "disabled" | "revoked";
     expiresAt?: string | null;
     actorOrToken?: any;
@@ -649,7 +705,7 @@ class MockDatabaseAdapter {
       }
     }
     const id = instance.id || crypto.randomUUID();
-    const secretHash = instance.secretHash || instance.secret || "";
+    const secretHash = instance.secretHash || (instance as any).secret_hash || instance.secret || "";
     const record = {
       id,
       facility_id: instance.facility_id || instance.actorOrToken?.facilityId || "fac-hyd-01",
@@ -891,14 +947,28 @@ class MockDatabaseAdapter {
       const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
 
       if (params.action === "create") {
+        const requestedStatus = params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
+        if (forbiddenStatuses.includes(requestedStatus) || !allowedStatuses.includes(requestedStatus)) {
+          throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${requestedStatus}`);
+        }
+
         const storagePath = params.payload?.storage_path || params.payload?.storagePath;
         if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
           throw new Error("STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path");
         }
 
-        const requestedStatus = params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
-        if (forbiddenStatuses.includes(requestedStatus) || !allowedStatuses.includes(requestedStatus)) {
-          throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${requestedStatus}`);
+        const requestedPatientId = params.payload?.patientId || params.payload?.patient_id;
+        const validated = validateCanonicalStoragePath(storagePath, requestedPatientId);
+
+        if (validated.caseId) {
+          const caseRecord = this.cases.get(validated.caseId);
+          if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
+            throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${validated.caseId}' does not exist for patient '${validated.patientId}'`);
+          }
+        }
+
+        if (!this.hasStorageFile(validated.normalizedPath) && !this.hasStorageFile(storagePath)) {
+          throw new Error(`STORAGE_OBJECT_NOT_FOUND: Storage object does not exist at '${storagePath}'`);
         }
 
         const docId = params.payload?.id || crypto.randomUUID();

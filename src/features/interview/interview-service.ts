@@ -34,7 +34,6 @@ export function pruneExpiredSessions(): number {
   for (const [id, s] of activeSessions.entries()) {
     const age = now - new Date(s.startedAt).getTime();
     if (age > MAX_SESSION_AGE_MS) {
-      revokeIntakeCapabilityToken(id);
       activeSessions.delete(id);
       pruned++;
     }
@@ -59,14 +58,9 @@ export async function teardownInterviewSession(
 
   // Update durable intake_sessions record immediately
   const updatePromise = (async () => {
-    if (options?.kioskId && options?.kioskSecret && !env.isDemoMode) {
-      const { revokeKioskSession } = await import("@/lib/db/supabase");
-      return revokeKioskSession({
-        kioskId: options.kioskId,
-        kioskSecret: options.kioskSecret,
-        sessionId,
-        targetStatus,
-      });
+    if (options?.kioskId && options?.kioskSecret) {
+      // Handled atomically by revokeIntakeCapabilityToken via kiosk RPC / mockDb
+      return;
     } else {
       const updateResult = await updateIntakeSession(sessionId, {
         status: targetStatus,
@@ -472,7 +466,11 @@ export async function compileInterviewToCase(
   });
 
   // Tear down the active kiosk session and revoke capability token
-  await teardownInterviewSession(sessionId);
+  await teardownInterviewSession(sessionId, {
+    kioskId: options?.kioskId,
+    kioskSecret: options?.kioskSecret,
+    targetStatus: "submitted",
+  });
 
   return newCase;
 }

@@ -10,6 +10,7 @@ import { POST as provisionKiosk } from "@/app/api/kiosk/provision/route";
 import { POST as submitInterview } from "@/app/api/interviews/[id]/submit/route";
 import { POST as answerInterview } from "@/app/api/interviews/[id]/answer/route";
 import { POST as syncRoute } from "@/app/api/sync/route";
+import { POST as logoutRoute } from "@/app/api/auth/logout/route";
 import {
   createInterviewSession,
   getInterviewSessionAsync,
@@ -384,6 +385,136 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
 
       spy.mockRestore();
     });
+
+    it("strictly rejects durable revocation when kiosk credentials are invalid", async () => {
+      const { revokeKioskSession } = await import("@/lib/db/supabase");
+      await expect(
+        revokeKioskSession({
+          kioskId: "00000000-0000-4000-8000-000000000000",
+          kioskSecret: "wrong-secret",
+          sessionId: "ses-test-invalid-cred",
+        })
+      ).rejects.toThrow(/UNAUTHORIZED/);
+    });
+
+    it("strictly rejects durable revocation when kiosk facility does not match session facility", async () => {
+      const kiosk = await mockDb.registerKioskInstance({
+        facility_id: "fac-del-01",
+        name: "Delhi Kiosk",
+        secret_hash: crypto.createHash("sha256").update("delhi-secret-123").digest("hex"),
+      });
+      const session = await mockDb.createIntakeSession({
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        facility_id: "fac-hyd-01",
+        language: "en",
+        status: "active",
+        answers: {},
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+      });
+
+      const { revokeKioskSession } = await import("@/lib/db/supabase");
+      await expect(
+        revokeKioskSession({
+          kioskId: kiosk.id,
+          kioskSecret: "delhi-secret-123",
+          sessionId: session.id,
+        })
+      ).rejects.toThrow(/FORBIDDEN/);
+    });
+
+    it("durably revokes intake session via POST /api/auth/logout with HttpOnly kiosk credentials", async () => {
+      const testPatientId = "11111111-1111-4111-8111-111111111111";
+      const kiosk = await mockDb.registerKioskInstance({
+        facility_id: "fac-hyd-01",
+        name: "Logout Test Kiosk",
+        secret_hash: crypto.createHash("sha256").update("logout-secret-xyz").digest("hex"),
+      });
+      const session = await mockDb.createIntakeSession({
+        patient_id: testPatientId,
+        facility_id: "fac-hyd-01",
+        language: "en",
+        status: "active",
+        answers: {},
+        expires_at: new Date(Date.now() + 3600000).toISOString(),
+      });
+      const intakeToken = signIntakeCapabilityToken({
+        sessionId: session.id,
+        patientId: testPatientId,
+        facilityId: "fac-hyd-01",
+        scope: ["intake:answer"],
+      });
+
+      const cookieVal = encodeURIComponent(
+        JSON.stringify({ kioskId: kiosk.id, kioskSecret: "logout-secret-xyz" })
+      );
+      const req = new Request("http://localhost:3000/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "x-intake-token": intakeToken,
+          Cookie: `medkit_kiosk_credential=${cookieVal}`,
+        },
+      });
+
+      const res = await logoutRoute(req);
+      expect(res.status).toBe(200);
+
+      const dbSession = await mockDb.getIntakeSessionById(session.id);
+      expect(dbSession?.status).toBe("abandoned");
+      expect(mockDb.isSessionRevoked(session.id)).toBe(true);
+    });
+
+    it("denies intake session revocation during logout without kiosk credentials in production", async () => {
+      const origDemo = env.isDemoMode;
+      try {
+        (env as any).isDemoMode = false;
+        const testPatientId = "11111111-1111-4111-8111-111111111111";
+        const intakeToken = signIntakeCapabilityToken({
+          sessionId: "ses-no-cred-logout",
+          patientId: testPatientId,
+          facilityId: "fac-hyd-01",
+          scope: ["intake:answer"],
+        });
+
+        const req = new Request("http://localhost:3000/api/auth/logout", {
+          method: "POST",
+          headers: {
+            "x-intake-token": intakeToken,
+          },
+        });
+
+        const res = await logoutRoute(req);
+        expect(res.status).toBe(401);
+      } finally {
+        (env as any).isDemoMode = origDemo;
+      }
+    });
+
+    it("fails closed with 500 when durable revocation encounters an error during logout", async () => {
+      const cap = await import("@/lib/auth/kiosk-capability");
+      const spy = vi.spyOn(cap, "revokeIntakeCapabilityToken").mockRejectedValueOnce(
+        new Error("DATABASE_ERROR: Connection failed")
+      );
+
+      const testPatientId = "11111111-1111-4111-8111-111111111111";
+      const intakeToken = signIntakeCapabilityToken({
+        sessionId: "ses-logout-fail-closed",
+        patientId: testPatientId,
+        facilityId: "fac-hyd-01",
+        scope: ["intake:answer"],
+      });
+
+      const req = new Request("http://localhost:3000/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "x-intake-token": intakeToken,
+        },
+      });
+
+      const res = await logoutRoute(req);
+      expect(res.status).toBe(500);
+
+      spy.mockRestore();
+    });
   });
 
   // ===========================================================================
@@ -488,6 +619,9 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
   describe("Blocker 6: Atomic Document Sync & Concurrency Locking", () => {
     it("atomically transacts document metadata registration through executeIdempotentMutation", async () => {
       const docKey = `doc-sync-key-${crypto.randomUUID()}`;
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-1/chest-xray-report.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-xray"), "application/pdf");
+
       const docPayload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "chest-xray-report.pdf",
@@ -495,7 +629,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
         fileSize: 2048576,
         documentType: "prescription",
         processingStatus: "uploaded",
-        storage_path: "clinical-records/chest-xray-report.pdf",
+        storage_path: canonicalPath,
         extractedData: { impressions: "Clear lung fields, no consolidation" },
       };
 
@@ -537,10 +671,13 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
 
     it("processes concurrent identical operations safely and replays without unique violations", async () => {
       const concurrentKey = `concurrent-doc-${crypto.randomUUID()}`;
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-2/ecg-trace.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-ecg"), "application/pdf");
+
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "ecg-trace.pdf",
-        storage_path: "clinical-records/ecg-trace.pdf",
+        storage_path: canonicalPath,
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
@@ -575,6 +712,9 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     it("executes atomic document sync through the /api/sync endpoint", async () => {
       const idempotencyKey = `sync-route-doc-${crypto.randomUUID()}`;
       const queueItemId = crypto.randomUUID();
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-3/discharge-summary.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-discharge"), "application/pdf");
+
       const queueItem = {
         id: queueItemId,
         entity: "documents",
@@ -585,7 +725,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
           originalFilename: "discharge-summary.pdf",
           mimeType: "application/pdf",
           fileSize: 512000,
-          storage_path: "clinical-records/discharge-summary.pdf",
+          storage_path: canonicalPath,
         },
         timestamp: new Date().toISOString(),
         retryCount: 0,
@@ -654,10 +794,13 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
 
     it("strictly rejects offline document sync setting clinician-only status confirmed", async () => {
       const docKey = `doc-forbidden-status-${crypto.randomUUID()}`;
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-4/status-tamper.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data"), "application/pdf");
+
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "status-tamper.pdf",
-        storage_path: "clinical-records/status-tamper.pdf",
+        storage_path: canonicalPath,
         processing_status: "confirmed",
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
@@ -677,10 +820,13 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     it("strictly rejects document update tampering with immutable fields (IMMUTABLE_FIELD_TAMPERING)", async () => {
       // First create a legitimate document
       const docKey = `doc-immutable-base-${crypto.randomUUID()}`;
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-5/immutable-check.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data"), "application/pdf");
+
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "immutable-check.pdf",
-        storage_path: "clinical-records/immutable-check.pdf",
+        storage_path: canonicalPath,
         processing_status: "uploaded",
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
@@ -714,6 +860,100 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
           payload: tamperPayload,
         })
       ).rejects.toThrow(/IMMUTABLE_FIELD_TAMPERING/);
+    });
+
+    it("strictly rejects document sync when referenced storage object does not exist in Supabase Storage", async () => {
+      const docKey = `doc-missing-obj-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "nonexistent.pdf",
+        storage_path: "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-99/nonexistent.pdf",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_OBJECT_NOT_FOUND/);
+    });
+
+    it("strictly rejects storage paths with directory traversal sequences", async () => {
+      const docKey = `doc-traversal-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "traversal.pdf",
+        storage_path: "patients/11111111-1111-4111-8111-111111111111/cases/../../../etc/passwd",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_TRAVERSAL/);
+    });
+
+    it("strictly rejects storage paths where path patient does not match document patient", async () => {
+      const docKey = `doc-mismatch-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "other-patient.pdf",
+        storage_path: "patients/22222222-2222-4222-8222-222222222222/cases/uncategorized/doc-1/other-patient.pdf",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_PATIENT_MISMATCH/);
+    });
+
+    it("strictly rejects storage paths where referenced case belongs to another patient", async () => {
+      // Create a case for a different patient
+      const otherCase = await mockDb.createCase({
+        patient_id: "22222222-2222-4222-8222-222222222222",
+        created_by: doctorUser.id,
+        case_type: "general",
+        patient_language: "en",
+        chief_complaint: "Other patient complaint",
+        status: "draft",
+      });
+
+      const docKey = `doc-case-mismatch-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "mismatched-case.pdf",
+        storage_path: `patients/11111111-1111-4111-8111-111111111111/cases/${otherCase.id}/doc-1/mismatched-case.pdf`,
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_CASE_MISMATCH/);
     });
   });
 });

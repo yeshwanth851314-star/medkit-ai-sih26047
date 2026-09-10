@@ -37,6 +37,7 @@ export async function revokeIntakeCapabilityToken(
     reason?: string;
     kioskId?: string;
     kioskSecret?: string;
+    actorOrToken?: AuthUser | string | null;
   }
 ): Promise<void> {
   const status = options?.targetStatus || "abandoned";
@@ -52,6 +53,7 @@ export async function revokeIntakeCapabilityToken(
     reason,
     kioskId: options?.kioskId,
     kioskSecret: options?.kioskSecret,
+    actorOrToken: options?.actorOrToken,
   });
 }
 

@@ -607,6 +607,49 @@ export async function getDocumentSignedUrl(
 }
 
 /**
+ * Verify that a referenced Supabase Storage object actually exists in the clinical-documents bucket.
+ * Uses caller auth to enforce Storage RLS policies.
+ */
+export async function verifyStorageObjectExists(
+  storagePath: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<boolean> {
+  if (env.isDemoMode) {
+    const exists = mockDb.hasStorageFile(storagePath);
+    if (!exists) {
+      throw new Error(`STORAGE_OBJECT_NOT_FOUND: Storage object does not exist at '${storagePath}'`);
+    }
+    return true;
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) {
+    throw new Error("STORAGE_VERIFICATION_FAILED: Supabase client unavailable to verify storage object");
+  }
+
+  const cleanPath = storagePath.replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
+  const lastSlash = cleanPath.lastIndexOf("/");
+  const parentFolder = lastSlash >= 0 ? cleanPath.substring(0, lastSlash) : "";
+  const fileName = lastSlash >= 0 ? cleanPath.substring(lastSlash + 1) : cleanPath;
+
+  const { data, error } = await supabase.storage
+    .from("clinical-documents")
+    .list(parentFolder, { search: fileName, limit: 10 });
+
+  if (error) {
+    console.error(`Supabase storage list error for ${parentFolder}:`, error.message);
+    throw new Error(`STORAGE_VERIFICATION_FAILED: Database error inspecting storage: ${error.message}`);
+  }
+
+  const found = data?.some((item) => item.name === fileName);
+  if (!found) {
+    throw new Error(`STORAGE_OBJECT_NOT_FOUND: Storage object does not exist at '${storagePath}'`);
+  }
+
+  return true;
+}
+
+/**
  * Server-Side Idempotency Helpers (Sync Mutations)
  * Guarantees duplicate mutations replayed across restarts or workers are never executed more than once.
  */
@@ -912,8 +955,7 @@ export async function revokeKioskSession(params: {
   targetStatus?: "abandoned" | "submitted";
 }): Promise<void> {
   if (env.isDemoMode) {
-    await mockDb.updateIntakeSession(params.sessionId, { status: params.targetStatus || "abandoned" });
-    mockDb.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked");
+    await mockDb.revokeKioskSession(params);
     return;
   }
 
@@ -938,49 +980,81 @@ export async function revokeKioskSession(params: {
 
 export async function revokeKioskSessionDurable(
   sessionId: string,
-  options?: { targetStatus?: "abandoned" | "submitted"; reason?: string; kioskId?: string; kioskSecret?: string }
+  options?: {
+    targetStatus?: "abandoned" | "submitted";
+    reason?: string;
+    kioskId?: string;
+    kioskSecret?: string;
+    actorOrToken?: AuthUser | string | null;
+  }
 ): Promise<void> {
   const targetStatus = options?.targetStatus || "abandoned";
+  const reason = options?.reason || "kiosk_session_revoked";
+
   if (env.isDemoMode) {
-    await mockDb.updateIntakeSession(sessionId, { status: targetStatus });
-    mockDb.recordRevocation(sessionId, options?.reason || "kiosk_session_revoked", targetStatus);
+    if (options?.kioskId && options?.kioskSecret) {
+      await mockDb.revokeKioskSession({
+        kioskId: options.kioskId,
+        kioskSecret: options.kioskSecret,
+        sessionId,
+        reason,
+        targetStatus,
+      });
+      return;
+    }
+    await mockDb.updateIntakeSession(sessionId, { status: targetStatus, completed_at: new Date().toISOString() });
+    mockDb.recordRevocation(sessionId, reason, targetStatus);
     return;
   }
 
-  const supabase = getSupabaseClient() || getServiceSupabaseClient();
-  if (!supabase) {
-    throw new Error("Database unavailable: Supabase client is not configured to record session revocation.");
-  }
-
   if (options?.kioskId && options?.kioskSecret) {
+    const supabase = getSupabaseClient() || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured to record session revocation.");
+    }
     const { error } = await supabase.rpc("rpc_revoke_kiosk_session", {
       p_kiosk_id: options.kioskId,
       p_kiosk_secret: options.kioskSecret,
       p_session_id: sessionId,
-      p_reason: options.reason || "abandoned_or_revoked",
-      p_target_status: options.targetStatus || "abandoned",
+      p_reason: reason,
+      p_target_status: targetStatus,
     });
     if (error) {
       console.error("Supabase rpc_revoke_kiosk_session error:", error.message);
       throw new Error(`Failed to durably revoke kiosk session: ${error.message}`);
     }
-  } else {
-    // Direct durable write to kiosk_capability_revocations & intake_sessions
+    return;
+  }
+
+  if (options?.actorOrToken) {
+    const supabase = getAuthorizedSupabaseClient(options.actorOrToken);
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured to record session revocation.");
+    }
+    // Clinician-authenticated durable revocation write
     const { error: revErr } = await supabase.from("kiosk_capability_revocations").upsert({
       session_id: sessionId,
       revoked_at: new Date().toISOString(),
-      reason: options?.reason || "abandoned_or_revoked",
+      reason,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     });
     if (revErr) {
       console.error("Failed to record kiosk_capability_revocations:", revErr.message);
       throw new Error(`Database error recording capability revocation: ${revErr.message}`);
     }
-    await supabase.from("intake_sessions").update({
-      status: options?.targetStatus || "abandoned",
+    const { error: updateErr } = await supabase.from("intake_sessions").update({
+      status: targetStatus,
       completed_at: new Date().toISOString(),
     }).eq("id", sessionId);
+    if (updateErr) {
+      console.error("Failed to update intake_sessions status:", updateErr.message);
+      throw new Error(`Database error updating intake session status: ${updateErr.message}`);
+    }
+    return;
   }
+
+  // In production without kiosk credentials and without clinician auth: FAIL CLOSED!
+  throw new Error("UNAUTHORIZED: Kiosk credentials or clinician authorization required for durable session revocation");
 }
 
 export type DurableSessionState =
