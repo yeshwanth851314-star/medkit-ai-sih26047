@@ -1,9 +1,13 @@
 /**
  * MedKit AI — Canonical Document Storage Validator
- * 
- * Enforces canonical path structure, prevents path traversal / injection,
- * and binds storage paths to patient / case contexts before metadata registration.
+ *
+ * Enforces one exact application-level document path contract and provides a
+ * deterministic conversion to the Supabase Storage bucket-relative object name.
  */
+
+const UUID_PATTERN = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const UUID_RE = new RegExp(`^${UUID_PATTERN}$`);
+const SAFE_FILENAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export interface ValidatedStoragePath {
   canonicalPath: string;
@@ -13,13 +17,47 @@ export interface ValidatedStoragePath {
   patientId: string;
   caseId: string | null;
   caseSegment: string;
-  docId: string | null;
+  docId: string;
   fileName: string;
+}
+
+function rejectUnsafeRawPath(trimmed: string): void {
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    throw new Error("STORAGE_PATH_INVALID: Protocol schemes are forbidden in storage paths");
+  }
+  if (trimmed.includes("?") || trimmed.includes("#")) {
+    throw new Error("STORAGE_PATH_INVALID: Query strings or URL fragments are forbidden in storage paths");
+  }
+  if (/\p{Cc}/u.test(trimmed)) {
+    throw new Error("STORAGE_PATH_INVALID: Control characters are forbidden in storage paths");
+  }
+  if (
+    trimmed.includes("..") ||
+    trimmed.includes("\\") ||
+    /%2e/i.test(trimmed) ||
+    /%2f/i.test(trimmed) ||
+    /%5c/i.test(trimmed)
+  ) {
+    throw new Error("STORAGE_PATH_TRAVERSAL: Encoded or raw traversal sequences are forbidden");
+  }
+  if (trimmed.includes("//")) {
+    throw new Error("STORAGE_PATH_INVALID: Duplicate path separators are forbidden");
+  }
+  if (trimmed.startsWith("offline-sync/") || trimmed.includes("/offline-sync/")) {
+    throw new Error("STORAGE_PATH_REQUIRED: Fake offline-sync placeholder paths are prohibited");
+  }
 }
 
 export function toBucketRelativePath(path: string): string {
   if (!path || typeof path !== "string") return "";
-  return path.trim().replace(/\/+/g, "/").replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
+  const trimmed = path.trim();
+  if (trimmed.startsWith("/private/documents/")) {
+    return trimmed.slice("/private/documents/".length);
+  }
+  if (trimmed.startsWith("private/documents/")) {
+    return trimmed.slice("private/documents/".length);
+  }
+  return trimmed.replace(/^\/+/, "");
 }
 
 export function toCanonicalStoragePath(path: string): string {
@@ -40,91 +78,61 @@ export function validateCanonicalStoragePath(
   if (!trimmed) {
     throw new Error("STORAGE_PATH_REQUIRED: Storage path cannot be empty");
   }
+  rejectUnsafeRawPath(trimmed);
 
-  // Reject URL schemes (e.g. http://, https://, file://, ftp://)
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
-    throw new Error("STORAGE_PATH_INVALID: Protocol schemes (e.g. http://, file://) are forbidden in storage paths");
+  const bucketRelative = toBucketRelativePath(trimmed);
+  const segments = bucketRelative.split("/");
+
+  // Exact contract:
+  // patients/{patientUuid}/cases/{caseUuid|uncategorized}/{documentUuid}/{safeFileName}
+  if (segments.length !== 6 || segments[0] !== "patients" || segments[2] !== "cases") {
+    throw new Error(
+      "STORAGE_PATH_INVALID: Path must exactly match patients/{patientId}/cases/{caseId|uncategorized}/{documentId}/{filename}"
+    );
   }
 
-  // Reject query strings or URL fragments
-  if (trimmed.includes("?") || trimmed.includes("#")) {
-    throw new Error("STORAGE_PATH_INVALID: Query strings or URL fragments are forbidden in storage paths");
+  const [, patientId, , caseSegment, docId, fileName] = segments;
+
+  if (!UUID_RE.test(patientId)) {
+    throw new Error("STORAGE_PATH_INVALID: Patient path segment must be a valid UUID");
+  }
+  if (caseSegment !== "uncategorized" && !UUID_RE.test(caseSegment)) {
+    throw new Error("STORAGE_PATH_INVALID: Case path segment must be a valid UUID or 'uncategorized'");
+  }
+  if (!UUID_RE.test(docId)) {
+    throw new Error("STORAGE_PATH_INVALID: Document path segment must be a valid UUID");
+  }
+  if (!fileName || !SAFE_FILENAME_RE.test(fileName) || fileName === "." || fileName === "..") {
+    throw new Error("STORAGE_PATH_INVALID: Filename contains unsupported characters");
   }
 
-  // Reject path traversal attempts (raw and URL-encoded)
-  if (
-    trimmed.includes("..") ||
-    trimmed.includes("\\") ||
-    /%2e/i.test(trimmed) ||
-    /%2f/i.test(trimmed) ||
-    /%5c/i.test(trimmed)
-  ) {
-    throw new Error("STORAGE_PATH_TRAVERSAL: Path traversal sequences (e.g. '..', '\\', '%2e') are strictly forbidden");
+  if (expectedPatientId && patientId !== expectedPatientId) {
+    throw new Error(
+      `STORAGE_PATH_PATIENT_MISMATCH: Path patient '${patientId}' does not match document patient '${expectedPatientId}'`
+    );
   }
 
-  // Reject fake offline paths
-  if (trimmed.startsWith("offline-sync/") || trimmed.includes("/offline-sync/")) {
-    throw new Error("STORAGE_PATH_REQUIRED: Fake offline-sync placeholder paths are strictly prohibited");
-  }
-
-  // Normalize: collapse consecutive slashes
-  const normalized = trimmed.replace(/\/+/g, "/");
-
-  // Strip optional /private/documents/ prefix to get path relative to 'clinical-documents' bucket
-  const cleanRelative = normalized.replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
-
-  if (!cleanRelative) {
-    throw new Error("STORAGE_PATH_REQUIRED: Storage path resolves to empty relative path");
-  }
-
-  // Match canonical structure: patients/{patientId}/cases/{caseFolder}/{docId}/{safeFileName} or patients/{patientId}/...
-  const patientMatch = cleanRelative.match(/^patients\/([a-zA-Z0-9_-]+)/);
-  if (!patientMatch) {
-    throw new Error("STORAGE_PATH_INVALID: Path must follow canonical structure starting with patients/{patientId}");
-  }
-
-  const pathPatientId = patientMatch[1];
-  if (expectedPatientId && pathPatientId !== expectedPatientId) {
-    throw new Error(`STORAGE_PATH_PATIENT_MISMATCH: Path patient '${pathPatientId}' does not match document patient '${expectedPatientId}'`);
-  }
-
-  let caseId: string | null = null;
-  let caseSegment = "uncategorized";
-  const caseMatch = cleanRelative.match(/\/cases\/([a-zA-Z0-9_-]+)/);
-  if (caseMatch) {
-    caseSegment = caseMatch[1];
-    if (caseMatch[1] !== "uncategorized") {
-      caseId = caseMatch[1];
-    }
-  }
-
+  const caseId = caseSegment === "uncategorized" ? null : caseSegment;
   if (expectedCaseId !== undefined) {
-    if (expectedCaseId) {
-      if (!caseSegment || caseSegment !== expectedCaseId) {
-        throw new Error(
-          `STORAGE_PATH_CASE_MISMATCH: Storage path case '${caseSegment || "missing"}' does not match expected case '${expectedCaseId}'`
-        );
-      }
-    } else {
-      if (caseSegment && caseSegment !== "uncategorized") {
-        throw new Error(
-          `STORAGE_PATH_CASE_MISMATCH: Unassociated document must use 'uncategorized' case path segment, found '${caseSegment}'`
-        );
-      }
+    if (expectedCaseId && caseId !== expectedCaseId) {
+      throw new Error(
+        `STORAGE_PATH_CASE_MISMATCH: Storage path case '${caseSegment}' does not match expected case '${expectedCaseId}'`
+      );
+    }
+    if (!expectedCaseId && caseId !== null) {
+      throw new Error(
+        `STORAGE_PATH_CASE_MISMATCH: Unassociated document must use 'uncategorized', found '${caseSegment}'`
+      );
     }
   }
 
-  const segments = cleanRelative.split("/");
-  const fileName = segments[segments.length - 1];
-  const docId = segments.length >= 3 ? segments[segments.length - 2] : null;
-  const canonicalPath = `/private/documents/${cleanRelative}`;
-
+  const canonicalPath = `/private/documents/${bucketRelative}`;
   return {
     canonicalPath,
-    bucketRelativePath: cleanRelative,
-    normalizedPath: normalized.startsWith("/") ? normalized : "/" + normalized,
-    cleanRelativePath: cleanRelative,
-    patientId: pathPatientId,
+    bucketRelativePath: bucketRelative,
+    normalizedPath: canonicalPath,
+    cleanRelativePath: bucketRelative,
+    patientId,
     caseId,
     caseSegment,
     docId,

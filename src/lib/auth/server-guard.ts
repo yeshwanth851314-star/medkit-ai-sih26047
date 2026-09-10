@@ -38,6 +38,17 @@ export async function requireServerAuth(options?: {
     }
   }
 
+  try {
+    const { verifyActiveClinicalProfile } = await import("@/lib/db/supabase");
+    const verified = await verifyActiveClinicalProfile(activeUser);
+    if (!verified) {
+      redirect(options?.redirectTo || "/login?error=inactive_profile");
+    }
+    activeUser = verified;
+  } catch {
+    redirect(options?.redirectTo || "/login?error=profile_verification_failed");
+  }
+
   if (options?.allowedRoles && options.allowedRoles.length > 0) {
     if (!options.allowedRoles.includes(activeUser.role)) {
       redirect("/login?error=unauthorized_role");

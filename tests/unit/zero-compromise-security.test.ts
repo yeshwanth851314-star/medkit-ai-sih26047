@@ -390,18 +390,17 @@ describe("Zero-Compromise Remediation Gate - Security & Integrity Invariants", (
   });
 
   describe("8. Atomic Idempotent Mutation RPC Execution & Replay Safeguards", () => {
-    it("executes new mutation atomically and returns replay safely on identical key and hash", async () => {
+    it("binds replay to the actual payload instead of trusting caller-supplied hashes", async () => {
       const idempotencyKey = `idem-rpc-${crypto.randomUUID()}`;
-      const payloadHash = "sha256-mutation-test-hash";
-      const payload = { action: "sync_vitals", vitals: { bp: "120/80" } };
+      const patientId = crypto.randomUUID();
+      const payload = { id: patientId, fullName: "Atomic Replay Patient" };
 
-      // 1. First execution applies mutation
       const res1 = await executeIdempotentMutation({
         idempotencyKey,
-        userId: "doc-01",
-        entity: "vitals",
-        action: "record",
-        payloadHash,
+        userId: "usr-doctor-001",
+        entity: "patients",
+        action: "create",
+        payloadHash: "forged-caller-hash-a",
         payload,
       });
 
@@ -409,33 +408,122 @@ describe("Zero-Compromise Remediation Gate - Security & Integrity Invariants", (
       expect(res1.status).toBe("completed");
       expect(res1.isReplay).toBe(false);
       expect(res1.mutationId).toBeDefined();
+      expect(res1.resourceId).toBe(patientId);
 
-      // 2. Replay with identical key & hash returns cached result
       const res2 = await executeIdempotentMutation({
         idempotencyKey,
-        userId: "doc-01",
-        entity: "vitals",
-        action: "record",
-        payloadHash,
+        userId: "usr-doctor-001",
+        entity: "patients",
+        action: "create",
+        payloadHash: "forged-caller-hash-b",
         payload,
       });
 
-      expect(res2.idempotencyKey).toBe(idempotencyKey);
       expect(res2.status).toBe("completed");
       expect(res2.isReplay).toBe(true);
       expect(res2.mutationId).toBe(res1.mutationId);
+      expect(res2.resourceId).toBe(patientId);
 
-      // 3. Replay with tampered payload hash throws conflict error
       await expect(
         executeIdempotentMutation({
           idempotencyKey,
-          userId: "doc-01",
-          entity: "vitals",
-          action: "record",
-          payloadHash: "sha256-tampered-hash-value",
-          payload: { ...payload, tampered: true },
+          userId: "usr-doctor-001",
+          entity: "patients",
+          action: "create",
+          payloadHash: "forged-caller-hash-b",
+          payload: { ...payload, fullName: "Tampered Patient" },
         })
       ).rejects.toThrow(/CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH/);
+    });
+
+    it("rejects unsupported entity/action combinations instead of recording fake success", async () => {
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: `unsupported-${crypto.randomUUID()}`,
+          userId: "usr-doctor-001",
+          entity: "vitals",
+          action: "record",
+          payloadHash: "ignored",
+          payload: { bp: "120/80" },
+        })
+      ).rejects.toThrow(/UNSUPPORTED_ENTITY/);
+    });
+
+    it("rejects facility-bound clinical callers that have no assigned facility", async () => {
+      const userId = `usr-no-fac-${crypto.randomUUID()}`;
+      mockDb.setUserProfile(userId, { role: "doctor", facilityId: null });
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: `no-facility-${crypto.randomUUID()}`,
+          userId,
+          entity: "patients",
+          action: "create",
+          payloadHash: "ignored",
+          payload: { id: crypto.randomUUID(), fullName: "No Facility Patient" },
+        })
+      ).rejects.toThrow(/FACILITY_REQUIRED/);
+    });
+
+    it("rejects case creation when consent belongs to another patient", async () => {
+      const consent = await mockDb.recordConsent({
+        id: crypto.randomUUID(),
+        patient_id: "22222222-2222-4222-8222-222222222222",
+        status: "granted",
+        revoked: false,
+        revoked_at: null,
+      });
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: `wrong-consent-patient-${crypto.randomUUID()}`,
+          userId: "usr-doctor-001",
+          entity: "cases",
+          action: "create",
+          payloadHash: "ignored",
+          payload: {
+            id: crypto.randomUUID(),
+            patientId: "11111111-1111-4111-8111-111111111111",
+            consentId: consent.id,
+            chiefComplaint: "Synthetic test complaint",
+          },
+        })
+      ).rejects.toThrow(/CONSENT_PATIENT_MISMATCH/);
+    });
+
+    it("rejects case creation with a revoked consent", async () => {
+      const consent = await mockDb.recordConsent({
+        id: crypto.randomUUID(),
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        status: "granted",
+        revoked: false,
+        revoked_at: null,
+      });
+      // Mutate through the mock revocation API so this test exercises the same
+      // persisted lifecycle state the production RPC checks.
+      await mockDb.revokeConsent(
+        consent.id,
+        "usr-doctor-001",
+        "Synthetic withdrawal",
+        "doctor",
+        "fac-hyd-01"
+      );
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: `revoked-consent-${crypto.randomUUID()}`,
+          userId: "usr-doctor-001",
+          entity: "cases",
+          action: "create",
+          payloadHash: "ignored",
+          payload: {
+            id: crypto.randomUUID(),
+            patientId: "11111111-1111-4111-8111-111111111111",
+            consentId: consent.id,
+            chiefComplaint: "Synthetic test complaint",
+          },
+        })
+      ).rejects.toThrow(/CONSENT_INVALID/);
     });
   });
 

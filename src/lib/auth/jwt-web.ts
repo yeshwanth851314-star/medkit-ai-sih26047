@@ -288,7 +288,7 @@ export async function refreshClinicianSessionWeb(
 
     // Verify active clinician profile
     const profileRes = await fetch(
-      `${supabaseUrl}/rest/v1/profiles?id=eq.${authData.user.id}&select=full_name,role,facility_id,active,is_active`,
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${authData.user.id}&select=full_name,role,facility_id,is_active`,
       {
         headers: {
           apikey: anonKey,
@@ -307,8 +307,7 @@ export async function refreshClinicianSessionWeb(
     if (
       !profile ||
       !profile.role ||
-      profile.active === false ||
-      profile.is_active === false ||
+      profile.is_active !== true ||
       !["doctor", "clinician", "staff", "admin"].includes(profile.role)
     ) {
       return null;

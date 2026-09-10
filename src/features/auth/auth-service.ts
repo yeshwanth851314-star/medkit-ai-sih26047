@@ -58,7 +58,7 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
 
     const { data: profile, error: profileError } = await authenticatedClient
       .from("profiles")
-      .select("full_name, role, facility_id, active, is_active")
+      .select("full_name, role, facility_id, is_active")
       .eq("id", data.user.id)
       .maybeSingle();
 
@@ -66,8 +66,7 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
       profileError ||
       !profile ||
       !profile.role ||
-      (profile as any).active === false ||
-      (profile as any).is_active === false
+      profile.is_active !== true
     ) {
       console.error(`Authentication denied: Missing, inactive, or invalid profile for user ${data.user.id}`);
       return null; // Fail closed: never default to doctor or synthesize privileges
@@ -136,7 +135,7 @@ export async function refreshClinicianSession(
 
   const { data: profile, error: profileError } = await authenticatedClient
     .from("profiles")
-    .select("full_name, role, facility_id, active, is_active")
+    .select("full_name, role, facility_id, is_active")
     .eq("id", data.user.id)
     .maybeSingle();
 
@@ -144,8 +143,7 @@ export async function refreshClinicianSession(
     profileError ||
     !profile ||
     !profile.role ||
-    (profile as any).active === false ||
-    (profile as any).is_active === false
+    profile.is_active !== true
   ) {
     console.error(`Session refresh denied: Inactive or invalid profile for user ${data.user.id}`);
     return null;

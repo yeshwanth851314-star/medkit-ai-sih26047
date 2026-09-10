@@ -45,7 +45,13 @@ export async function authenticateApiRequest(request: Request): Promise<AuthUser
     }
   }
 
-  return user;
+  try {
+    const { verifyActiveClinicalProfile } = await import("@/lib/db/supabase");
+    return await verifyActiveClinicalProfile(user);
+  } catch (err) {
+    console.error("API authentication fail-closed during active-profile verification:", err);
+    return null;
+  }
 }
 
 export async function requireApiAuth(

@@ -6,7 +6,6 @@ export interface Profile {
   role: UserRole;
   facility_id?: string | null;
   is_active: boolean;
-  active?: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -16,14 +16,14 @@ class MockDatabaseAdapter {
   private caseAmendments: Map<string, any[]> = new Map();
   private kioskInstances: Map<string, any> = new Map();
   private capabilityRevocations: Set<string> = new Set();
-  private userProfiles: Map<string, { role: string; facilityId: string }> = new Map();
+  private userProfiles: Map<string, { role: string; facilityId: string | null }> = new Map();
   private isInitialized = false;
 
-  setUserProfile(userId: string, profile: { role: string; facilityId: string }): void {
+  setUserProfile(userId: string, profile: { role: string; facilityId: string | null }): void {
     this.userProfiles.set(userId, profile);
   }
 
-  getUserProfile(userId: string): { role: string; facilityId: string } | undefined {
+  getUserProfile(userId: string): { role: string; facilityId: string | null } | undefined {
     return this.userProfiles.get(userId);
   }
 
@@ -48,17 +48,23 @@ class MockDatabaseAdapter {
     return "doctor";
   }
 
-  private resolveCallerFacility(params: { actorOrToken?: any; userId?: string }): string {
-    if (params.actorOrToken && typeof params.actorOrToken === "object" && params.actorOrToken.facilityId) {
-      return params.actorOrToken.facilityId;
+  private resolveCallerFacility(params: { actorOrToken?: any; userId?: string }): string | null {
+    if (
+      params.actorOrToken &&
+      typeof params.actorOrToken === "object" &&
+      Object.prototype.hasOwnProperty.call(params.actorOrToken, "facilityId")
+    ) {
+      return params.actorOrToken.facilityId ?? null;
     }
     if (typeof params.actorOrToken === "string") {
       try {
         const { verifySessionToken } = require("@/lib/auth/jwt");
         const decoded = verifySessionToken(params.actorOrToken);
-        if (decoded?.facilityId) return decoded.facilityId;
+        if (decoded && Object.prototype.hasOwnProperty.call(decoded, "facilityId")) {
+          return decoded.facilityId ?? null;
+        }
       } catch {
-        // ignore
+        // Synthetic/demo token resolution falls through to seeded profile/default facility.
       }
     }
     if (params.userId && this.userProfiles.has(params.userId)) {
@@ -944,25 +950,52 @@ class MockDatabaseAdapter {
     status: "completed" | "in_progress" | "failed";
     isReplay: boolean;
     mutationId?: string;
+    resourceId?: string | null;
     summary?: any;
   }> {
     if (!params.idempotencyKey || !params.idempotencyKey.trim()) {
       throw new Error("INVALID_ARGUMENT: idempotency_key is required");
     }
 
+    const canonicalize = (value: any): any => {
+      if (Array.isArray(value)) return value.map(canonicalize);
+      if (value && typeof value === "object") {
+        return Object.keys(value)
+          .sort()
+          .reduce((acc: Record<string, any>, key) => {
+            acc[key] = canonicalize(value[key]);
+            return acc;
+          }, {});
+      }
+      return value;
+    };
+    const authoritativeHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(canonicalize(params.payload ?? {})))
+      .digest("hex");
+
     const compositeKey = `${params.userId}:${params.idempotencyKey}`;
     const existing = this.syncMutations.get(compositeKey);
+    let mutationId = existing?.id || crypto.randomUUID();
 
     if (existing) {
+      if (
+        existing.entity !== params.entity ||
+        existing.action !== params.action ||
+        existing.payload_hash !== authoritativeHash
+      ) {
+        throw new Error(
+          "CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH: Idempotency key is already bound to a different entity/action/payload"
+        );
+      }
+
       if (existing.status === "completed") {
-        if (existing.payload_hash && params.payloadHash && existing.payload_hash !== params.payloadHash) {
-          throw new Error("CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH: Payload does not match previously completed mutation");
-        }
         return {
           idempotencyKey: params.idempotencyKey,
           status: "completed",
           isReplay: true,
           mutationId: existing.id,
+          resourceId: existing.resource_id ?? null,
           summary: existing.summary,
         };
       }
@@ -974,48 +1007,54 @@ class MockDatabaseAdapter {
       ) {
         throw new Error("LOCKED_IN_PROGRESS: Mutation is currently being processed by another worker");
       }
-
-      existing.status = "completed";
-      existing.completed_at = new Date().toISOString();
-      existing.payload_hash = params.payloadHash || existing.payload_hash;
-      existing.summary = { success: true, action: params.action, entity: params.entity };
-
-      this.recordAudit(params.userId, "SYNC_MUTATION_EXECUTED", params.entity, params.idempotencyKey, {
-        action: params.action,
-        mutationId: existing.id,
-        payloadHash: params.payloadHash,
-      });
-
-      return {
-        idempotencyKey: params.idempotencyKey,
-        status: "completed",
-        isReplay: false,
-        mutationId: existing.id,
-      };
+      // Expired/failed rows can be retried only with the exact original contract.
+      mutationId = existing.id;
     }
 
-    const mutationId = crypto.randomUUID();
-    let mutationSummary: any = { success: true, action: params.action, entity: params.entity };
+    const callerRole = this.resolveCallerRole(params);
+    const callerFacility = this.resolveCallerFacility(params);
+    if (!["doctor", "clinician", "staff", "admin"].includes(callerRole)) {
+      throw new Error(`ROLE_UNAUTHORIZED: Role ${callerRole} cannot execute offline mutations`);
+    }
+    if (callerRole !== "admin" && (!callerFacility || !callerFacility.trim())) {
+      throw new Error("FACILITY_REQUIRED: Facility-bound clinical caller has no assigned facility");
+    }
+
+    let mutationSummary: any;
+    let resourceId: string | null = null;
 
     if (params.entity === "documents") {
-      const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed"];
+      const forbiddenStatuses = [
+        "confirmed",
+        "accepted",
+        "verified",
+        "final",
+        "clinician_confirmed",
+        "reviewed",
+        "rejected",
+      ];
       const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
 
-      const callerRole = this.resolveCallerRole(params);
-      const callerFacility = this.resolveCallerFacility(params);
-
       if (params.action === "create") {
-        const requestedStatus = params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
+        const requestedStatus =
+          params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
         if (forbiddenStatuses.includes(requestedStatus) || !allowedStatuses.includes(requestedStatus)) {
-          throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${requestedStatus}`);
+          throw new Error(
+            `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${requestedStatus}`
+          );
         }
 
         const storagePath = params.payload?.storage_path || params.payload?.storagePath;
-        if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
-          throw new Error("STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path");
+        if (!storagePath || typeof storagePath !== "string" || !storagePath.trim()) {
+          throw new Error(
+            "STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path"
+          );
         }
 
         const requestedPatientId = params.payload?.patientId || params.payload?.patient_id;
+        if (!requestedPatientId) {
+          throw new Error("INVALID_PAYLOAD: Document creation requires patientId.");
+        }
         const requestedCaseId = params.payload?.caseId || params.payload?.case_id || null;
         const validated = validateCanonicalStoragePath(storagePath, requestedPatientId, requestedCaseId);
 
@@ -1023,46 +1062,67 @@ class MockDatabaseAdapter {
         if (!patient) {
           throw new Error("PATIENT_NOT_FOUND: Target patient does not exist");
         }
-
-        if (callerRole !== "admin") {
-          if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
-            throw new Error("FACILITY_ACCESS_DENIED: Cannot upload document for patient outside assigned facility");
-          }
+        if (
+          callerRole !== "admin" &&
+          (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id)
+        ) {
+          throw new Error(
+            "FACILITY_ACCESS_DENIED: Cannot upload document for patient outside assigned facility"
+          );
         }
 
         if (requestedCaseId) {
           const caseRecord = this.cases.get(requestedCaseId);
           if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
-            throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`);
+            throw new Error(
+              `STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`
+            );
           }
-          if (callerRole !== "admin") {
-            const casePatient = this.patients.get(caseRecord.patient_id);
-            if (!callerFacility || !casePatient?.facility_id || callerFacility !== casePatient.facility_id) {
-              throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility");
-            }
+          const casePatient = this.patients.get(caseRecord.patient_id);
+          if (
+            callerRole !== "admin" &&
+            (!callerFacility || !casePatient?.facility_id || callerFacility !== casePatient.facility_id)
+          ) {
+            throw new Error(
+              "FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility"
+            );
           }
         } else if (validated.caseId) {
-          const caseRecord = this.cases.get(validated.caseId);
-          if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
-            throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${validated.caseId}' does not exist for patient '${validated.patientId}'`);
-          }
+          throw new Error(
+            "STORAGE_PATH_CASE_MISMATCH: Document without caseId must use uncategorized path"
+          );
         }
 
-        if (!this.hasStorageFile(validated.normalizedPath) && !this.hasStorageFile(storagePath)) {
-          throw new Error(`STORAGE_OBJECT_NOT_FOUND: Storage object does not exist at '${storagePath}'`);
+        if (!this.hasStorageFile(validated.bucketRelativePath)) {
+          throw new Error(
+            `STORAGE_OBJECT_NOT_FOUND: Storage object does not exist at '${validated.canonicalPath}'`
+          );
         }
 
-        const docId = params.payload?.id || crypto.randomUUID();
+        const suppliedDocId =
+          params.payload?.id || params.payload?.documentId || params.payload?.document_id || null;
+        if (suppliedDocId && suppliedDocId !== validated.docId) {
+          throw new Error(
+            "STORAGE_PATH_DOCUMENT_MISMATCH: Path documentId does not match payload document id"
+          );
+        }
+        const docId = validated.docId;
+        if (this.documents.has(docId)) {
+          throw new Error("DOCUMENT_CONFLICT: Document id already exists");
+        }
+
         const docRecord = {
           id: docId,
-          patient_id: params.payload?.patientId || params.payload?.patient_id,
-          case_id: params.payload?.caseId || params.payload?.case_id || null,
+          patient_id: validated.patientId,
+          case_id: requestedCaseId,
           uploaded_by: params.userId,
           storage_path: validated.canonicalPath,
-          original_filename: params.payload?.original_filename || params.payload?.originalFilename || "document.pdf",
-          mime_type: params.payload?.mime_type || params.payload?.mimeType || "application/pdf",
-          file_size: params.payload?.file_size || params.payload?.fileSize || 1024,
-          document_type: params.payload?.document_type || params.payload?.documentType || "prescription",
+          original_filename:
+            params.payload?.original_filename || params.payload?.originalFilename || validated.fileName,
+          mime_type: params.payload?.mime_type || params.payload?.mimeType || "application/octet-stream",
+          file_size: params.payload?.file_size || params.payload?.fileSize || 0,
+          document_type:
+            params.payload?.document_type || params.payload?.documentType || "prescription",
           processing_status: requestedStatus,
           extracted_data: params.payload?.extracted_data || params.payload?.extractedData || null,
           ocr_confidence: params.payload?.ocr_confidence || params.payload?.ocrConfidence || null,
@@ -1070,176 +1130,225 @@ class MockDatabaseAdapter {
           updated_at: new Date().toISOString(),
         };
         this.documents.set(docId, docRecord as any);
+        resourceId = docId;
         mutationSummary = { success: true, documentId: docId };
       } else if (params.action === "update") {
         const docId = params.payload?.id || params.payload?.documentId || params.payload?.document_id;
-        if (!docId) {
-          throw new Error("INVALID_PAYLOAD: Document update requires documentId.");
-        }
+        if (!docId) throw new Error("INVALID_PAYLOAD: Document update requires documentId.");
+
         const existingDoc = this.documents.get(docId);
-        if (!existingDoc) {
-          throw new Error("DOCUMENT_NOT_FOUND: Target document does not exist");
-        }
+        if (!existingDoc) throw new Error("DOCUMENT_NOT_FOUND: Target document does not exist");
 
-        // Verify parent patient and cross-facility authorization
         const patient = this.patients.get(existingDoc.patient_id);
-        if (!patient) {
-          throw new Error("PATIENT_NOT_FOUND: Document parent patient does not exist");
-        }
-
-        if (callerRole !== "admin") {
-          if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
-            throw new Error("FACILITY_ACCESS_DENIED: Cannot update document outside assigned facility");
-          }
+        if (!patient) throw new Error("PATIENT_NOT_FOUND: Document parent patient does not exist");
+        if (
+          callerRole !== "admin" &&
+          (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id)
+        ) {
+          throw new Error(
+            "FACILITY_ACCESS_DENIED: Cannot update document outside assigned facility"
+          );
         }
 
         const immutableFields = [
-          "patient_id", "patientId",
-          "facility_id", "facilityId",
-          "storage_path", "storagePath",
-          "uploaded_by", "uploadedBy",
-          "created_at", "createdAt",
-          "confirmed_by", "confirmedBy",
-          "confirmed_at", "confirmedAt"
+          "patient_id",
+          "patientId",
+          "case_id",
+          "caseId",
+          "facility_id",
+          "facilityId",
+          "storage_path",
+          "storagePath",
+          "uploaded_by",
+          "uploadedBy",
+          "created_at",
+          "createdAt",
+          "confirmed_by",
+          "confirmedBy",
+          "confirmed_at",
+          "confirmedAt",
+          "verified_by",
+          "verifiedBy",
+          "verified_at",
+          "verifiedAt",
         ];
         for (const field of immutableFields) {
           if (params.payload && params.payload[field] !== undefined) {
-            throw new Error(`IMMUTABLE_FIELD_TAMPERING: Offline sync cannot mutate document provenance or verification fields (${field})`);
+            throw new Error(
+              `IMMUTABLE_FIELD_TAMPERING: Offline sync cannot mutate document provenance or verification fields (${field})`
+            );
           }
         }
 
-        if (params.payload?.processing_status !== undefined || params.payload?.processingStatus !== undefined) {
+        if (
+          params.payload?.processing_status !== undefined ||
+          params.payload?.processingStatus !== undefined
+        ) {
           const newStatus = params.payload?.processing_status || params.payload?.processingStatus;
           if (forbiddenStatuses.includes(newStatus) || !allowedStatuses.includes(newStatus)) {
-            throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${newStatus}`);
+            throw new Error(
+              `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${newStatus}`
+            );
           }
           existingDoc.processing_status = newStatus;
         }
 
-        if (params.payload?.extracted_data !== undefined) existingDoc.extracted_data = params.payload.extracted_data;
-        if (params.payload?.extractedData !== undefined) existingDoc.extracted_data = params.payload.extractedData;
-        if (params.payload?.ocr_confidence !== undefined) existingDoc.ocr_confidence = params.payload.ocr_confidence;
-        if (params.payload?.ocrConfidence !== undefined) existingDoc.ocr_confidence = params.payload.ocrConfidence;
+        if (params.payload?.extracted_data !== undefined)
+          existingDoc.extracted_data = params.payload.extracted_data;
+        if (params.payload?.extractedData !== undefined)
+          existingDoc.extracted_data = params.payload.extractedData;
+        if (params.payload?.ocr_confidence !== undefined)
+          existingDoc.ocr_confidence = params.payload.ocr_confidence;
+        if (params.payload?.ocrConfidence !== undefined)
+          existingDoc.ocr_confidence = params.payload.ocrConfidence;
         existingDoc.updated_at = new Date().toISOString();
 
+        resourceId = docId;
         mutationSummary = { success: true, documentId: docId };
+      } else {
+        throw new Error(
+          `UNSUPPORTED_ACTION: Action ${params.action} on documents is not supported`
+        );
       }
     } else if (params.entity === "patients") {
-      const callerRole = this.resolveCallerRole(params);
-      const callerFacility = this.resolveCallerFacility(params);
-
-      if (params.action === "create") {
-        const suppliedFacility = params.payload?.facilityId || params.payload?.facility_id;
-        let finalFacility = callerFacility;
-
-        if (callerRole !== "admin") {
-          if (suppliedFacility && suppliedFacility !== callerFacility) {
-            throw new Error("FACILITY_ACCESS_DENIED: Cannot create patient outside assigned facility");
-          }
-          finalFacility = callerFacility;
-        } else {
-          finalFacility = suppliedFacility || callerFacility;
-        }
-
-        const patientId = params.payload?.id || crypto.randomUUID();
-        const patientRecord = {
-          id: patientId,
-          patient_code: params.payload?.patientCode || params.payload?.patient_code || `PT-${patientId.slice(0, 8).toUpperCase()}`,
-          full_name: params.payload?.fullName || params.payload?.full_name || "Unnamed Patient",
-          date_of_birth: params.payload?.dateOfBirth || params.payload?.date_of_birth,
-          gender: params.payload?.gender,
-          phone: params.payload?.phone,
-          facility_id: finalFacility,
-          abha_id: params.payload?.abhaId || params.payload?.abha_id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        this.patients.set(patientId, patientRecord as any);
-        mutationSummary = { success: true, patientId };
-      } else {
+      if (params.action !== "create") {
         throw new Error(`UNSUPPORTED_ACTION: Action ${params.action} on patients is not supported`);
       }
-    } else if (params.entity === "cases") {
-      const callerRole = this.resolveCallerRole(params);
-      const callerFacility = this.resolveCallerFacility(params);
 
+      const suppliedFacility = params.payload?.facilityId || params.payload?.facility_id || null;
+      let finalFacility = callerFacility;
+      if (callerRole !== "admin") {
+        if (suppliedFacility && suppliedFacility !== callerFacility) {
+          throw new Error("FACILITY_ACCESS_DENIED: Cannot create patient outside assigned facility");
+        }
+        finalFacility = callerFacility;
+      } else {
+        finalFacility = suppliedFacility || callerFacility;
+      }
+
+      const patientId = params.payload?.id || crypto.randomUUID();
+      const patientRecord = {
+        id: patientId,
+        patient_code:
+          params.payload?.patientCode ||
+          params.payload?.patient_code ||
+          `PT-${patientId.slice(0, 8).toUpperCase()}`,
+        full_name: params.payload?.fullName || params.payload?.full_name || "Unnamed Patient",
+        date_of_birth: params.payload?.dateOfBirth || params.payload?.date_of_birth,
+        gender: params.payload?.gender,
+        phone: params.payload?.phone,
+        facility_id: finalFacility,
+        abha_id: params.payload?.abhaId || params.payload?.abha_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.patients.set(patientId, patientRecord as any);
+      resourceId = patientId;
+      mutationSummary = { success: true, patientId };
+    } else if (params.entity === "cases") {
       if (callerRole === "staff") {
         throw new Error("ROLE_UNAUTHORIZED: Staff members cannot create or update clinical cases");
       }
 
       if (params.action === "create") {
         const targetPatientId = params.payload?.patientId || params.payload?.patient_id;
-        if (targetPatientId) {
-          const patient = this.patients.get(targetPatientId);
-          if (!patient) {
-            throw new Error("PATIENT_NOT_FOUND: Target patient does not exist");
-          }
-
-          if (callerRole !== "admin") {
-            if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
-              throw new Error("FACILITY_ACCESS_DENIED: Cannot create case outside assigned facility");
-            }
-          }
-
-          const caseId = params.payload?.id || crypto.randomUUID();
-          const caseRecord: ClinicalCase = {
-            id: caseId,
-            patient_id: targetPatientId,
-            clinician_id: params.userId,
-            consent_id: params.payload?.consentId || params.payload?.consent_id || null,
-            case_type: params.payload?.caseType || "general",
-            patient_language: params.payload?.patientLanguage || "en",
-            chief_complaint: params.payload?.chiefComplaint || params.payload?.chief_complaint || "Chief complaint pending",
-            raw_patient_complaint: params.payload?.rawPatientComplaint || null,
-            hpi: params.payload?.hpi || {},
-            past_history: params.payload?.pastHistory || null,
-            medication_history: params.payload?.medications || params.payload?.medication_history || [],
-            allergy_history: params.payload?.allergies || params.payload?.allergy_history || [],
-            red_flags: params.payload?.red_flags || params.payload?.redFlags || [],
-            status: "draft",
-            provenance: params.payload?.provenance || {},
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          this.cases.set(caseId, caseRecord);
-          mutationSummary = { success: true, caseId };
-        } else {
-          mutationSummary = { success: true, action: params.action, entity: params.entity };
+        if (!targetPatientId) {
+          throw new Error("INVALID_PAYLOAD: Case creation requires patientId.");
         }
+        const patient = this.patients.get(targetPatientId);
+        if (!patient) throw new Error("PATIENT_NOT_FOUND: Target patient does not exist");
+        if (
+          callerRole !== "admin" &&
+          (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id)
+        ) {
+          throw new Error("FACILITY_ACCESS_DENIED: Cannot create case outside assigned facility");
+        }
+
+        const consentId = params.payload?.consentId || params.payload?.consent_id || null;
+        if (consentId) {
+          const consent = this.consents.get(consentId);
+          if (!consent) throw new Error("CONSENT_NOT_FOUND: Referenced consent does not exist");
+          if (consent.patient_id !== targetPatientId) {
+            throw new Error(
+              "CONSENT_PATIENT_MISMATCH: Consent does not belong to the target patient"
+            );
+          }
+          if (
+            consent.revoked === true ||
+            consent.status !== "granted" ||
+            consent.revoked_at != null
+          ) {
+            throw new Error("CONSENT_INVALID: Referenced consent is not currently granted");
+          }
+        }
+
+        const caseId = params.payload?.id || crypto.randomUUID();
+        const caseRecord: ClinicalCase = {
+          id: caseId,
+          patient_id: targetPatientId,
+          clinician_id: params.userId,
+          consent_id: consentId,
+          case_type: params.payload?.caseType || params.payload?.case_type || "general",
+          patient_language:
+            params.payload?.patientLanguage || params.payload?.patient_language || "en",
+          chief_complaint:
+            params.payload?.chiefComplaint ||
+            params.payload?.chief_complaint ||
+            "Chief complaint pending",
+          raw_patient_complaint:
+            params.payload?.rawPatientComplaint || params.payload?.raw_patient_complaint || null,
+          hpi: params.payload?.hpi || {},
+          past_history: params.payload?.pastHistory || params.payload?.past_history || null,
+          medication_history:
+            params.payload?.medications || params.payload?.medication_history || [],
+          allergy_history: params.payload?.allergies || params.payload?.allergy_history || [],
+          red_flags: params.payload?.red_flags || params.payload?.redFlags || [],
+          status: "draft",
+          provenance: params.payload?.provenance || {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.cases.set(caseId, caseRecord);
+        resourceId = caseId;
+        mutationSummary = { success: true, caseId };
       } else if (params.action === "update" || params.action === "update_draft") {
         const targetCaseId = params.payload?.id || params.payload?.caseId;
-        if (targetCaseId) {
-          const existingCase = this.cases.get(targetCaseId);
-          if (!existingCase) {
-            throw new Error("CASE_NOT_FOUND: Target case does not exist");
-          }
+        if (!targetCaseId) throw new Error("INVALID_PAYLOAD: Case update requires id.");
 
-          const patient = this.patients.get(existingCase.patient_id);
-          if (!patient) {
-            throw new Error("PATIENT_NOT_FOUND: Parent patient for case does not exist");
-          }
+        const existingCase = this.cases.get(targetCaseId);
+        if (!existingCase) throw new Error("CASE_NOT_FOUND: Target case does not exist");
 
-          if (callerRole !== "admin") {
-            if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
-              throw new Error("FACILITY_ACCESS_DENIED: Cannot update case outside assigned facility");
-            }
-          }
-
-          if (existingCase.status === "final") {
-            throw new Error("IMMUTABLE_FINAL_CASE: Finalized cases cannot be mutated directly");
-          }
-
-          if (params.payload?.chiefComplaint) existingCase.chief_complaint = params.payload.chiefComplaint;
-          if (params.payload?.chief_complaint) existingCase.chief_complaint = params.payload.chief_complaint;
-          if (params.payload?.hpi) existingCase.hpi = params.payload.hpi;
-          existingCase.updated_at = new Date().toISOString();
-          mutationSummary = { success: true, caseId: targetCaseId };
-        } else {
-          mutationSummary = { success: true, action: params.action, entity: params.entity };
+        const patient = this.patients.get(existingCase.patient_id);
+        if (!patient) throw new Error("PATIENT_NOT_FOUND: Parent patient for case does not exist");
+        if (
+          callerRole !== "admin" &&
+          (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id)
+        ) {
+          throw new Error("FACILITY_ACCESS_DENIED: Cannot update case outside assigned facility");
         }
+        if (existingCase.status === "final") {
+          throw new Error("IMMUTABLE_FINAL_CASE: Finalized cases cannot be mutated directly");
+        }
+
+        if (params.payload?.chiefComplaint)
+          existingCase.chief_complaint = params.payload.chiefComplaint;
+        if (params.payload?.chief_complaint)
+          existingCase.chief_complaint = params.payload.chief_complaint;
+        if (params.payload?.hpi) existingCase.hpi = params.payload.hpi;
+        existingCase.updated_at = new Date().toISOString();
+
+        resourceId = targetCaseId;
+        mutationSummary = { success: true, caseId: targetCaseId };
+      } else {
+        throw new Error(`UNSUPPORTED_ACTION: Action ${params.action} on cases is not supported`);
       }
+    } else {
+      throw new Error(
+        `UNSUPPORTED_ENTITY: Entity type ${params.entity} is not supported for idempotent mutation`
+      );
     }
 
+    const now = new Date().toISOString();
     const record = {
       id: mutationId,
       idempotency_key: params.idempotencyKey,
@@ -1247,34 +1356,38 @@ class MockDatabaseAdapter {
       entity: params.entity,
       action: params.action,
       payload: params.payload,
-      payload_hash: params.payloadHash,
+      payload_hash: authoritativeHash,
       status: "completed",
       lease_expires_at: new Date(Date.now() + 60000).toISOString(),
+      resource_id: resourceId,
       summary: mutationSummary,
-      created_at: new Date().toISOString(),
-      completed_at: new Date().toISOString(),
+      created_at: existing?.created_at || now,
+      completed_at: now,
+      updated_at: now,
     };
-
-    // Strictly user-scoped key: user A and user B can use the same idempotency key independently
     this.syncMutations.set(compositeKey, record);
 
-    const callerRole = this.resolveCallerRole(params);
-    const callerFacility = this.resolveCallerFacility(params);
-
-    this.recordAudit(params.userId, "SYNC_MUTATION_EXECUTED", params.entity, params.idempotencyKey, {
-      idempotencyKey: params.idempotencyKey,
-      action: params.action,
-      mutationId,
-      payloadHash: params.payloadHash,
-      facilityId: callerFacility,
-      role: callerRole,
-    });
+    this.recordAudit(
+      params.userId,
+      "SYNC_MUTATION_EXECUTED",
+      params.entity,
+      resourceId || params.idempotencyKey,
+      {
+        idempotencyKey: params.idempotencyKey,
+        action: params.action,
+        mutationId,
+        payloadHash: authoritativeHash,
+        facilityId: callerFacility,
+        role: callerRole,
+      }
+    );
 
     return {
       idempotencyKey: params.idempotencyKey,
       status: "completed",
       isReplay: false,
       mutationId,
+      resourceId,
       summary: mutationSummary,
     };
   }

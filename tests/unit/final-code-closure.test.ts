@@ -523,32 +523,27 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
   describe("Blocker 5: User-Scoped Idempotency Uniqueness & RLS", () => {
     it("allows two distinct users to independently execute mutations with the exact same idempotency key text", async () => {
       const sharedKey = `shared-sync-key-${crypto.randomUUID()}`;
-      const payloadUser1 = { action: "sync_record", detail: "User 1 data" };
-      const payloadUser2 = { action: "sync_record", detail: "User 2 data" };
+      const payloadUser1 = { id: crypto.randomUUID(), fullName: "User One Patient" };
+      const payloadUser2 = { id: crypto.randomUUID(), fullName: "User Two Patient" };
 
-      const hash1 = crypto.createHash("sha256").update(JSON.stringify(payloadUser1)).digest("hex");
-      const hash2 = crypto.createHash("sha256").update(JSON.stringify(payloadUser2)).digest("hex");
-
-      // User 1 executes mutation with sharedKey
       const res1 = await executeIdempotentMutation({
         idempotencyKey: sharedKey,
         userId: "usr-doctor-001",
-        entity: "cases",
+        entity: "patients",
         action: "create",
-        payloadHash: hash1,
+        payloadHash: "caller-hash-is-not-authoritative-1",
         payload: payloadUser1,
       });
 
       expect(res1.status).toBe("completed");
       expect(res1.isReplay).toBe(false);
 
-      // User 2 executes mutation with the exact same key string independently
       const res2 = await executeIdempotentMutation({
         idempotencyKey: sharedKey,
         userId: "usr-doctor-002",
-        entity: "cases",
+        entity: "patients",
         action: "create",
-        payloadHash: hash2,
+        payloadHash: "caller-hash-is-not-authoritative-2",
         payload: payloadUser2,
       });
 
@@ -557,17 +552,16 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       expect(res2.mutationId).not.toBe(res1.mutationId);
     });
 
-    it("replays mutation result for the same user when identical key and hash are re-sent", async () => {
+    it("replays the same request even if the caller supplies a different claimed payloadHash", async () => {
       const userKey = `user-replay-key-${crypto.randomUUID()}`;
-      const payload = { action: "sync_case", data: "reproducible payload" };
-      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+      const payload = { id: crypto.randomUUID(), fullName: "Replay Patient" };
 
       const first = await executeIdempotentMutation({
         idempotencyKey: userKey,
         userId: "usr-doctor-001",
-        entity: "cases",
+        entity: "patients",
         action: "create",
-        payloadHash: hash,
+        payloadHash: "untrusted-hash-a",
         payload,
       });
       expect(first.isReplay).toBe(false);
@@ -575,28 +569,28 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const second = await executeIdempotentMutation({
         idempotencyKey: userKey,
         userId: "usr-doctor-001",
-        entity: "cases",
+        entity: "patients",
         action: "create",
-        payloadHash: hash,
+        payloadHash: "untrusted-hash-b",
         payload,
       });
       expect(second.isReplay).toBe(true);
       expect(second.mutationId).toBe(first.mutationId);
+      expect(second.resourceId).toBe(first.resourceId);
     });
 
-    it("rejects mutation with conflict error if same user sends different payload for same key", async () => {
+    it("rejects the same user/key when the actual payload changes, regardless of claimed hash", async () => {
       const userKey = `user-conflict-key-${crypto.randomUUID()}`;
-      const payload1 = { value: "original" };
-      const payload2 = { value: "tampered" };
-      const hash1 = crypto.createHash("sha256").update(JSON.stringify(payload1)).digest("hex");
-      const hash2 = crypto.createHash("sha256").update(JSON.stringify(payload2)).digest("hex");
+      const patientId = crypto.randomUUID();
+      const payload1 = { id: patientId, fullName: "Original Patient" };
+      const payload2 = { id: patientId, fullName: "Tampered Patient" };
 
       await executeIdempotentMutation({
         idempotencyKey: userKey,
         userId: "usr-doctor-001",
-        entity: "cases",
+        entity: "patients",
         action: "create",
-        payloadHash: hash1,
+        payloadHash: "same-untrusted-hash",
         payload: payload1,
       });
 
@@ -604,9 +598,9 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
         executeIdempotentMutation({
           idempotencyKey: userKey,
           userId: "usr-doctor-001",
-          entity: "cases",
+          entity: "patients",
           action: "create",
-          payloadHash: hash2,
+          payloadHash: "same-untrusted-hash",
           payload: payload2,
         })
       ).rejects.toThrow(/CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH/);
@@ -619,7 +613,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
   describe("Blocker 6: Atomic Document Sync & Concurrency Locking", () => {
     it("atomically transacts document metadata registration through executeIdempotentMutation", async () => {
       const docKey = `doc-sync-key-${crypto.randomUUID()}`;
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-1/chest-xray-report.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000001/chest-xray-report.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-xray"), "application/pdf");
 
       const docPayload = {
@@ -671,7 +665,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
 
     it("processes concurrent identical operations safely and replays without unique violations", async () => {
       const concurrentKey = `concurrent-doc-${crypto.randomUUID()}`;
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-2/ecg-trace.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000002/ecg-trace.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-ecg"), "application/pdf");
 
       const payload = {
@@ -712,7 +706,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     it("executes atomic document sync through the /api/sync endpoint", async () => {
       const idempotencyKey = `sync-route-doc-${crypto.randomUUID()}`;
       const queueItemId = crypto.randomUUID();
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-3/discharge-summary.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000003/discharge-summary.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-discharge"), "application/pdf");
 
       const queueItem = {
@@ -794,7 +788,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
 
     it("strictly rejects offline document sync setting clinician-only status confirmed", async () => {
       const docKey = `doc-forbidden-status-${crypto.randomUUID()}`;
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-4/status-tamper.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000004/status-tamper.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {
@@ -820,7 +814,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     it("strictly rejects document update tampering with immutable fields (IMMUTABLE_FIELD_TAMPERING)", async () => {
       // First create a legitimate document
       const docKey = `doc-immutable-base-${crypto.randomUUID()}`;
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-5/immutable-check.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000005/immutable-check.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {
@@ -867,7 +861,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "nonexistent.pdf",
-        storage_path: "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-99/nonexistent.pdf",
+        storage_path: "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/10000000-0000-4000-8000-000000000099/nonexistent.pdf",
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
@@ -909,7 +903,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "other-patient.pdf",
-        storage_path: "patients/22222222-2222-4222-8222-222222222222/cases/uncategorized/doc-1/other-patient.pdf",
+        storage_path: "patients/22222222-2222-4222-8222-222222222222/cases/uncategorized/20000000-0000-4000-8000-000000000001/other-patient.pdf",
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
@@ -940,7 +934,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "mismatched-case.pdf",
-        storage_path: `patients/11111111-1111-4111-8111-111111111111/cases/${otherCase.id}/doc-1/mismatched-case.pdf`,
+        storage_path: `patients/11111111-1111-4111-8111-111111111111/cases/${otherCase.id}/30000000-0000-4000-8000-000000000001/mismatched-case.pdf`,
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
@@ -959,7 +953,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     it("strictly rejects document UPDATE attempted across facility boundaries (FACILITY_ACCESS_DENIED)", async () => {
       // 1. Create a legitimate document in fac-hyd-01 for Hyderabad patient
       const docKey = `doc-cross-fac-base-${crypto.randomUUID()}`;
-      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-xfac/cross-fac.pdf";
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/40000000-0000-4000-8000-000000000001/cross-fac.pdf";
       mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-xfac"), "application/pdf");
 
       const created = await executeIdempotentMutation({
@@ -1025,7 +1019,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       });
 
       const docKey = `doc-case-uncat-mismatch-${crypto.randomUUID()}`;
-      const storagePath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-1/file.pdf";
+      const storagePath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/50000000-0000-4000-8000-000000000001/file.pdf";
       mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {
@@ -1067,7 +1061,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       });
 
       const docKey = `doc-caseA-caseB-${crypto.randomUUID()}`;
-      const storagePath = `patients/11111111-1111-4111-8111-111111111111/cases/${caseA.id}/doc-1/file.pdf`;
+      const storagePath = `patients/11111111-1111-4111-8111-111111111111/cases/${caseA.id}/50000000-0000-4000-8000-000000000001/file.pdf`;
       mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {
@@ -1112,7 +1106,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       });
 
       const docKey = `doc-case-fac-mismatch-${crypto.randomUUID()}`;
-      const storagePath = `patients/${delhiPatient.id}/cases/${delhiCase.id}/doc-1/file.pdf`;
+      const storagePath = `patients/${delhiPatient.id}/cases/${delhiCase.id}/50000000-0000-4000-8000-000000000001/file.pdf`;
       mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {

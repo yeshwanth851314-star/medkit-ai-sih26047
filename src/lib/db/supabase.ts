@@ -3,6 +3,7 @@ import { env } from "@/config/env";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { Patient, ClinicalCase, MedicalDocument, IntakeSessionRecord } from "@/types/database";
 import type { AuthUser } from "@/features/auth/types";
+import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
 
 /**
  * Create an ephemeral, request-bound Supabase client.
@@ -103,6 +104,39 @@ export function getAuthorizedSupabaseClient(
 ): SupabaseClient | null {
   const token = extractAccessToken(actorOrToken);
   return getSupabaseClient(token, configOverride);
+}
+
+/**
+ * Revalidates the authenticated clinical profile against the live database.
+ * This makes account deactivation effective immediately instead of waiting for
+ * the application JWT to expire.
+ */
+export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthUser | null> {
+  if (env.isDemoMode) return user;
+
+  const supabase = getAuthorizedSupabaseClient(user);
+  if (!supabase) {
+    throw new Error("DATABASE_UNAVAILABLE: Supabase client unavailable for active-profile verification");
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("full_name, role, facility_id, is_active")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`DATABASE_UNAVAILABLE: Failed to verify active profile: ${error.message}`);
+  }
+  if (!profile || profile.is_active !== true) return null;
+  if (!["doctor", "clinician", "staff", "admin"].includes(profile.role)) return null;
+
+  return {
+    ...user,
+    fullName: profile.full_name || user.fullName,
+    role: profile.role as AuthUser["role"],
+    facilityId: profile.facility_id || null,
+  };
 }
 
 // Unified Data Access Interface for Patients
@@ -627,7 +661,7 @@ export async function verifyStorageObjectExists(
     throw new Error("STORAGE_VERIFICATION_FAILED: Supabase client unavailable to verify storage object");
   }
 
-  const cleanPath = storagePath.replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
+  const cleanPath = toBucketRelativePath(storagePath);
   const lastSlash = cleanPath.lastIndexOf("/");
   const parentFolder = lastSlash >= 0 ? cleanPath.substring(0, lastSlash) : "";
   const fileName = lastSlash >= 0 ? cleanPath.substring(lastSlash + 1) : cleanPath;
@@ -660,27 +694,10 @@ export async function isIdempotencyKeyProcessed(
   if (env.isDemoMode) {
     return mockDb.isIdempotencyKeyProcessed(key);
   }
-
-  const supabase = getAuthorizedSupabaseClient(actorOrToken);
-  if (!supabase) return false;
-
-  try {
-    const { data, error } = await supabase
-      .from("sync_mutations")
-      .select("id, status")
-      .eq("idempotency_key", key)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("Error querying sync_mutations table:", error.message);
-      return false;
-    }
-
-    return Boolean(data && data.status === "completed");
-  } catch (err) {
-    console.warn("Exception checking sync mutation idempotency:", err);
-    return false;
-  }
+  void actorOrToken;
+  throw new Error(
+    "ATOMIC_SYNC_REQUIRED: Production idempotency state is controlled exclusively by rpc_execute_idempotent_mutation"
+  );
 }
 
 export async function reserveIdempotencyKey(params: {
@@ -694,82 +711,9 @@ export async function reserveIdempotencyKey(params: {
   if (env.isDemoMode) {
     return mockDb.reserveIdempotencyKey(params);
   }
-
-  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
-  if (!supabase) {
-    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
-  }
-
-  try {
-    const leaseExpiresAt = new Date(Date.now() + 60000).toISOString();
-    const { error: insertError } = await supabase.from("sync_mutations").insert([
-      {
-        idempotency_key: params.key,
-        user_id: params.userId,
-        entity: params.entity,
-        action: params.action,
-        payload_hash: params.payloadHash || null,
-        status: "in_progress",
-        lease_expires_at: leaseExpiresAt,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-
-    if (!insertError) {
-      return { claimed: true, status: "in_progress" };
-    }
-
-    // Key already exists — fetch its current status, payload_hash, and lease_expires_at
-    const { data: existing, error: queryError } = await supabase
-      .from("sync_mutations")
-      .select("status, resource_id, payload_hash, lease_expires_at")
-      .eq("idempotency_key", params.key)
-      .eq("user_id", params.userId)
-      .maybeSingle();
-
-    if (queryError || !existing) {
-      return { claimed: false, status: "failed" };
-    }
-
-    // Replay with different payload must be rejected as conflict
-    if (existing.payload_hash && params.payloadHash && existing.payload_hash !== params.payloadHash) {
-      return { claimed: false, status: "conflict", resourceId: existing.resource_id };
-    }
-
-    // Orphan lease timeout recovery: if previous worker crashed while in_progress
-    if (
-      existing.status === "in_progress" &&
-      existing.lease_expires_at &&
-      new Date(existing.lease_expires_at).getTime() < Date.now()
-    ) {
-      const newLease = new Date(Date.now() + 60000).toISOString();
-      const { data: reclaimed, error: reclaimError } = await supabase
-        .from("sync_mutations")
-        .update({
-          lease_expires_at: newLease,
-          status: "in_progress",
-          payload_hash: params.payloadHash || null,
-        })
-        .eq("idempotency_key", params.key)
-        .eq("user_id", params.userId)
-        .eq("status", "in_progress")
-        .select()
-        .maybeSingle();
-
-      if (!reclaimError && reclaimed) {
-        return { claimed: true, status: "in_progress" };
-      }
-    }
-
-    return {
-      claimed: false,
-      status: existing.status as any,
-      resourceId: existing.resource_id,
-    };
-  } catch (err) {
-    console.error("Critical: Exception during idempotency key reservation:", err);
-    return { claimed: false, status: "failed" };
-  }
+  throw new Error(
+    "ATOMIC_SYNC_REQUIRED: Production idempotency reservations must use rpc_execute_idempotent_mutation"
+  );
 }
 
 export async function executeIdempotentMutation(params: {
@@ -785,13 +729,14 @@ export async function executeIdempotentMutation(params: {
   status: "completed" | "in_progress" | "failed";
   isReplay: boolean;
   mutationId?: string;
+  resourceId?: string | null;
   summary?: any;
 }> {
   if (env.isDemoMode) {
     return mockDb.executeIdempotentMutation(params);
   }
 
-  const supabase = getAuthorizedSupabaseClient(params.actorOrToken) || getServiceSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -1171,23 +1116,9 @@ export async function updateSyncMutationStatus(params: {
     mockDb.updateSyncMutationStatus(params);
     return;
   }
-
-  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
-  if (!supabase) return;
-
-  try {
-    await supabase
-      .from("sync_mutations")
-      .update({
-        status: params.status,
-        resource_id: params.resourceId || null,
-        error_message: params.errorMessage || null,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("idempotency_key", params.key);
-  } catch (err) {
-    console.warn("Exception updating sync mutation status:", err);
-  }
+  throw new Error(
+    "ATOMIC_SYNC_REQUIRED: Production sync ledger updates are internal to rpc_execute_idempotent_mutation"
+  );
 }
 
 export async function recordProcessedIdempotencyKey(params: {
@@ -1212,34 +1143,11 @@ export async function recordProcessedIdempotencyKey(params: {
     });
     return;
   }
-
-  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
-  if (!supabase) return;
-
-  try {
-    const { error } = await supabase.from("sync_mutations").upsert(
-      {
-        idempotency_key: params.key,
-        user_id: params.userId,
-        entity: params.entity,
-        action: params.action,
-        resource_id: params.resourceId || null,
-        status: params.status || "completed",
-        error_message: params.errorMessage || null,
-        completed_at: new Date().toISOString(),
-      },
-      { onConflict: "idempotency_key" }
-    );
-
-    if (error) {
-      console.warn("Failed to record sync mutation in Supabase:", error.message);
-    }
-  } catch (err) {
-    console.warn("Exception recording sync mutation:", err);
-  }
+  throw new Error(
+    "ATOMIC_SYNC_REQUIRED: Production sync ledger writes are internal to rpc_execute_idempotent_mutation"
+  );
 }
 
-// Unified Data Access Interface for Red Flag Events
 export async function createRedFlagEvent(
   event: {
     caseId: string;
