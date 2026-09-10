@@ -16,7 +16,56 @@ class MockDatabaseAdapter {
   private caseAmendments: Map<string, any[]> = new Map();
   private kioskInstances: Map<string, any> = new Map();
   private capabilityRevocations: Set<string> = new Set();
+  private userProfiles: Map<string, { role: string; facilityId: string }> = new Map();
   private isInitialized = false;
+
+  setUserProfile(userId: string, profile: { role: string; facilityId: string }): void {
+    this.userProfiles.set(userId, profile);
+  }
+
+  getUserProfile(userId: string): { role: string; facilityId: string } | undefined {
+    return this.userProfiles.get(userId);
+  }
+
+  private resolveCallerRole(params: { actorOrToken?: any; userId?: string }): string {
+    if (params.actorOrToken && typeof params.actorOrToken === "object" && params.actorOrToken.role) {
+      return params.actorOrToken.role;
+    }
+    if (typeof params.actorOrToken === "string") {
+      try {
+        const { verifySessionToken } = require("@/lib/auth/jwt");
+        const decoded = verifySessionToken(params.actorOrToken);
+        if (decoded?.role) return decoded.role;
+      } catch {
+        // ignore
+      }
+    }
+    if (params.userId && this.userProfiles.has(params.userId)) {
+      return this.userProfiles.get(params.userId)!.role;
+    }
+    if (params.userId?.includes("admin")) return "admin";
+    if (params.userId?.includes("staff")) return "staff";
+    return "doctor";
+  }
+
+  private resolveCallerFacility(params: { actorOrToken?: any; userId?: string }): string {
+    if (params.actorOrToken && typeof params.actorOrToken === "object" && params.actorOrToken.facilityId) {
+      return params.actorOrToken.facilityId;
+    }
+    if (typeof params.actorOrToken === "string") {
+      try {
+        const { verifySessionToken } = require("@/lib/auth/jwt");
+        const decoded = verifySessionToken(params.actorOrToken);
+        if (decoded?.facilityId) return decoded.facilityId;
+      } catch {
+        // ignore
+      }
+    }
+    if (params.userId && this.userProfiles.has(params.userId)) {
+      return this.userProfiles.get(params.userId)!.facilityId;
+    }
+    return "fac-hyd-01";
+  }
 
   recordRevocation(sessionId: string, reason?: string, targetStatus: "abandoned" | "submitted" = "abandoned"): void {
     this.capabilityRevocations.add(sessionId);
@@ -42,6 +91,10 @@ class MockDatabaseAdapter {
   }
 
   private seedKiosks() {
+    this.userProfiles.set("usr-staff-001", { role: "staff", facilityId: "fac-hyd-01" });
+    this.userProfiles.set("usr-doctor-001", { role: "doctor", facilityId: "fac-hyd-01" });
+    this.userProfiles.set("usr-admin-001", { role: "admin", facilityId: "fac-hyd-01" });
+
     this.kioskInstances.set("00000000-0000-0000-0000-000000000001", {
       id: "00000000-0000-0000-0000-000000000001",
       facility_id: "fac-hyd-01",
@@ -884,6 +937,7 @@ class MockDatabaseAdapter {
     action: string;
     payloadHash?: string;
     payload?: any;
+    actorOrToken?: any;
   }): Promise<{
     idempotencyKey: string;
     status: "completed" | "in_progress" | "failed";
@@ -946,6 +1000,9 @@ class MockDatabaseAdapter {
       const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed"];
       const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
 
+      const callerRole = this.resolveCallerRole(params);
+      const callerFacility = this.resolveCallerFacility(params);
+
       if (params.action === "create") {
         const requestedStatus = params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
         if (forbiddenStatuses.includes(requestedStatus) || !allowedStatuses.includes(requestedStatus)) {
@@ -958,9 +1015,31 @@ class MockDatabaseAdapter {
         }
 
         const requestedPatientId = params.payload?.patientId || params.payload?.patient_id;
-        const validated = validateCanonicalStoragePath(storagePath, requestedPatientId);
+        const requestedCaseId = params.payload?.caseId || params.payload?.case_id || null;
+        const validated = validateCanonicalStoragePath(storagePath, requestedPatientId, requestedCaseId);
 
-        if (validated.caseId) {
+        const patient = this.patients.get(validated.patientId);
+        if (!patient) {
+          throw new Error("PATIENT_NOT_FOUND: Target patient does not exist");
+        }
+
+        if (callerRole !== "admin") {
+          if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
+            throw new Error("FACILITY_ACCESS_DENIED: Cannot upload document for patient outside assigned facility");
+          }
+        }
+
+        if (requestedCaseId) {
+          const caseRecord = this.cases.get(requestedCaseId);
+          if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
+            throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`);
+          }
+          if (callerRole !== "admin") {
+            if (!callerFacility || !caseRecord.facility_id || callerFacility !== caseRecord.facility_id) {
+              throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility");
+            }
+          }
+        } else if (validated.caseId) {
           const caseRecord = this.cases.get(validated.caseId);
           if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
             throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${validated.caseId}' does not exist for patient '${validated.patientId}'`);
@@ -992,9 +1071,24 @@ class MockDatabaseAdapter {
         mutationSummary = { success: true, documentId: docId };
       } else if (params.action === "update") {
         const docId = params.payload?.id || params.payload?.documentId || params.payload?.document_id;
+        if (!docId) {
+          throw new Error("INVALID_PAYLOAD: Document update requires documentId.");
+        }
         const existingDoc = this.documents.get(docId);
         if (!existingDoc) {
           throw new Error("DOCUMENT_NOT_FOUND: Target document does not exist");
+        }
+
+        // Verify parent patient and cross-facility authorization
+        const patient = this.patients.get(existingDoc.patient_id);
+        if (!patient) {
+          throw new Error("PATIENT_NOT_FOUND: Document parent patient does not exist");
+        }
+
+        if (callerRole !== "admin") {
+          if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
+            throw new Error("FACILITY_ACCESS_DENIED: Cannot update document outside assigned facility");
+          }
         }
 
         const immutableFields = [

@@ -955,5 +955,176 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
         })
       ).rejects.toThrow(/STORAGE_PATH_CASE_MISMATCH/);
     });
+
+    it("strictly rejects document UPDATE attempted across facility boundaries (FACILITY_ACCESS_DENIED)", async () => {
+      // 1. Create a legitimate document in fac-hyd-01 for Hyderabad patient
+      const docKey = `doc-cross-fac-base-${crypto.randomUUID()}`;
+      const canonicalPath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-xfac/cross-fac.pdf";
+      mockDb.saveStorageFile(canonicalPath, Buffer.from("pdf-data-xfac"), "application/pdf");
+
+      const created = await executeIdempotentMutation({
+        idempotencyKey: docKey,
+        userId: staffUser.id,
+        entity: "documents",
+        action: "create",
+        payloadHash: "hash-xfac-1",
+        payload: {
+          patientId: "11111111-1111-4111-8111-111111111111",
+          originalFilename: "cross-fac.pdf",
+          storage_path: canonicalPath,
+          processing_status: "uploaded",
+        },
+      });
+
+      const docId = created.summary.documentId;
+
+      // 2. Register an external doctor belonging to Delhi facility
+      const delhiDoctorUser: AuthUser = {
+        id: "usr-doctor-delhi-001",
+        email: "doctor.delhi@aiia.gov.in",
+        fullName: "Dr. Delhi Clinician",
+        role: "doctor",
+        facilityId: "fac-del-01",
+      };
+      mockDb.setUserProfile(delhiDoctorUser.id, { role: "doctor", facilityId: "fac-del-01" });
+
+      // 3. Delhi doctor attempts to update Hyderabad document
+      const updateKey = `doc-cross-update-${crypto.randomUUID()}`;
+      const updatePayload = {
+        id: docId,
+        processing_status: "processing",
+        extracted_data: { notes: "tampered by cross-facility user" },
+      };
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: updateKey,
+          userId: delhiDoctorUser.id,
+          entity: "documents",
+          action: "update",
+          payloadHash: "hash-xfac-update",
+          payload: updatePayload,
+          actorOrToken: delhiDoctorUser,
+        })
+      ).rejects.toThrow(/FACILITY_ACCESS_DENIED/);
+
+      // Verify document was NOT modified
+      const docAfter = await mockDb.getDocumentById(docId);
+      expect(docAfter?.processing_status).toBe("uploaded");
+      expect(docAfter?.extracted_data).toBeNull();
+    });
+
+    it("strictly rejects document CREATE when path has uncategorized but payload specifies caseId", async () => {
+      const validCase = await mockDb.createCase({
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        created_by: doctorUser.id,
+        case_type: "general",
+        patient_language: "en",
+        chief_complaint: "Complaint",
+        status: "draft",
+      });
+
+      const docKey = `doc-case-uncat-mismatch-${crypto.randomUUID()}`;
+      const storagePath = "patients/11111111-1111-4111-8111-111111111111/cases/uncategorized/doc-1/file.pdf";
+      mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
+
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        caseId: validCase.id, // Specifies case
+        originalFilename: "file.pdf",
+        storage_path: storagePath, // Path is uncategorized
+      };
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: doctorUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: "hash-case-uncat",
+          payload,
+          actorOrToken: doctorUser,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_CASE_MISMATCH/);
+    });
+
+    it("strictly rejects document CREATE when path has caseA but payload specifies caseB", async () => {
+      const caseA = await mockDb.createCase({
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        created_by: doctorUser.id,
+        case_type: "general",
+        patient_language: "en",
+        chief_complaint: "Complaint A",
+        status: "draft",
+      });
+      const caseB = await mockDb.createCase({
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        created_by: doctorUser.id,
+        case_type: "general",
+        patient_language: "en",
+        chief_complaint: "Complaint B",
+        status: "draft",
+      });
+
+      const docKey = `doc-caseA-caseB-${crypto.randomUUID()}`;
+      const storagePath = `patients/11111111-1111-4111-8111-111111111111/cases/${caseA.id}/doc-1/file.pdf`;
+      mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
+
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        caseId: caseB.id, // Specifies caseB
+        originalFilename: "file.pdf",
+        storage_path: storagePath, // Path specifies caseA
+      };
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: doctorUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: "hash-caseA-caseB",
+          payload,
+          actorOrToken: doctorUser,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_CASE_MISMATCH/);
+    });
+
+    it("strictly rejects document CREATE when payload specifies case from another facility", async () => {
+      // Create case in Delhi facility
+      const delhiCase = await mockDb.createCase({
+        patient_id: "11111111-1111-4111-8111-111111111111",
+        created_by: "usr-doctor-delhi-001",
+        case_type: "general",
+        patient_language: "en",
+        chief_complaint: "Delhi Case Complaint",
+        status: "draft",
+      });
+      // Override facility on case
+      (delhiCase as any).facility_id = "fac-del-01";
+
+      const docKey = `doc-case-fac-mismatch-${crypto.randomUUID()}`;
+      const storagePath = `patients/11111111-1111-4111-8111-111111111111/cases/${delhiCase.id}/doc-1/file.pdf`;
+      mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
+
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        caseId: delhiCase.id,
+        originalFilename: "file.pdf",
+        storage_path: storagePath,
+      };
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: doctorUser.id, // Hyderabad doctor
+          entity: "documents",
+          action: "create",
+          payloadHash: "hash-case-delhi-fac",
+          payload,
+          actorOrToken: doctorUser,
+        })
+      ).rejects.toThrow(/FACILITY_ACCESS_DENIED/);
+    });
   });
 });

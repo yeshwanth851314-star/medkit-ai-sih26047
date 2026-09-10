@@ -84,9 +84,10 @@ export async function POST(request: Request) {
             continue;
           }
 
+          const requestedCaseId = item.payload?.caseId || item.payload?.case_id || null;
           let validated;
           try {
-            validated = validateCanonicalStoragePath(storagePath, patientId);
+            validated = validateCanonicalStoragePath(storagePath, patientId, requestedCaseId);
           } catch (pathErr: any) {
             failed.push({
               id: item.id,
@@ -95,7 +96,23 @@ export async function POST(request: Request) {
             continue;
           }
 
-          if (validated.caseId) {
+          if (requestedCaseId) {
+            const caseRecord = await getCaseById(requestedCaseId, auth.user);
+            if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
+              failed.push({
+                id: item.id,
+                error: `STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`,
+              });
+              continue;
+            }
+            if (auth.user.role !== "admin" && caseRecord.facility_id && auth.user.facilityId !== caseRecord.facility_id) {
+              failed.push({
+                id: item.id,
+                error: "FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.",
+              });
+              continue;
+            }
+          } else if (validated.caseId) {
             const caseRecord = await getCaseById(validated.caseId, auth.user);
             if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
               failed.push({
@@ -322,7 +339,17 @@ export async function POST(request: Request) {
             if (!patientCheck.authorized) {
               throw new Error("FACILITY_ACCESS_DENIED: Cannot mutate document for patient outside assigned facility.");
             }
-            const validated = validateCanonicalStoragePath(storagePath, patientId);
+            const requestedCaseId = item.payload?.caseId || item.payload?.case_id || null;
+            const validated = validateCanonicalStoragePath(storagePath, patientId, requestedCaseId);
+            if (requestedCaseId) {
+              const caseRecord = await getCaseById(requestedCaseId, auth.user);
+              if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
+                throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`);
+              }
+              if (auth.user.role !== "admin" && caseRecord.facility_id && auth.user.facilityId !== caseRecord.facility_id) {
+                throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.");
+              }
+            }
             const doc = await createDocument({
               ...item.payload,
               storage_path: validated.normalizedPath,

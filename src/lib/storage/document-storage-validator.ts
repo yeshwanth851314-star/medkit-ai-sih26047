@@ -16,7 +16,8 @@ export interface ValidatedStoragePath {
 
 export function validateCanonicalStoragePath(
   rawPath: string,
-  expectedPatientId?: string
+  expectedPatientId?: string,
+  expectedCaseId?: string | null
 ): ValidatedStoragePath {
   if (!rawPath || typeof rawPath !== "string") {
     throw new Error("STORAGE_PATH_REQUIRED: Storage path is missing or invalid");
@@ -75,9 +76,29 @@ export function validateCanonicalStoragePath(
   }
 
   let caseId: string | null = null;
+  let caseSegment: string | null = null;
   const caseMatch = cleanRelative.match(/\/cases\/([a-zA-Z0-9_-]+)/);
-  if (caseMatch && caseMatch[1] !== "uncategorized") {
-    caseId = caseMatch[1];
+  if (caseMatch) {
+    caseSegment = caseMatch[1];
+    if (caseMatch[1] !== "uncategorized") {
+      caseId = caseMatch[1];
+    }
+  }
+
+  if (expectedCaseId !== undefined) {
+    if (expectedCaseId) {
+      if (!caseSegment || caseSegment !== expectedCaseId) {
+        throw new Error(
+          `STORAGE_PATH_CASE_MISMATCH: Storage path case '${caseSegment || "missing"}' does not match expected case '${expectedCaseId}'`
+        );
+      }
+    } else {
+      if (caseSegment && caseSegment !== "uncategorized") {
+        throw new Error(
+          `STORAGE_PATH_CASE_MISMATCH: Unassociated document must use 'uncategorized' case path segment, found '${caseSegment}'`
+        );
+      }
+    }
   }
 
   const segments = cleanRelative.split("/");
