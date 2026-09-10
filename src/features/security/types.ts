@@ -22,7 +22,9 @@ export type AuditAction =
   | "VERIFY_AYUSH"
   | "VERIFY_MULTILINGUAL"
   | "EXPORT_FHIR"
-  | "SYNC_OFFLINE_OPERATION";
+  | "SYNC_OFFLINE_OPERATION"
+  | "KIOSK_PROVISIONED"
+  | "KIOSK_SESSION_REVOKED";
 
 
 export interface ClinicalAuditLog {
@@ -30,7 +32,7 @@ export interface ClinicalAuditLog {
   actor_id: string;
   actor_role?: string;
   action: AuditAction;
-  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts";
+  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions";
   resource_id: string;
   metadata?: Record<string, any> | null;
   created_at: string;
@@ -41,7 +43,17 @@ export const clinicalAuditSchema = z.object({
   actor_id: z.string(),
   actor_role: z.string().optional(),
   action: z.string(),
-  resource_type: z.enum(["patients", "cases", "documents", "auth", "fhir", "consents", "transcripts"]),
+  resource_type: z.enum([
+    "patients",
+    "cases",
+    "documents",
+    "auth",
+    "fhir",
+    "consents",
+    "transcripts",
+    "kiosk_instances",
+    "intake_sessions",
+  ]),
   resource_id: z.string(),
   metadata: z.record(z.any()).optional().nullable(),
   created_at: z.string(),

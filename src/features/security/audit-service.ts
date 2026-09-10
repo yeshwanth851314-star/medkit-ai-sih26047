@@ -26,7 +26,7 @@ export async function logAuditEvent(params: {
   actorId: string;
   actorRole?: string;
   action: AuditAction;
-  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts";
+  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions";
   resourceId: string;
   metadata?: Record<string, any>;
   actorOrToken?: import("@/features/auth/types").AuthUser | string | null;
@@ -46,7 +46,7 @@ export async function logAuditEvent(params: {
   const isCritical = CRITICAL_AUDIT_ACTIONS.has(validated.action as AuditAction);
 
   if (!env.isDemoMode) {
-    const supabase = getAuthorizedSupabaseClient(params.actorOrToken) || getServiceSupabaseClient();
+    const supabase = getServiceSupabaseClient() || getAuthorizedSupabaseClient(params.actorOrToken);
     if (!supabase) {
       if (isCritical) {
         throw new Error(
