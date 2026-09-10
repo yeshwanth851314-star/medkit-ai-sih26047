@@ -87,7 +87,7 @@ export function KioskIntro({ onStart, onSkip }: KioskIntroProps) {
       ];
 
   return (
-    <div className="rounded-3xl border border-surface-200 bg-white p-6 sm:p-10 shadow-sm space-y-8 animate-in fade-in duration-200">
+    <div className="rounded-3xl border border-surface-200 bg-white p-6 sm:p-10 shadow-sm space-y-8 transition-opacity duration-200">
       {/* Top Banner with Language Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-surface-200 pb-5">
         <div className="flex items-center gap-3">

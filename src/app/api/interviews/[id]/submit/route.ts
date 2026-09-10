@@ -16,7 +16,11 @@ export async function POST(
   }
 
   try {
-    const clinicalCase = await compileInterviewToCase(id);
+    const body = await request.json().catch(() => ({}));
+    const kioskId = body.kioskId || request.headers.get("x-kiosk-id") || undefined;
+    const kioskSecret = body.kioskSecret || request.headers.get("x-kiosk-secret") || undefined;
+
+    const clinicalCase = await compileInterviewToCase(id, { kioskId, kioskSecret });
 
     return NextResponse.json({
       success: true,

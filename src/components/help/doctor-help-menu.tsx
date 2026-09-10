@@ -75,7 +75,7 @@ export function DoctorHelpMenu() {
         <div
           role="menu"
           aria-orientation="vertical"
-          className="absolute right-0 z-50 mt-2 w-72 sm:w-80 origin-top-right rounded-2xl border border-surface-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-none animate-in fade-in duration-150"
+          className="absolute right-0 z-50 mt-2 w-72 sm:w-80 origin-top-right rounded-2xl border border-surface-200 bg-white p-3 shadow-xl ring-1 ring-black/5 focus:outline-none transition-opacity duration-150"
         >
           {/* Menu Header */}
           <div className="flex items-center justify-between border-b border-surface-100 pb-2.5 px-2">

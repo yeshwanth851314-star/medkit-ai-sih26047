@@ -7,7 +7,7 @@ import { Stethoscope, Lock, Mail, AlertCircle, CheckCircle2, Shield, Activity } 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/doctor/dashboard";
+  const redirectTo = searchParams.get("redirectTo") || "/doctor/patients";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,8 +34,7 @@ export default function LoginPage() {
       }
 
       // Successful login -> navigate to intended destination
-      router.push(redirectTo);
-      router.refresh();
+      window.location.href = redirectTo;
     } catch {
       setError("Network error communicating with authentication service.");
       setIsLoading(false);

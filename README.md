@@ -101,7 +101,29 @@ npm run build
 
 ---
 
-## 5. Live SIH Demonstration Guide
+## 5. Source Packaging & Audit Workflow
+
+A mandatory packaging workflow validates and produces three disjoint, non-overlapping ZIP archives and a cryptographic manifest at `D:\SIH-zip-files-gpt`:
+
+```bash
+# Execute deterministic packaging and extract-validation audit
+npm run package:audit
+
+# Background continuous package watcher
+npm run package:watch
+npm run package:watch:status
+npm run package:watch:stop
+```
+
+### Generated Distribution Artifacts:
+1. `medkit-source-assets.zip` — Application source code and assets (`src/`, `public/`)
+2. `medkit-tests.zip` — Unit, integration, and end-to-end test suites and synthetic fixtures (`tests/`)
+3. `medkit-supabase-config.zip` — Supabase migrations, project configuration, scripts, documentation, and `package-lock.json`
+4. `audit-package-manifest.json` — Complete file inventory, per-file SHA-256 hashes, archive mappings, and validation metadata.
+
+---
+
+## 6. Live SIH Demonstration Guide
 
 For the complete 3-minute jury presentation and defense script, refer to:  
 👉 **[`docs/DEMO_SCRIPT.md`](./docs/DEMO_SCRIPT.md)**

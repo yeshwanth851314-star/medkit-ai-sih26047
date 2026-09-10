@@ -16,17 +16,9 @@ import {
   Plus,
   Trash2,
   WifiOff,
+  Leaf,
 } from "lucide-react";
 import { offlineQueue } from "@/features/offline/offline-queue";
-
-const SECTIONS = [
-  { id: "complaint", label: "1. Chief Complaint" },
-  { id: "hpi", label: "2. HPI" },
-  { id: "history", label: "3. Past & Personal" },
-  { id: "meds", label: "4. Meds & Allergies" },
-  { id: "exam", label: "5. Examination" },
-  { id: "plan", label: "6. Assessment & Plan" },
-];
 
 export default function NewCasePage() {
   const router = useRouter();
@@ -37,6 +29,18 @@ export default function NewCasePage() {
   const [patientId, setPatientId] = useState(patientIdParam);
   const [caseType, setCaseType] = useState<"general" | "ayush">("general");
   const [patientLanguage, setPatientLanguage] = useState("en");
+
+  // Dynamic sections based on case type
+  const sections = [
+    { id: "complaint", label: "1. Chief Complaint" },
+    { id: "hpi", label: "2. HPI" },
+    { id: "history", label: "3. Past & Personal" },
+    { id: "meds", label: "4. Meds & Allergies" },
+    { id: "exam", label: "5. Examination" },
+    ...(caseType === "ayush" ? [{ id: "ayush", label: "6. AYUSH Pariksha" }] : []),
+    { id: "plan", label: caseType === "ayush" ? "7. Assessment & Plan" : "6. Assessment & Plan" },
+  ];
+  const currentSectionId = sections[activeSection]?.id || "complaint";
 
   // Form Fields
   const [chiefComplaint, setChiefComplaint] = useState("");
@@ -78,8 +82,23 @@ export default function NewCasePage() {
   const [assessmentSummary, setAssessmentSummary] = useState("");
   const [treatmentPlan, setTreatmentPlan] = useState("");
 
+  // AYUSH Dashavidha Pariksha State
+  const [prakriti, setPrakriti] = useState("Vata-Pitta");
+  const [vikriti, setVikriti] = useState("Vata Prakopa");
+  const [sara, setSara] = useState("Madhyama");
+  const [samhanana, setSamhanana] = useState("Madhyama");
+  const [pramana, setPramana] = useState("Madhyama");
+  const [satmya, setSatmya] = useState("Madhyama");
+  const [sattva, setSattva] = useState("Pravara");
+  const [aharaShakti, setAharaShakti] = useState("Madhyama (Samagni)");
+  const [vyayamaShakti, setVyayamaShakti] = useState("Madhyama");
+  const [vaya, setVaya] = useState("Madhyama (Adult)");
+  const [dietaryHabits, setDietaryHabits] = useState("");
+  const [dailyRoutine, setDailyRoutine] = useState("");
+
   // Persistence State
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
+  const [localDraftKey] = useState(() => crypto.randomUUID());
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -108,35 +127,50 @@ export default function NewCasePage() {
         aggravating_factors: aggravatingFactors || null,
         relieving_factors: relievingFactors || null,
       },
-      pastHistory: { chronicConditions: chronicConditions || null },
-      familyHistory: { notes: familyHistory || null },
-      personalHistory: { diet, sleep },
-      medicationHistory: medications.map((m) => ({ ...m, source: "patient" })),
-      allergyHistory: allergies.map((a) => ({ ...a, source: "patient", severity: "Moderate" })),
-      examination: {
-        blood_pressure: bloodPressure || null,
-        pulse: pulse || null,
-        temperature: temperature || null,
-        spo2: spo2 || null,
-        notes: examNotes || null,
+      pastHistory: {
+        chronic_conditions: chronicConditions ? chronicConditions.split(",").map((s) => s.trim()) : [],
+        family_history: familyHistory || null,
+        diet: diet || null,
+        sleep: sleep || null,
+      },
+      medications: medications.map((m) => ({ name: m.name, dosage: m.dose, status: "active" })),
+      allergies: allergies.map((a) => ({ substance: a.substance, reaction: a.reaction, severity: "moderate" })),
+      physicalExamination: {
+        vitals: {
+          blood_pressure: bloodPressure || null,
+          pulse: pulse ? parseInt(pulse, 10) : null,
+          temperature: temperature ? parseFloat(temperature) : null,
+          spo2: spo2 ? parseInt(spo2, 10) : null,
+        },
+        general_notes: examNotes || null,
       },
       assessmentPlan: {
         summary: assessmentSummary || null,
         plan: treatmentPlan || null,
       },
+      ayushAssessment: caseType === "ayush" ? {
+        prakriti: prakriti || null,
+        vikriti: vikriti || null,
+        sara: sara || null,
+        samhanana: samhanana || null,
+        pramana: pramana || null,
+        satmya: satmya || null,
+        sattva: sattva || null,
+        ahara_shakti: aharaShakti || null,
+        vyayama_shakti: vyayamaShakti || null,
+        vaya: vaya || null,
+        ahara_vihara: (dietaryHabits || dailyRoutine) ? {
+          dietary_habits: dietaryHabits || null,
+          daily_routine: dailyRoutine || null,
+        } : null,
+        source: "clinician" as const,
+      } : null,
       status,
-      provenance: {
-        chief_complaint: "patient",
-        hpi: "patient",
-        medications: "patient",
-        examination: "clinician",
-        assessment_plan: "clinician",
-      },
     };
   };
 
   const handleSaveDraft = async () => {
-    if (!chiefComplaint || chiefComplaint.trim().length < 3) {
+    if (!chiefComplaint.trim()) {
       setErrorMsg("Please enter at least a brief chief complaint to save a draft.");
       return;
     }
@@ -146,7 +180,16 @@ export default function NewCasePage() {
 
     // If browser is offline, enqueue directly
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      offlineQueue.enqueue("cases", "create", buildPayload("draft"));
+      if (savedCaseId) {
+        offlineQueue.enqueue("cases", "update", { id: savedCaseId, ...buildPayload("draft") });
+      } else {
+        offlineQueue.enqueue(
+          "cases",
+          "create",
+          buildPayload("draft"),
+          `draft-${patientId}-${localDraftKey}`
+        );
+      }
       setLastSavedTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " (Offline Queued)");
       setIsSaving(false);
       return;
@@ -177,7 +220,16 @@ export default function NewCasePage() {
     } catch (err: any) {
       // Network error fallback to offline queue
       if (typeof navigator !== "undefined" && !navigator.onLine) {
-        offlineQueue.enqueue("cases", "create", buildPayload("draft"));
+        if (savedCaseId) {
+          offlineQueue.enqueue("cases", "update", { id: savedCaseId, ...buildPayload("draft") });
+        } else {
+          offlineQueue.enqueue(
+            "cases",
+            "create",
+            buildPayload("draft"),
+            `draft-${patientId}-${localDraftKey}`
+          );
+        }
         setLastSavedTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " (Offline Queued)");
       } else {
         setErrorMsg(err.message || "Failed to save draft");
@@ -208,11 +260,15 @@ export default function NewCasePage() {
         if (!createRes.ok) throw new Error(createData.error || "Failed to create case");
         caseId = createData.case.id;
       } else {
-        await fetch(`/api/cases/${caseId}`, {
+        const updateRes = await fetch(`/api/cases/${caseId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(buildPayload("draft")),
         });
+        if (!updateRes.ok) {
+          const updateData = await updateRes.json().catch(() => ({}));
+          throw new Error(updateData.error || "Failed to persist draft prior to finalization");
+        }
       }
 
       // Finalize action
@@ -304,13 +360,15 @@ export default function NewCasePage() {
       {/* Progress & Section Navigation */}
       <div className="rounded-xl border border-surface-200 bg-white p-2 shadow-sm">
         <nav className="flex flex-wrap gap-1">
-          {SECTIONS.map((sec, idx) => (
+          {sections.map((sec, idx) => (
             <button
               key={sec.id}
               onClick={() => setActiveSection(idx)}
               className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${
                 activeSection === idx
-                  ? "bg-clinical-600 text-white shadow-sm"
+                  ? sec.id === "ayush"
+                    ? "bg-ayush-700 text-white shadow-sm"
+                    : "bg-clinical-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-surface-100"
               }`}
             >
@@ -322,8 +380,8 @@ export default function NewCasePage() {
 
       {/* Section Content */}
       <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm sm:p-8">
-        {/* SECTION 0: Chief Complaint */}
-        {activeSection === 0 && (
+        {/* SECTION: Chief Complaint */}
+        {currentSectionId === "complaint" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">Chief Complaint &amp; Intake Mode</h2>
@@ -407,8 +465,8 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* SECTION 1: HPI */}
-        {activeSection === 1 && (
+        {/* SECTION: HPI */}
+        {currentSectionId === "hpi" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">History of Present Illness (HPI)</h2>
@@ -487,8 +545,8 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* SECTION 2: Past & Personal History */}
-        {activeSection === 2 && (
+        {/* SECTION: Past & Personal History */}
+        {currentSectionId === "history" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">Past, Family &amp; Personal History</h2>
@@ -548,8 +606,8 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* SECTION 3: Meds & Allergies */}
-        {activeSection === 3 && (
+        {/* SECTION: Meds & Allergies */}
+        {currentSectionId === "meds" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">Current Medications &amp; Known Allergies</h2>
@@ -656,8 +714,8 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* SECTION 4: Physical Examination */}
-        {activeSection === 4 && (
+        {/* SECTION: Physical Examination */}
+        {currentSectionId === "exam" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">Vitals &amp; Physical Examination</h2>
@@ -720,8 +778,188 @@ export default function NewCasePage() {
           </div>
         )}
 
-        {/* SECTION 5: Assessment & Plan */}
-        {activeSection === 5 && (
+        {/* SECTION: AYUSH Dashavidha Pariksha */}
+        {currentSectionId === "ayush" && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-ayush-200">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ayush-100 text-ayush-700">
+                <Leaf className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">AYUSH Dashavidha Pariksha</h2>
+                <p className="text-xs text-slate-500">Ten-fold Ayurvedic diagnostic assessment per Ministry of Ayush / AIIA standards</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Prakriti (Constitutional Type)</label>
+                <select
+                  value={prakriti}
+                  onChange={(e) => setPrakriti(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Vata-Pitta">Vata-Pitta</option>
+                  <option value="Pitta-Kapha">Pitta-Kapha</option>
+                  <option value="Kapha-Vata">Kapha-Vata</option>
+                  <option value="Vataja">Vataja</option>
+                  <option value="Pittaja">Pittaja</option>
+                  <option value="Kaphaja">Kaphaja</option>
+                  <option value="Tridoshaja / Sama">Tridoshaja / Sama</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Vikriti (Dosha Imbalance)</label>
+                <input
+                  type="text"
+                  value={vikriti}
+                  onChange={(e) => setVikriti(e.target.value)}
+                  placeholder="e.g. Vata Prakopa with Pittanubandha"
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Sara (Dhatu Excellence)</label>
+                <select
+                  value={sara}
+                  onChange={(e) => setSara(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Pravara (Superior / Sarva Sara)">Pravara (Superior / Sarva Sara)</option>
+                  <option value="Madhyama (Moderate)">Madhyama (Moderate)</option>
+                  <option value="Avara (Inferior / Asara)">Avara (Inferior / Asara)</option>
+                  <option value="Rakta Sara">Rakta Sara</option>
+                  <option value="Asthi Sara">Asthi Sara</option>
+                  <option value="Majja Sara">Majja Sara</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Samhanana (Compactness)</label>
+                <select
+                  value={samhanana}
+                  onChange={(e) => setSamhanana(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Su-samhanana (Well-compacted)">Su-samhanana (Well-compacted)</option>
+                  <option value="Madhyama (Moderate)">Madhyama (Moderate)</option>
+                  <option value="Heena / Avara (Poorly built)">Heena / Avara (Poorly built)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Pramana (Anthropometric Proportion)</label>
+                <select
+                  value={pramana}
+                  onChange={(e) => setPramana(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Sama-pramana (Proportionate)">Sama-pramana (Proportionate)</option>
+                  <option value="Ati-dirgha (Excessive height)">Ati-dirgha (Excessive height)</option>
+                  <option value="Ati-hraswa (Short stature)">Ati-hraswa (Short stature)</option>
+                  <option value="Ati-sthula (Obese)">Ati-sthula (Obese)</option>
+                  <option value="Ati-krisha (Emaciated)">Ati-krisha (Emaciated)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Satmya (Adaptability &amp; Habituation)</label>
+                <select
+                  value={satmya}
+                  onChange={(e) => setSatmya(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Pravara (Sarva-rasa satmya)">Pravara (Sarva-rasa satmya)</option>
+                  <option value="Madhyama (Moderate)">Madhyama (Moderate)</option>
+                  <option value="Avara (Eka-rasa satmya)">Avara (Eka-rasa satmya)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Sattva (Mental Strength &amp; Resilience)</label>
+                <select
+                  value={sattva}
+                  onChange={(e) => setSattva(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Pravara (High / Strong mental control)">Pravara (High / Strong mental control)</option>
+                  <option value="Madhyama (Moderate)">Madhyama (Moderate)</option>
+                  <option value="Avara (Low / Fearful / Fragile)">Avara (Low / Fearful / Fragile)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Ahara Shakti (Digestive Capacity / Agni)</label>
+                <select
+                  value={aharaShakti}
+                  onChange={(e) => setAharaShakti(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Pravara (Samagni - balanced)">Pravara (Samagni - balanced)</option>
+                  <option value="Madhyama (Moderate digestion)">Madhyama (Moderate digestion)</option>
+                  <option value="Vishama (Vishamagni - irregular)">Vishama (Vishamagni - irregular)</option>
+                  <option value="Tikshna (Tikshnagni - hyperactive)">Tikshna (Tikshnagni - hyperactive)</option>
+                  <option value="Manda (Mandagni - hypoactive)">Manda (Mandagni - hypoactive)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Vyayama Shakti (Physical Work Capacity)</label>
+                <select
+                  value={vyayamaShakti}
+                  onChange={(e) => setVyayamaShakti(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Pravara (High physical capacity)">Pravara (High physical capacity)</option>
+                  <option value="Madhyama (Moderate capacity)">Madhyama (Moderate capacity)</option>
+                  <option value="Avara (Low physical capacity)">Avara (Low physical capacity)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Vaya (Chronological / Biological Age)</label>
+                <select
+                  value={vaya}
+                  onChange={(e) => setVaya(e.target.value)}
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                >
+                  <option value="Bala (Childhood / Growth stage)">Bala (Childhood / Growth stage)</option>
+                  <option value="Madhyama (Adult / Youth to Mid-age)">Madhyama (Adult / Youth to Mid-age)</option>
+                  <option value="Vriddha (Elderly / Geriatric)">Vriddha (Elderly / Geriatric)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-surface-200">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Ahara (Dietary Habits &amp; Preferences)</label>
+                <textarea
+                  rows={3}
+                  value={dietaryHabits}
+                  onChange={(e) => setDietaryHabits(e.target.value)}
+                  placeholder="e.g. Prefers warm, oily food. Irregular meal timings. Avoids spicy and cold foods."
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Vihara (Daily Regimen &amp; Lifestyle)</label>
+                <textarea
+                  rows={3}
+                  value={dailyRoutine}
+                  onChange={(e) => setDailyRoutine(e.target.value)}
+                  placeholder="e.g. Sedentary desk job. Late night sleep around 1 AM. Regular morning walking."
+                  className="block w-full rounded-lg border border-surface-200 p-2.5 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION: Assessment & Plan */}
+        {currentSectionId === "plan" && (
           <div className="space-y-6">
             <div>
               <h2 className="text-base font-bold text-slate-900">Clinician Assessment &amp; Treatment Plan</h2>
@@ -763,13 +1001,13 @@ export default function NewCasePage() {
             <ArrowLeft className="h-3.5 w-3.5" /> Previous Section
           </button>
 
-          {activeSection < SECTIONS.length - 1 ? (
+          {activeSection < sections.length - 1 ? (
             <button
               type="button"
-              onClick={() => setActiveSection(Math.min(SECTIONS.length - 1, activeSection + 1))}
+              onClick={() => setActiveSection(Math.min(sections.length - 1, activeSection + 1))}
               className="inline-flex items-center gap-1 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white hover:bg-clinical-700"
             >
-              Next: {SECTIONS[activeSection + 1].label} <ArrowRight className="h-3.5 w-3.5" />
+              Next: {sections[activeSection + 1]?.label} <ArrowRight className="h-3.5 w-3.5" />
             </button>
           ) : (
             <button

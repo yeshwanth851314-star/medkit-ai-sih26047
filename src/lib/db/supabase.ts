@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { env } from "@/config/env";
 import { mockDb } from "@/lib/db/mock-adapter";
-import { Patient, ClinicalCase, MedicalDocument } from "@/types/database";
+import { Patient, ClinicalCase, MedicalDocument, IntakeSessionRecord } from "@/types/database";
+import type { AuthUser } from "@/features/auth/types";
 
 /**
  * Create an ephemeral, request-bound Supabase client.
@@ -51,11 +52,12 @@ export function getServiceSupabaseClient(
   const serviceKey =
     configOverride?.serviceKey ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    env.supabaseServiceKey ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    env.supabaseAnonKey;
+    env.supabaseServiceKey;
 
   if (!url || !serviceKey) {
+    if (!env.isDemoMode) {
+      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is required for service-role database operations in production.");
+    }
     return null;
   }
 
@@ -83,13 +85,36 @@ export function getSupabaseClient(
   return createRequestSupabaseClient(accessToken, configOverride);
 }
 
+/**
+ * Safely extracts access token from either a string or an AuthUser object
+ */
+export function extractAccessToken(actorOrToken?: AuthUser | string | null): string | undefined {
+  if (!actorOrToken) return undefined;
+  if (typeof actorOrToken === "string") return actorOrToken;
+  return actorOrToken.supabaseToken;
+}
+
+/**
+ * Returns a Supabase client scoped to the authorized user's session token
+ */
+export function getAuthorizedSupabaseClient(
+  actorOrToken?: AuthUser | string | null,
+  configOverride?: { supabaseUrl?: string; supabaseAnonKey?: string }
+): SupabaseClient | null {
+  const token = extractAccessToken(actorOrToken);
+  return getSupabaseClient(token, configOverride);
+}
+
 // Unified Data Access Interface for Patients
-export async function getPatients(searchQuery?: string): Promise<Patient[]> {
+export async function getPatients(
+  searchQuery?: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<Patient[]> {
   if (env.isDemoMode) {
     return mockDb.getPatients(searchQuery);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -108,12 +133,15 @@ export async function getPatients(searchQuery?: string): Promise<Patient[]> {
   return (data || []) as Patient[];
 }
 
-export async function getPatientById(id: string): Promise<Patient | null> {
+export async function getPatientById(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<Patient | null> {
   if (env.isDemoMode) {
     return mockDb.getPatientById(id);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -127,12 +155,15 @@ export async function getPatientById(id: string): Promise<Patient | null> {
   return (data || null) as Patient | null;
 }
 
-export async function createPatient(payload: Omit<Patient, "id" | "created_at" | "updated_at">): Promise<Patient> {
+export async function createPatient(
+  payload: Omit<Patient, "id" | "created_at" | "updated_at">,
+  actorOrToken?: AuthUser | string | null
+): Promise<Patient> {
   if (env.isDemoMode) {
     return mockDb.createPatient(payload);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -147,12 +178,15 @@ export async function createPatient(payload: Omit<Patient, "id" | "created_at" |
 }
 
 // Unified Data Access Interface for Cases
-export async function getCasesByPatientId(patientId: string): Promise<ClinicalCase[]> {
+export async function getCasesByPatientId(
+  patientId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase[]> {
   if (env.isDemoMode) {
     return mockDb.getCasesByPatientId(patientId);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -171,12 +205,15 @@ export async function getCasesByPatientId(patientId: string): Promise<ClinicalCa
   return (data || []) as ClinicalCase[];
 }
 
-export async function getCaseById(id: string): Promise<ClinicalCase | null> {
+export async function getCaseById(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase | null> {
   if (env.isDemoMode) {
     return mockDb.getCaseById(id);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -187,15 +224,38 @@ export async function getCaseById(id: string): Promise<ClinicalCase | null> {
     throw new Error(`Database error fetching case ${id}: ${error.message}`);
   }
 
-  return (data || null) as ClinicalCase | null;
+  if (!data) return null;
+
+  // Dynamically attach amendments from dedicated case_amendments table
+  try {
+    const amendments = await getCaseAmendments(id, actorOrToken);
+    if (amendments && amendments.length > 0) {
+      data.amendments = amendments.map((a: any) => ({
+        id: a.id,
+        version: a.version,
+        actor_id: a.author_id || a.actor_id,
+        actor_name: a.author_name || a.actor_name,
+        timestamp: a.created_at || a.timestamp,
+        reason: a.reason,
+        notes: a.notes,
+      }));
+    }
+  } catch (err) {
+    console.warn("Could not load case amendments for case", id, err);
+  }
+
+  return data as ClinicalCase;
 }
 
-export async function createCase(payload: Omit<ClinicalCase, "id" | "created_at" | "updated_at">): Promise<ClinicalCase> {
+export async function createCase(
+  payload: Omit<ClinicalCase, "id" | "created_at" | "updated_at">,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase> {
   if (env.isDemoMode) {
     return mockDb.createCase(payload);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -209,12 +269,16 @@ export async function createCase(payload: Omit<ClinicalCase, "id" | "created_at"
   return data as ClinicalCase;
 }
 
-export async function updateCase(id: string, updates: Partial<ClinicalCase>): Promise<ClinicalCase | null> {
+export async function updateCase(
+  id: string,
+  updates: Partial<ClinicalCase>,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase | null> {
   if (env.isDemoMode) {
     return mockDb.updateCase(id, updates);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -234,13 +298,80 @@ export async function updateCase(id: string, updates: Partial<ClinicalCase>): Pr
   return data as ClinicalCase;
 }
 
+// Case Amendments (Dedicated Immutable Append-Only Storage)
+export async function getCaseAmendments(
+  caseId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<any[]> {
+  if (env.isDemoMode) {
+    return mockDb.getCaseAmendments(caseId);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("case_amendments")
+    .select("*")
+    .eq("case_id", caseId)
+    .order("version", { ascending: true });
+
+  if (error) {
+    console.error("Supabase getCaseAmendments error:", error);
+    throw new Error(`Database error fetching amendments for case ${caseId}: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function createCaseAmendment(
+  amendment: {
+    id?: string;
+    case_id: string;
+    author_id: string;
+    author_name?: string | null;
+    reason: string;
+    notes: string;
+    version: number;
+    created_at?: string;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<any> {
+  if (env.isDemoMode) {
+    return mockDb.createCaseAmendment(amendment);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("case_amendments")
+    .insert([amendment])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Supabase createCaseAmendment error:", error);
+    throw new Error(`Database error recording amendment for case ${amendment.case_id}: ${error.message}`);
+  }
+
+  return data;
+}
+
 // Unified Data Access Interface for Documents
-export async function getDocumentsByPatientId(patientId: string): Promise<MedicalDocument[]> {
+export async function getDocumentsByPatientId(
+  patientId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<MedicalDocument[]> {
   if (env.isDemoMode) {
     return mockDb.getDocumentsByPatientId(patientId);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -259,12 +390,15 @@ export async function getDocumentsByPatientId(patientId: string): Promise<Medica
   return (data || []) as MedicalDocument[];
 }
 
-export async function getDocumentById(id: string): Promise<MedicalDocument | null> {
+export async function getDocumentById(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<MedicalDocument | null> {
   if (env.isDemoMode) {
     return mockDb.getDocumentById(id);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -283,12 +417,15 @@ export async function getDocumentById(id: string): Promise<MedicalDocument | nul
   return (data || null) as MedicalDocument | null;
 }
 
-export async function createDocument(payload: Omit<MedicalDocument, "created_at">): Promise<MedicalDocument> {
+export async function createDocument(
+  payload: Omit<MedicalDocument, "created_at">,
+  actorOrToken?: AuthUser | string | null
+): Promise<MedicalDocument> {
   if (env.isDemoMode) {
     return mockDb.createDocument(payload);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -302,12 +439,16 @@ export async function createDocument(payload: Omit<MedicalDocument, "created_at"
   return data as MedicalDocument;
 }
 
-export async function updateDocument(id: string, updates: Partial<MedicalDocument>): Promise<MedicalDocument | null> {
+export async function updateDocument(
+  id: string,
+  updates: Partial<MedicalDocument>,
+  actorOrToken?: AuthUser | string | null
+): Promise<MedicalDocument | null> {
   if (env.isDemoMode) {
     return mockDb.updateDocument(id, updates);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -333,33 +474,107 @@ export async function uploadDocumentToStorage(
   docId: string,
   fileName: string,
   fileBytes: Uint8Array | ArrayBuffer,
-  mimeType: string
+  mimeType: string,
+  actorOrToken?: AuthUser | string | null
 ): Promise<{ storagePath: string }> {
   const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   const caseFolder = caseId || "uncategorized";
   const storagePath = `patients/${patientId}/cases/${caseFolder}/${docId}/${safeFileName}`;
 
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    try {
-      const { error } = await supabase.storage
-        .from("clinical-documents")
-        .upload(storagePath, fileBytes, {
-          contentType: mimeType,
-          upsert: true,
-        });
+  const fullStoragePath = `/private/documents/${storagePath}`;
 
-      if (error) {
-        console.error(`Supabase Storage upload error for ${storagePath}:`, error.message);
-        throw new Error(`Supabase Storage upload failed: ${error.message}`);
+  if (env.isDemoMode) {
+    const buf = fileBytes instanceof Uint8Array
+      ? Buffer.from(fileBytes.buffer, fileBytes.byteOffset, fileBytes.byteLength)
+      : Buffer.from(fileBytes);
+    mockDb.saveStorageFile(fullStoragePath, buf, mimeType);
+    return { storagePath: fullStoragePath };
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) {
+    throw new Error("Storage unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  try {
+    const { error } = await supabase.storage
+      .from("clinical-documents")
+      .upload(storagePath, fileBytes, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error(`Supabase Storage upload error for ${storagePath}:`, error.message);
+      throw new Error(`Supabase Storage upload failed: ${error.message}`);
+    }
+  } catch (storageErr: any) {
+    console.error("Storage upload exception:", storageErr);
+    throw new Error(`Failed to persist document to private storage: ${storageErr.message}`);
+  }
+
+  return { storagePath: fullStoragePath };
+}
+
+export async function downloadDocumentFromStorage(
+  storagePath: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<{ buffer: Buffer; mimeType?: string } | null> {
+  // Enforce cross-facility isolation on document downloads
+  if (actorOrToken && typeof actorOrToken === "object" && actorOrToken.role !== "admin" && actorOrToken.facilityId) {
+    const match = storagePath.match(/patients\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      const patient = await getPatientById(match[1], actorOrToken);
+      if (patient && patient.facility_id && patient.facility_id !== actorOrToken.facilityId) {
+        console.warn(`[Security Alert] Denied cross-facility document download attempt: actor facility '${actorOrToken.facilityId}' vs patient facility '${patient.facility_id}'`);
+        return null;
       }
-    } catch (storageErr: any) {
-      console.error("Storage upload exception:", storageErr);
-      throw new Error(`Failed to persist document to private storage: ${storageErr.message}`);
     }
   }
 
-  return { storagePath: `/private/documents/${storagePath}` };
+  if (env.isDemoMode) {
+    const file = mockDb.getStorageFile(storagePath);
+    if (!file) return null;
+    return { buffer: file.bytes, mimeType: file.mimeType };
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) return null;
+
+  const cleanPath = storagePath.replace(/^\/private\/documents\//, "");
+  const { data, error } = await supabase.storage
+    .from("clinical-documents")
+    .download(cleanPath);
+
+  if (error || !data) {
+    console.error("Failed to download document from storage:", error);
+    return null;
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return { buffer: Buffer.from(arrayBuffer), mimeType: data.type };
+}
+
+export async function deleteDocumentFromStorage(
+  storagePath: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<void> {
+  if (env.isDemoMode) {
+    mockDb.deleteStorageFile(storagePath);
+    return;
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) return;
+
+  const cleanPath = storagePath.replace(/^\/private\/documents\//, "");
+  const { error } = await supabase.storage
+    .from("clinical-documents")
+    .remove([cleanPath]);
+
+  if (error) {
+    console.error("Failed to delete document from storage:", error.message);
+  }
 }
 
 /**
@@ -368,13 +583,14 @@ export async function uploadDocumentToStorage(
  */
 export async function getDocumentSignedUrl(
   storagePath: string,
-  expiresInSeconds: number = 300
+  expiresInSeconds: number = 300,
+  actorOrToken?: AuthUser | string | null
 ): Promise<string | null> {
   if (env.isDemoMode) {
     return `/api/documents/mock-file?path=${encodeURIComponent(storagePath)}`;
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) return null;
 
   const cleanPath = storagePath.replace(/^\/private\/documents\//, "");
@@ -394,12 +610,15 @@ export async function getDocumentSignedUrl(
  * Server-Side Idempotency Helpers (Sync Mutations)
  * Guarantees duplicate mutations replayed across restarts or workers are never executed more than once.
  */
-export async function isIdempotencyKeyProcessed(key: string): Promise<boolean> {
+export async function isIdempotencyKeyProcessed(
+  key: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<boolean> {
   if (env.isDemoMode) {
     return mockDb.isIdempotencyKeyProcessed(key);
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) return false;
 
   try {
@@ -421,6 +640,193 @@ export async function isIdempotencyKeyProcessed(key: string): Promise<boolean> {
   }
 }
 
+export async function reserveIdempotencyKey(params: {
+  key: string;
+  userId: string;
+  entity: string;
+  action: string;
+  payloadHash?: string;
+  actorOrToken?: AuthUser | string | null;
+}): Promise<{ claimed: boolean; status?: "in_progress" | "completed" | "failed" | "conflict"; resourceId?: string }> {
+  if (env.isDemoMode) {
+    return mockDb.reserveIdempotencyKey(params);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  try {
+    const leaseExpiresAt = new Date(Date.now() + 60000).toISOString();
+    const { error: insertError } = await supabase.from("sync_mutations").insert([
+      {
+        idempotency_key: params.key,
+        user_id: params.userId,
+        entity: params.entity,
+        action: params.action,
+        payload_hash: params.payloadHash || null,
+        status: "in_progress",
+        lease_expires_at: leaseExpiresAt,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    if (!insertError) {
+      return { claimed: true, status: "in_progress" };
+    }
+
+    // Key already exists — fetch its current status, payload_hash, and lease_expires_at
+    const { data: existing, error: queryError } = await supabase
+      .from("sync_mutations")
+      .select("status, resource_id, payload_hash, lease_expires_at")
+      .eq("idempotency_key", params.key)
+      .eq("user_id", params.userId)
+      .maybeSingle();
+
+    if (queryError || !existing) {
+      return { claimed: false, status: "failed" };
+    }
+
+    // Replay with different payload must be rejected as conflict
+    if (existing.payload_hash && params.payloadHash && existing.payload_hash !== params.payloadHash) {
+      return { claimed: false, status: "conflict", resourceId: existing.resource_id };
+    }
+
+    // Orphan lease timeout recovery: if previous worker crashed while in_progress
+    if (
+      existing.status === "in_progress" &&
+      existing.lease_expires_at &&
+      new Date(existing.lease_expires_at).getTime() < Date.now()
+    ) {
+      const newLease = new Date(Date.now() + 60000).toISOString();
+      const { data: reclaimed, error: reclaimError } = await supabase
+        .from("sync_mutations")
+        .update({
+          lease_expires_at: newLease,
+          status: "in_progress",
+          payload_hash: params.payloadHash || null,
+        })
+        .eq("idempotency_key", params.key)
+        .eq("user_id", params.userId)
+        .eq("status", "in_progress")
+        .select()
+        .maybeSingle();
+
+      if (!reclaimError && reclaimed) {
+        return { claimed: true, status: "in_progress" };
+      }
+    }
+
+    return {
+      claimed: false,
+      status: existing.status as any,
+      resourceId: existing.resource_id,
+    };
+  } catch (err) {
+    console.error("Critical: Exception during idempotency key reservation:", err);
+    return { claimed: false, status: "failed" };
+  }
+}
+
+export async function executeIdempotentMutation(params: {
+  idempotencyKey: string;
+  userId: string;
+  entity: string;
+  action: string;
+  payloadHash?: string;
+  payload?: any;
+  actorOrToken?: AuthUser | string | null;
+}): Promise<{
+  idempotencyKey: string;
+  status: "completed" | "in_progress" | "failed";
+  isReplay: boolean;
+  mutationId?: string;
+  summary?: any;
+}> {
+  if (env.isDemoMode) {
+    return mockDb.executeIdempotentMutation(params);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_execute_idempotent_mutation", {
+    p_idempotency_key: params.idempotencyKey,
+    p_entity: params.entity,
+    p_action: params.action,
+    p_payload_hash: params.payloadHash || null,
+    p_payload: params.payload || {},
+  });
+
+  if (error) {
+    console.error("Supabase rpc_execute_idempotent_mutation error:", error.message);
+    throw new Error(`Database error executing idempotent mutation: ${error.message}`);
+  }
+
+  return data as any;
+}
+
+export async function submitIntakeToCase(params: {
+  sessionId: string;
+  kioskId: string;
+  kioskSecret: string;
+}): Promise<ClinicalCase> {
+  if (env.isDemoMode) {
+    return mockDb.submitIntakeToCase(params);
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_submit_intake_to_case", {
+    p_session_id: params.sessionId,
+    p_kiosk_id: params.kioskId,
+    p_kiosk_secret: params.kioskSecret,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_submit_intake_to_case error:", error.message);
+    throw new Error(`Database error compiling kiosk intake to case: ${error.message}`);
+  }
+
+  return data as ClinicalCase;
+}
+
+export async function updateSyncMutationStatus(params: {
+  key: string;
+  status: "completed" | "failed";
+  resourceId?: string;
+  errorMessage?: string;
+  actorOrToken?: AuthUser | string | null;
+}): Promise<void> {
+  if (env.isDemoMode) {
+    mockDb.updateSyncMutationStatus(params);
+    return;
+  }
+
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
+  if (!supabase) return;
+
+  try {
+    await supabase
+      .from("sync_mutations")
+      .update({
+        status: params.status,
+        resource_id: params.resourceId || null,
+        error_message: params.errorMessage || null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("idempotency_key", params.key);
+  } catch (err) {
+    console.warn("Exception updating sync mutation status:", err);
+  }
+}
+
 export async function recordProcessedIdempotencyKey(params: {
   key: string;
   userId: string;
@@ -429,6 +835,7 @@ export async function recordProcessedIdempotencyKey(params: {
   resourceId?: string;
   status?: "completed" | "failed";
   errorMessage?: string;
+  actorOrToken?: AuthUser | string | null;
 }): Promise<void> {
   if (env.isDemoMode) {
     mockDb.recordSyncMutation({
@@ -443,7 +850,7 @@ export async function recordProcessedIdempotencyKey(params: {
     return;
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
   if (!supabase) return;
 
   try {
@@ -469,6 +876,192 @@ export async function recordProcessedIdempotencyKey(params: {
   }
 }
 
+// Unified Data Access Interface for Red Flag Events
+export async function createRedFlagEvent(
+  event: {
+    caseId: string;
+    ruleId: string;
+    severity: string;
+    triggerText: string;
+    acknowledgedBy?: string | null;
+    acknowledgedAt?: string | null;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<any> {
+  if (env.isDemoMode) {
+    return mockDb.recordRedFlagEvent({
+      case_id: event.caseId,
+      rule_id: event.ruleId,
+      severity: event.severity.toUpperCase(),
+      trigger_text: event.triggerText,
+      acknowledged_by: event.acknowledgedBy,
+      acknowledged_at: event.acknowledgedAt,
+    });
+  }
 
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
 
+  const { data, error } = await supabase
+    .from("red_flag_events")
+    .insert([
+      {
+        case_id: event.caseId,
+        rule_id: event.ruleId,
+        severity: event.severity.toUpperCase(),
+        trigger_text: event.triggerText,
+        acknowledged_by: event.acknowledgedBy || null,
+        acknowledged_at: event.acknowledgedAt || null,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    .select()
+    .single();
 
+  if (error) {
+    console.error("Supabase createRedFlagEvent error:", error.message);
+    throw new Error(`Failed to persist red flag event for rule ${event.ruleId}: ${error.message}`);
+  }
+  return data;
+}
+
+export async function getRedFlagEventsByCaseId(
+  caseId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<any[]> {
+  if (env.isDemoMode) {
+    return mockDb.getRedFlagEvents(caseId);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("red_flag_events")
+      .select("*")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("Error fetching red flag events:", error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.warn("Exception fetching red flag events:", err);
+    return [];
+  }
+}
+
+// Durable Kiosk Intake Sessions (Database-backed)
+export async function createIntakeSession(
+  session: Omit<IntakeSessionRecord, "id" | "started_at"> & { id?: string },
+  actorOrToken?: AuthUser | string | null
+): Promise<IntakeSessionRecord> {
+  if (env.isDemoMode) {
+    return mockDb.createIntakeSession(session);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("intake_sessions")
+    .insert([session])
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Supabase createIntakeSession error:", error);
+    throw new Error(`Database error creating intake session: ${error.message}`);
+  }
+
+  return data as IntakeSessionRecord;
+}
+
+export async function getIntakeSessionById(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<IntakeSessionRecord | null> {
+  if (env.isDemoMode) {
+    return mockDb.getIntakeSessionById(id);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("intake_sessions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Supabase getIntakeSessionById error:", error);
+    throw new Error(`Database error fetching intake session ${id}: ${error.message}`);
+  }
+
+  return (data || null) as IntakeSessionRecord | null;
+}
+
+export async function updateIntakeSession(
+  id: string,
+  updates: Partial<IntakeSessionRecord>,
+  actorOrToken?: AuthUser | string | null
+): Promise<IntakeSessionRecord | null> {
+  if (env.isDemoMode) {
+    return mockDb.updateIntakeSession(id, updates);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("intake_sessions")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Supabase updateIntakeSession error:", error);
+    throw new Error(`Database error updating intake session ${id}: ${error.message}`);
+  }
+
+  return (data || null) as IntakeSessionRecord | null;
+}
+
+export async function deleteIntakeSession(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<boolean> {
+  if (env.isDemoMode) {
+    return mockDb.deleteIntakeSession(id);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { error } = await supabase
+    .from("intake_sessions")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Supabase deleteIntakeSession error:", error);
+    return false;
+  }
+
+  return true;
+}

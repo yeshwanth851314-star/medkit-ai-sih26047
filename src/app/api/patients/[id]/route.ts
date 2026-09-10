@@ -22,8 +22,8 @@ export async function GET(
     const patient = accessCheck.data;
 
     const [cases, documents] = await Promise.all([
-      getCasesByPatientId(id),
-      getDocumentsByPatientId(id),
+      getCasesByPatientId(id, auth.user),
+      getDocumentsByPatientId(id, auth.user),
     ]);
 
     return NextResponse.json({

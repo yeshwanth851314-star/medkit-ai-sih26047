@@ -25,6 +25,9 @@ export interface JwtPayload {
   fullName: string;
   role: UserRole;
   facilityId?: string | null;
+  supabaseToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
   iat: number;
   exp: number;
 }
@@ -60,6 +63,9 @@ export function signSessionToken(
     fullName: user.fullName,
     role: user.role,
     facilityId: user.facilityId || null,
+    supabaseToken: user.supabaseToken,
+    refreshToken: user.refreshToken,
+    tokenExpiresAt: user.tokenExpiresAt,
     iat: now,
     exp: now + expiresInSeconds,
   };
@@ -159,6 +165,9 @@ export function verifySessionToken(token: string, customSecret?: string): AuthUs
       fullName: payload.fullName,
       role: payload.role,
       facilityId: payload.facilityId || null,
+      supabaseToken: payload.supabaseToken,
+      refreshToken: payload.refreshToken,
+      tokenExpiresAt: payload.tokenExpiresAt,
     };
   } catch {
     return null;

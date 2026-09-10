@@ -16,8 +16,11 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     // Test 11 explicitly tests fresh first-time onboarding and replay.
     if (!testInfo.title.includes("11.")) {
       await page.addInitScript(() => {
-        window.localStorage.setItem("medkit_doctor_onboarding_completed_v1", "true");
-        window.localStorage.setItem("medkit_kiosk_onboarding_completed_v1", "true");
+        window.localStorage.setItem("medkit_doctor_onboarding_completed", "true");
+        window.localStorage.setItem("medkit_doctor_onboarding_completed:doctor-101", "true");
+        window.localStorage.setItem("medkit_doctor_onboarding_completed:user-doctor-01", "true");
+        window.localStorage.setItem("medkit_kiosk_onboarding_completed", "true");
+        window.sessionStorage.setItem("medkit_kiosk_onboarding_completed", "true");
       });
     }
   });
@@ -389,7 +392,12 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     // Reset onboarding state in localStorage to simulate fresh clinician login
     await page.evaluate(() => {
-      window.localStorage.removeItem("medkit_doctor_onboarding_completed_v1");
+      window.localStorage.removeItem("medkit_doctor_onboarding_completed");
+      Object.keys(window.localStorage).forEach((k) => {
+        if (k.startsWith("medkit_doctor_onboarding_completed")) {
+          window.localStorage.removeItem(k);
+        }
+      });
     });
     await page.reload();
 
@@ -433,6 +441,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await expect(page.getByText(/Step 5 of 5/i)).toBeVisible();
     await expect(page.getByText(/Finalize the Clinical Record/i).first()).toBeVisible();
     const finishBtn = page.getByRole("button", { name: /Start Using MedKit AI/i });
+    await expect(finishBtn).toBeVisible();
     await finishBtn.click();
 
     // Verify modal is closed
@@ -457,7 +466,18 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     // 2. Patient Kiosk First-Time Intro
     await page.goto("/intake/new");
     await page.evaluate(() => {
-      window.localStorage.removeItem("medkit_kiosk_onboarding_completed_v1");
+      window.localStorage.removeItem("medkit_kiosk_onboarding_completed");
+      window.sessionStorage.removeItem("medkit_kiosk_onboarding_completed");
+      Object.keys(window.localStorage).forEach((k) => {
+        if (k.startsWith("medkit_kiosk_onboarding_completed")) {
+          window.localStorage.removeItem(k);
+        }
+      });
+      Object.keys(window.sessionStorage).forEach((k) => {
+        if (k.startsWith("medkit_kiosk_onboarding_completed")) {
+          window.sessionStorage.removeItem(k);
+        }
+      });
     });
     await page.reload();
 

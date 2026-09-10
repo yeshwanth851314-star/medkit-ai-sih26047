@@ -29,8 +29,8 @@ export async function GET(
     }
 
     const [milestones, comparison] = await Promise.all([
-      buildPatientTimeline(patientId),
-      compareConsecutiveVisits(patientId, targetCaseId),
+      buildPatientTimeline(patientId, auth.user),
+      compareConsecutiveVisits(patientId, targetCaseId, auth.user),
     ]);
 
     await logAuditEvent({
@@ -40,6 +40,7 @@ export async function GET(
       resourceType: "patients",
       resourceId: patientId,
       metadata: { action: "view_timeline", targetCaseId },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({

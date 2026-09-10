@@ -317,11 +317,19 @@ confirm
 Example UI:
 
 ```text
-Medication: Amoxicillin
-Confidence: 94%
+Medication: Levocetirizine 5mg (ID: cand-med-01)
+Confidence: 98%
 Source: Page 1
-[Verify] [Edit]
+Status: Candidate (Amber badge)
+[Verify & Confirm] [Edit Dosage] [Reject]
 ```
+
+Review Rules:
+- Verification state is keyed by stable candidate identifiers (`candidateId`), not loose text.
+- Clinician can Accept, Edit (dosage/value), or Reject candidates.
+- Actions immediately persist to the server (`POST /api/documents/:id/confirm`) with actor audit log.
+- Network or server failures fail closed; the UI never optimistically marks records as verified.
+- Unverified candidates remain visibly distinct with amber borders and never appear as verified clinical records.
 
 ## 14. Clinical Timeline Flow
 
@@ -428,22 +436,21 @@ Requirements:
 - show saved timestamp
 - recover after refresh
 - avoid duplicate case creation
-- handle conflict if another session edits the same record
+- optimistic concurrency: verify `expectedUpdatedAt` against database timestamp; reject stale updates with `409 Conflict` to prevent silent overwrites by concurrent sessions
 
 ## 19. Finalization
 
 Before finalization:
-- required fields checked
+- required fields checked (chief complaint >= 3 chars)
 - AI content reviewed where applicable
-- OCR candidates verified
+- OCR candidates verified or explicitly rejected
 - red flags acknowledged where required
 - clinician confirms
 
 After finalization:
-- mark final
-- timestamp
-- audit actor
-- prevent silent mutation
+- mark final with timestamp and clinician actor audit
+- record is permanently immutable in place
+- subsequent clinical revisions strictly require append-only `case_amendments` addenda with recorded clinical rationale
 
 ## 20. PDF Flow
 

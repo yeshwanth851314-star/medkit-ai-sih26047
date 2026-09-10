@@ -1,0 +1,368 @@
+{
+  "resourceType": "Bundle",
+  "id": "bundle-case-c-001",
+  "identifier": {
+    "system": "https://medkit.ai/bundle-id",
+    "value": "bundle-c-001"
+  },
+  "meta": {
+    "profile": [
+      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
+      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle",
+      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord"
+    ],
+    "lastUpdated": "2026-09-01T11:00:00Z",
+    "tag": [
+      {
+        "system": "https://medkit.ai/compliance",
+        "code": "abdm-ready",
+        "display": "FHIR-compatible representation / ABDM integration-ready architecture"
+      }
+    ]
+  },
+  "type": "document",
+  "timestamp": "2026-09-01T11:00:00Z",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:901de753-fa36-4fda-9f99-c710a28d28ab",
+      "resource": {
+        "resourceType": "Composition",
+        "id": "901de753-fa36-4fda-9f99-c710a28d28ab",
+        "meta": {
+          "profile": [
+            "https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord"
+          ]
+        },
+        "status": "final",
+        "type": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "371530004",
+              "display": "Clinical consultation report"
+            }
+          ],
+          "text": "Clinical Consultation Record"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111",
+          "display": "Rajesh Varma"
+        },
+        "encounter": {
+          "reference": "urn:uuid:eab61c14-c7cf-4f9d-a881-ee714c0469db"
+        },
+        "date": "2026-09-01T11:00:00Z",
+        "author": [
+          {
+            "reference": "urn:uuid:42ec2ee1-f609-4e17-aed6-d88cbe73d7d7",
+            "display": "Attending Clinician"
+          }
+        ],
+        "title": "Clinical Consultation Summary - Rajesh Varma",
+        "section": [
+          {
+            "title": "Chief Complaint",
+            "entry": [
+              {
+                "reference": "urn:uuid:dbee4c2d-b9ca-44cd-8209-c5d1f1d22996"
+              }
+            ]
+          },
+          {
+            "title": "Assessment & Plan",
+            "text": {
+              "status": "generated",
+              "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Acute severe chest pain radiating to left arm</p></div>"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:42ec2ee1-f609-4e17-aed6-d88cbe73d7d7",
+      "resource": {
+        "resourceType": "Practitioner",
+        "id": "42ec2ee1-f609-4e17-aed6-d88cbe73d7d7",
+        "identifier": [
+          {
+            "system": "https://medkit.ai/practitioners",
+            "value": "clinician-default"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "text": "Attending Clinician"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "11111111-1111-4111-8111-111111111111",
+        "identifier": [
+          {
+            "system": "https://healthid.ndhm.gov.in",
+            "value": "14-2345-6789-0123"
+          },
+          {
+            "system": "https://medkit.ai/mrn",
+            "value": "MED-2026-0001"
+          }
+        ],
+        "name": [
+          {
+            "use": "official",
+            "text": "Rajesh Varma"
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1978-05-12",
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "+919876543210"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:eab61c14-c7cf-4f9d-a881-ee714c0469db",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "eab61c14-c7cf-4f9d-a881-ee714c0469db",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111",
+          "display": "Rajesh Varma"
+        },
+        "period": {
+          "start": "2026-09-01T10:15:00Z",
+          "end": "2026-09-01T11:00:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:dbee4c2d-b9ca-44cd-8209-c5d1f1d22996",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "dbee4c2d-b9ca-44cd-8209-c5d1f1d22996",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "text": "Acute severe chest pain radiating to left arm"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111",
+          "display": "Rajesh Varma"
+        },
+        "encounter": {
+          "reference": "urn:uuid:eab61c14-c7cf-4f9d-a881-ee714c0469db"
+        },
+        "recordedDate": "2026-09-01T10:15:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:c9e8e088-f901-4204-a3bc-ce842d99b60e",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-bp-c-001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ],
+          "text": "Blood Pressure"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "valueString": "148/96",
+        "effectiveDateTime": "2026-09-01T11:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:905c8fb5-d340-47a9-b41c-058392ca13dc",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-hr-c-001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart rate"
+            }
+          ],
+          "text": "Heart Rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "valueQuantity": {
+          "value": 112,
+          "unit": "beats/minute",
+          "system": "http://unitsofmeasure.org",
+          "code": "/min"
+        },
+        "effectiveDateTime": "2026-09-01T11:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ebdfbf5d-ee3d-4ab8-a9fd-8ecbe77e2ed9",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-temp-c-001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8310-5",
+              "display": "Body temperature"
+            }
+          ],
+          "text": "Body Temperature"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "valueQuantity": {
+          "value": 98.6,
+          "unit": "Fahrenheit",
+          "system": "http://unitsofmeasure.org",
+          "code": "[degF]"
+        },
+        "effectiveDateTime": "2026-09-01T11:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:622e743b-3715-4104-bc4c-843d3c5fa4f6",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-spo2-c-001",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2708-6",
+              "display": "Oxygen saturation in Arterial blood"
+            }
+          ],
+          "text": "Oxygen Saturation (SpO2)"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "valueQuantity": {
+          "value": 95,
+          "unit": "%",
+          "system": "http://unitsofmeasure.org",
+          "code": "%"
+        },
+        "effectiveDateTime": "2026-09-01T11:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:3e9319cf-4d12-4ff2-bc3b-f7a322691305",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergy-c-001-0",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "criticality": "high",
+        "code": {
+          "text": "Penicillin (Urticaria and facial edema)"
+        },
+        "patient": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:175f067e-5146-4940-b123-7c4edc62aab6",
+      "resource": {
+        "resourceType": "MedicationStatement",
+        "id": "med-c-001-0",
+        "status": "active",
+        "medicationCodeableConcept": {
+          "text": "Amlodipine 5mg"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "dosage": [
+          {
+            "text": "OD for ongoing"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:35606e34-d008-458f-9979-805ba2279a52",
+      "resource": {
+        "resourceType": "DocumentReference",
+        "id": "doc-doc-01",
+        "status": "current",
+        "type": {
+          "text": "LAB"
+        },
+        "subject": {
+          "reference": "urn:uuid:11111111-1111-4111-8111-111111111111"
+        },
+        "date": "2026-09-01T10:20:00Z",
+        "content": [
+          {
+            "attachment": {
+              "contentType": "application/pdf",
+              "url": "/uploads/ecg_report.pdf",
+              "title": "ecg_report.pdf",
+              "size": 204850
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

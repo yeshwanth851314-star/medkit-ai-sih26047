@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { ClinicalCase, Patient, MedicalDocument } from "../../types/database";
 import {
   FhirR4Bundle,
@@ -14,6 +15,29 @@ import {
 export const ABDM_COMPLIANCE_DISCLAIMER =
   "FHIR-compatible representation / ABDM integration-ready architecture";
 
+export function toDeterministicUuid(seed: string): string {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(seed)) {
+    return seed.toLowerCase();
+  }
+  const hash = createHash("sha256").update(seed).digest("hex");
+  const p1 = hash.substring(0, 8);
+  const p2 = hash.substring(8, 12);
+  const p3 = "4" + hash.substring(13, 16);
+  const p4 = ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0") + hash.substring(18, 20);
+  const p5 = hash.substring(20, 32);
+  return `${p1}-${p2}-${p3}-${p4}-${p5}`.toLowerCase();
+}
+
+function escapeXml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export function mapCaseToFhirBundle(params: {
   clinicalCase: ClinicalCase;
   patient: Patient;
@@ -22,13 +46,23 @@ export function mapCaseToFhirBundle(params: {
   const { clinicalCase, patient, documents = [] } = params;
   const entries: FhirBundleEntry[] = [];
   const timestamp = clinicalCase.finalized_at || clinicalCase.created_at || new Date().toISOString();
-  const encounterId = `enc-${clinicalCase.id}`;
-  const compositionId = `comp-${clinicalCase.id}`;
+
+  // Deterministic, standard RFC 4122 UUIDs for all FHIR URN identifiers
+  const patientUuid = toDeterministicUuid(patient.id);
+  const encounterUuid = toDeterministicUuid(`enc-${clinicalCase.id}`);
+  const compositionUuid = toDeterministicUuid(`comp-${clinicalCase.id}`);
+  const conditionUuid = toDeterministicUuid(`cond-${clinicalCase.id}`);
+  const authorIdentifier = clinicalCase.created_by || "clinician-default";
+  const practitionerUuid = toDeterministicUuid(`practitioner-${authorIdentifier}`);
+  const authorDisplay = clinicalCase.finalized_by || "Attending Clinician";
 
   // 1. Composition Resource (MANDATORY entry[0] for FHIR R4 document bundles)
   const fhirComposition: FhirCompositionResource = {
     resourceType: "Composition",
-    id: compositionId,
+    id: compositionUuid,
+    meta: {
+      profile: ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord"],
+    },
     status: clinicalCase.status === "final" ? "final" : "preliminary",
     type: {
       coding: [
@@ -41,17 +75,17 @@ export function mapCaseToFhirBundle(params: {
       text: clinicalCase.case_type === "ayush" ? "AYUSH Clinical Encounter Record" : "Clinical Consultation Record",
     },
     subject: {
-      reference: `urn:uuid:${patient.id}`,
+      reference: `urn:uuid:${patientUuid}`,
       display: patient.full_name,
     },
     encounter: {
-      reference: `urn:uuid:${encounterId}`,
+      reference: `urn:uuid:${encounterUuid}`,
     },
     date: timestamp,
     author: [
       {
-        reference: `urn:uuid:${clinicalCase.created_by || "clinician-default"}`,
-        display: "Attending Clinician",
+        reference: `urn:uuid:${practitionerUuid}`,
+        display: authorDisplay,
       },
     ],
     title: clinicalCase.case_type === "ayush"
@@ -60,32 +94,57 @@ export function mapCaseToFhirBundle(params: {
     section: [
       {
         title: "Chief Complaint",
-        entry: clinicalCase.chief_complaint ? [{ reference: `urn:uuid:cond-${clinicalCase.id}` }] : undefined,
+        entry: clinicalCase.chief_complaint ? [{ reference: `urn:uuid:${conditionUuid}` }] : undefined,
       },
       {
         title: "Assessment & Plan",
         text: {
           status: "generated",
-          div: `<div xmlns="http://www.w3.org/1999/xhtml"><p>${clinicalCase.assessment_plan?.summary || clinicalCase.chief_complaint}</p></div>`,
+          div: `<div xmlns="http://www.w3.org/1999/xhtml"><p>${escapeXml(clinicalCase.assessment_plan?.summary || clinicalCase.chief_complaint)}</p></div>`,
         },
       },
     ],
   };
 
   entries.push({
-    fullUrl: `urn:uuid:${compositionId}`,
+    fullUrl: `urn:uuid:${compositionUuid}`,
     resource: fhirComposition,
   });
 
-  // 2. Patient Resource
+  // 2. Author Practitioner Resource (mandatory entry when case has an author)
+  entries.push({
+    fullUrl: `urn:uuid:${practitionerUuid}`,
+    resource: {
+      resourceType: "Practitioner",
+      id: practitionerUuid,
+      identifier: [
+        {
+          system: "https://medkit.ai/practitioners",
+          value: authorIdentifier,
+        },
+      ],
+      name: [
+        {
+          use: "official",
+          text: authorDisplay,
+        },
+      ],
+    },
+  });
+
+  // 3. Patient Resource
   const fhirPatient: FhirPatientResource = {
     resourceType: "Patient",
-    id: patient.id,
+    id: patientUuid,
     identifier: [
-      {
-        system: "https://healthid.ndhm.gov.in",
-        value: patient.abha_id || patient.patient_code,
-      },
+      ...(patient.abha_id
+        ? [
+            {
+              system: "https://healthid.ndhm.gov.in",
+              value: patient.abha_id,
+            },
+          ]
+        : []),
       {
         system: "https://medkit.ai/mrn",
         value: patient.patient_code,
@@ -117,14 +176,14 @@ export function mapCaseToFhirBundle(params: {
   };
 
   entries.push({
-    fullUrl: `urn:uuid:${patient.id}`,
+    fullUrl: `urn:uuid:${patientUuid}`,
     resource: fhirPatient,
   });
 
-  // 3. Encounter Resource
+  // 4. Encounter Resource
   const fhirEncounter: FhirEncounterResource = {
     resourceType: "Encounter",
-    id: encounterId,
+    id: encounterUuid,
     status: clinicalCase.status === "final" ? "finished" : "in-progress",
     class: {
       system: "http://terminology.hl7.org/CodeSystem/v3-ActCode",
@@ -132,7 +191,7 @@ export function mapCaseToFhirBundle(params: {
       display: "ambulatory",
     },
     subject: {
-      reference: `urn:uuid:${patient.id}`,
+      reference: `urn:uuid:${patientUuid}`,
       display: patient.full_name,
     },
     period: {
@@ -142,16 +201,15 @@ export function mapCaseToFhirBundle(params: {
   };
 
   entries.push({
-    fullUrl: `urn:uuid:${encounterId}`,
+    fullUrl: `urn:uuid:${encounterUuid}`,
     resource: fhirEncounter,
   });
 
-  // 3. Condition (Chief Complaint & Diagnosis)
+  // 5. Condition (Chief Complaint & Diagnosis)
   if (clinicalCase.chief_complaint) {
-    const conditionId = `cond-${clinicalCase.id}`;
     const fhirCondition: FhirConditionResource = {
       resourceType: "Condition",
-      id: conditionId,
+      id: conditionUuid,
       clinicalStatus: {
         coding: [
           {
@@ -172,22 +230,22 @@ export function mapCaseToFhirBundle(params: {
         text: clinicalCase.chief_complaint,
       },
       subject: {
-        reference: `urn:uuid:${patient.id}`,
+        reference: `urn:uuid:${patientUuid}`,
         display: patient.full_name,
       },
       encounter: {
-        reference: `urn:uuid:${encounterId}`,
+        reference: `urn:uuid:${encounterUuid}`,
       },
       recordedDate: clinicalCase.created_at,
     };
 
     entries.push({
-      fullUrl: `urn:uuid:${conditionId}`,
+      fullUrl: `urn:uuid:${conditionUuid}`,
       resource: fhirCondition,
     });
   }
 
-  // 4. Observations (Vitals)
+  // 6. Observations (Vitals)
   const examination = clinicalCase.examination || {};
   const vitalsNested =
     examination.vitals && typeof examination.vitals === "object" ? examination.vitals : {};
@@ -209,8 +267,9 @@ export function mapCaseToFhirBundle(params: {
   const rr = vitalsNested.respiratory_rate || examination.respiratory_rate;
 
   if (bp) {
+    const bpUuid = toDeterministicUuid(`obs-bp-${clinicalCase.id}`);
     entries.push({
-      fullUrl: `urn:uuid:obs-bp-${clinicalCase.id}`,
+      fullUrl: `urn:uuid:${bpUuid}`,
       resource: {
         resourceType: "Observation",
         id: `obs-bp-${clinicalCase.id}`,
@@ -225,7 +284,7 @@ export function mapCaseToFhirBundle(params: {
           ],
           text: "Blood Pressure",
         },
-        subject: { reference: `urn:uuid:${patient.id}` },
+        subject: { reference: `urn:uuid:${patientUuid}` },
         valueString: String(bp),
         effectiveDateTime: timestamp,
       } as FhirObservationResource,
@@ -234,8 +293,9 @@ export function mapCaseToFhirBundle(params: {
 
   const hrNum = parseNumericVital(hr);
   if (hrNum !== null) {
+    const hrUuid = toDeterministicUuid(`obs-hr-${clinicalCase.id}`);
     entries.push({
-      fullUrl: `urn:uuid:obs-hr-${clinicalCase.id}`,
+      fullUrl: `urn:uuid:${hrUuid}`,
       resource: {
         resourceType: "Observation",
         id: `obs-hr-${clinicalCase.id}`,
@@ -250,7 +310,7 @@ export function mapCaseToFhirBundle(params: {
           ],
           text: "Heart Rate",
         },
-        subject: { reference: `urn:uuid:${patient.id}` },
+        subject: { reference: `urn:uuid:${patientUuid}` },
         valueQuantity: {
           value: hrNum,
           unit: "beats/minute",
@@ -264,8 +324,10 @@ export function mapCaseToFhirBundle(params: {
 
   const tempNum = parseNumericVital(temp);
   if (tempNum !== null) {
+    const tempUuid = toDeterministicUuid(`obs-temp-${clinicalCase.id}`);
+    const isCelsius = tempNum < 45;
     entries.push({
-      fullUrl: `urn:uuid:obs-temp-${clinicalCase.id}`,
+      fullUrl: `urn:uuid:${tempUuid}`,
       resource: {
         resourceType: "Observation",
         id: `obs-temp-${clinicalCase.id}`,
@@ -280,12 +342,12 @@ export function mapCaseToFhirBundle(params: {
           ],
           text: "Body Temperature",
         },
-        subject: { reference: `urn:uuid:${patient.id}` },
+        subject: { reference: `urn:uuid:${patientUuid}` },
         valueQuantity: {
           value: tempNum,
-          unit: "Fahrenheit",
+          unit: isCelsius ? "Celsius" : "Fahrenheit",
           system: "http://unitsofmeasure.org",
-          code: "[degF]",
+          code: isCelsius ? "Cel" : "[degF]",
         },
         effectiveDateTime: timestamp,
       } as FhirObservationResource,
@@ -294,8 +356,9 @@ export function mapCaseToFhirBundle(params: {
 
   const spo2Num = parseNumericVital(spo2);
   if (spo2Num !== null) {
+    const spo2Uuid = toDeterministicUuid(`obs-spo2-${clinicalCase.id}`);
     entries.push({
-      fullUrl: `urn:uuid:obs-spo2-${clinicalCase.id}`,
+      fullUrl: `urn:uuid:${spo2Uuid}`,
       resource: {
         resourceType: "Observation",
         id: `obs-spo2-${clinicalCase.id}`,
@@ -310,7 +373,7 @@ export function mapCaseToFhirBundle(params: {
           ],
           text: "Oxygen Saturation (SpO2)",
         },
-        subject: { reference: `urn:uuid:${patient.id}` },
+        subject: { reference: `urn:uuid:${patientUuid}` },
         valueQuantity: {
           value: spo2Num,
           unit: "%",
@@ -324,8 +387,9 @@ export function mapCaseToFhirBundle(params: {
 
   const rrNum = parseNumericVital(rr);
   if (rrNum !== null) {
+    const rrUuid = toDeterministicUuid(`obs-rr-${clinicalCase.id}`);
     entries.push({
-      fullUrl: `urn:uuid:obs-rr-${clinicalCase.id}`,
+      fullUrl: `urn:uuid:${rrUuid}`,
       resource: {
         resourceType: "Observation",
         id: `obs-rr-${clinicalCase.id}`,
@@ -340,7 +404,7 @@ export function mapCaseToFhirBundle(params: {
           ],
           text: "Respiratory Rate",
         },
-        subject: { reference: `urn:uuid:${patient.id}` },
+        subject: { reference: `urn:uuid:${patientUuid}` },
         valueQuantity: {
           value: rrNum,
           unit: "breaths/minute",
@@ -352,11 +416,12 @@ export function mapCaseToFhirBundle(params: {
     });
   }
 
-  // 5. AllergyIntolerance
+  // 7. AllergyIntolerance
   if (Array.isArray(clinicalCase.allergy_history)) {
     clinicalCase.allergy_history.forEach((allergy, index) => {
+      const allergyUuid = toDeterministicUuid(`allergy-${clinicalCase.id}-${index}`);
       entries.push({
-        fullUrl: `urn:uuid:allergy-${clinicalCase.id}-${index}`,
+        fullUrl: `urn:uuid:${allergyUuid}`,
         resource: {
           resourceType: "AllergyIntolerance",
           id: `allergy-${clinicalCase.id}-${index}`,
@@ -386,18 +451,26 @@ export function mapCaseToFhirBundle(params: {
             text: `${allergy.substance} (${allergy.reaction || "allergy"})`,
           },
           patient: {
-            reference: `urn:uuid:${patient.id}`,
+            reference: `urn:uuid:${patientUuid}`,
           },
         } as FhirAllergyIntoleranceResource,
       });
     });
   }
 
-  // 6. MedicationStatement
+  // 8. MedicationStatement
   if (Array.isArray(clinicalCase.medication_history)) {
     clinicalCase.medication_history.forEach((med, index) => {
+      const medUuid = toDeterministicUuid(`med-${clinicalCase.id}-${index}`);
+      const dosageText = [
+        med.frequency ? med.frequency : null,
+        med.duration ? `for ${med.duration}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
       entries.push({
-        fullUrl: `urn:uuid:med-${clinicalCase.id}-${index}`,
+        fullUrl: `urn:uuid:${medUuid}`,
         resource: {
           resourceType: "MedicationStatement",
           id: `med-${clinicalCase.id}-${index}`,
@@ -406,22 +479,19 @@ export function mapCaseToFhirBundle(params: {
             text: `${med.name} ${med.dose || ""}`.trim(),
           },
           subject: {
-            reference: `urn:uuid:${patient.id}`,
+            reference: `urn:uuid:${patientUuid}`,
           },
-          dosage: [
-            {
-              text: `${med.frequency || "daily"}${med.duration ? ` for ${med.duration}` : ""}`,
-            },
-          ],
+          dosage: dosageText ? [{ text: dosageText }] : undefined,
         } as FhirMedicationStatementResource,
       });
     });
   }
 
-  // 7. DocumentReference (for uploaded prescriptions/labs)
+  // 9. DocumentReference (for uploaded prescriptions/labs)
   documents.forEach((doc) => {
+    const docUuid = toDeterministicUuid(`doc-${doc.id}`);
     entries.push({
-      fullUrl: `urn:uuid:doc-${doc.id}`,
+      fullUrl: `urn:uuid:${docUuid}`,
       resource: {
         resourceType: "DocumentReference",
         id: `doc-${doc.id}`,
@@ -430,7 +500,7 @@ export function mapCaseToFhirBundle(params: {
           text: doc.document_type.toUpperCase(),
         },
         subject: {
-          reference: `urn:uuid:${patient.id}`,
+          reference: `urn:uuid:${patientUuid}`,
         },
         date: doc.created_at,
         content: [
@@ -450,13 +520,27 @@ export function mapCaseToFhirBundle(params: {
   return {
     resourceType: "Bundle",
     id: `bundle-case-${clinicalCase.id}`,
+    identifier: {
+      system: "https://medkit.ai/bundle-id",
+      value: `bundle-${clinicalCase.id}`,
+    },
     meta: {
-      profile: ["https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact"],
+      profile: [
+        "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
+        "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle",
+        "https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord",
+      ],
       lastUpdated: timestamp,
+      tag: [
+        {
+          system: "https://medkit.ai/compliance",
+          code: "abdm-ready",
+          display: ABDM_COMPLIANCE_DISCLAIMER,
+        },
+      ],
     },
     type: "document",
     timestamp,
     entry: entries,
-    abdmComplianceNotice: ABDM_COMPLIANCE_DISCLAIMER,
   };
 }

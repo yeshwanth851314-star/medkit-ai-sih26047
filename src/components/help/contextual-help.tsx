@@ -166,7 +166,7 @@ export function ContextualHelp({ topic, className = "", side = "bottom" }: Conte
           ref={popoverRef}
           role="dialog"
           aria-label={data.label}
-          className={`absolute z-50 w-72 sm:w-80 rounded-xl border border-surface-200 bg-white p-4 shadow-xl text-left text-xs text-slate-700 space-y-2.5 animate-in fade-in duration-150 motion-reduce:animate-none ${sideClasses}`}
+          className={`absolute z-50 w-72 sm:w-80 rounded-xl border border-surface-200 bg-white p-4 shadow-xl text-left text-xs text-slate-700 space-y-2.5 transition-opacity duration-150 ${sideClasses}`}
         >
           <div className="flex items-center justify-between border-b border-surface-200 pb-2">
             <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">

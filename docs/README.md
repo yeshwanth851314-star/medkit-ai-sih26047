@@ -10,7 +10,9 @@ This folder contains the six Antigravity source-of-truth documents.
 6. 06_IMPLEMENTATION_PLAN.md — Phased build/test/deploy plan
 
 Recommended Antigravity order:
-READ → UNDERSTAND → IDENTIFY CONFLICTS → REPORT → PLAN → IMPLEMENT → TEST → VERIFY → COMMIT
+READ → UNDERSTAND → IDENTIFY CONFLICTS → REPORT → PLAN → IMPLEMENT → TEST → VERIFY → PACKAGE:AUDIT → COMMIT
+
+Whenever completing code, test, configuration, or documentation changes, always execute `npm run package:audit` to regenerate the three synchronized distribution archives in `D:\SIH-zip-files-gpt`.
 
 Source basis:
 - SIH26047 problem statement

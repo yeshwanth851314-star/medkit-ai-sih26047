@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       return patientCheck.errorResponse;
     }
 
-    const cases = await getCasesByPatientId(patientId);
+    const cases = await getCasesByPatientId(patientId, auth.user);
     return NextResponse.json({ cases });
   } catch (err) {
     console.error("GET /api/cases error:", err);
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       return patientCheck.errorResponse;
     }
 
-    const newCase = await createCaseDraft(validated.data, auth.user.id);
+    const newCase = await createCaseDraft(validated.data, auth.user.id, auth.user);
 
     await logAuditEvent({
       actorId: auth.user.id,
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       resourceType: "cases",
       resourceId: newCase.id,
       metadata: { case_type: newCase.case_type, status: newCase.status },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({ success: true, case: newCase }, { status: 201 });

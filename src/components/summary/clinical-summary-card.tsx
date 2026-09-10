@@ -43,6 +43,8 @@ export function ClinicalSummaryCard({
       if (res.ok && data.summary) {
         setSummary(data.summary);
         setEditedNarrative(data.summary.hpiNarrative);
+        setIsConfirmed(false);
+        setIsEditing(false);
       }
     } catch {
       console.error("Failed to regenerate summary");

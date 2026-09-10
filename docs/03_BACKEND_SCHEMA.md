@@ -38,8 +38,8 @@ Use Supabase Auth's user identity rather than storing a second password system.
 | id | uuid PK | references auth.users.id |
 | full_name | text | required |
 | role | enum | doctor, clinician, admin, staff |
-| facility_id | uuid nullable | future multi-facility boundary |
-| is_active | boolean | default true |
+| facility_id | uuid nullable | mandatory institutional boundary (non-admin clinicians must have active facility assignment) |
+| is_active | boolean | default true (active status required for authentication) |
 | created_at | timestamptz | |
 | updated_at | timestamptz | |
 
@@ -310,6 +310,22 @@ Keep this structured and clinician-verifiable. Do not automatically infer consti
 
 Do not store full clinical content in metadata.
 
+## 16.1. sync_mutations
+
+| Field | Type | Notes |
+|---|---|---|
+| id | uuid PK | internal sync record ID |
+| idempotency_key | text UNIQUE | client-generated idempotency key |
+| user_id | text | caller UID (strictly scoped to calling user) |
+| entity | text | cases, patients, documents, transcripts |
+| action | text | create, update |
+| payload_hash | text | SHA-256 hash of mutation payload |
+| status | enum | pending, in_progress, completed, failed |
+| resource_id | text nullable | ID of created/updated resource |
+| error_message | text nullable | diagnostic failure reason |
+| created_at | timestamptz | initial enqueue timestamp |
+| completed_at | timestamptz nullable | resolution timestamp |
+
 ## 17. Relationships
 
 ```text
@@ -329,22 +345,26 @@ Patient 1 ─── N Consent
 ## 18. Row Level Security
 
 Minimum policy:
-- Authenticated users only.
-- Users can access only facilities/roles they are authorized for.
+- Authenticated users only; service-role keys are never exposed or substituted for ordinary client operations.
+- Strict multi-facility boundary: All legacy broad permissive policies are explicitly purged (`DROP POLICY IF EXISTS`) to prevent PostgreSQL combining permissive policies via logical `OR`.
+- Users can access only patients, cases, and documents belonging to their assigned facility (`facility_id = public.current_user_facility()`).
+- Storage objects in `clinical-documents` bucket enforce identical path-based facility checks: `patients/<patient_id>/...`.
+- `sync_mutations` records are strictly scoped to the authenticated caller (`user_id = auth.uid()::text`).
 - Patient/case records cannot be accessed solely by knowing UUIDs.
 - Server-side authorization remains mandatory even with UI restrictions.
-- Storage objects use equivalent access control.
 
 ## 19. Indexes
 
 Initial:
 - patients(patient_code)
 - patients(full_name)
-- patients(phone) where appropriate
+- patients(facility_id)
 - cases(patient_id, created_at desc)
 - cases(created_by, created_at desc)
 - documents(patient_id, created_at desc)
 - audit_logs(resource_type, resource_id, created_at desc)
+- sync_mutations(idempotency_key)
+- sync_mutations(user_id, status)
 
 ## 20. API Contract
 
@@ -363,9 +383,11 @@ GET    /api/cases/:id/pdf
 
 POST   /api/documents
 POST   /api/documents/:id/extract
+POST   /api/documents/:id/confirm
 POST   /api/interviews
 POST   /api/interviews/:id/answer
 POST   /api/interviews/:id/submit
+POST   /api/sync
 
 GET    /api/timeline/:patientId
 GET    /api/cases/:id/red-flags
@@ -375,10 +397,12 @@ The exact transport may be Server Actions or Route Handlers; the domain contract
 
 ## 21. Data Integrity Rules
 
-- Every case references an existing patient.
-- Finalized cases cannot be silently mutated.
-- Changes to finalized clinical content create an audit event.
+- Every case references an existing patient within the caller's authorized facility.
+- Finalized cases cannot be mutated in place; post-finalization updates must be recorded via immutable `case_amendments` addenda.
+- Optimistic Concurrency Control: Case updates accept `expectedUpdatedAt`. If a concurrent session modified the record, the server rejects with `409 Conflict`.
 - AI output cannot silently replace clinician-confirmed data.
-- OCR candidates remain candidates until verified.
+- Candidate-Level Document Review: OCR candidates (medications and diagnostic tests) remain candidates (`status: "candidate"`) with stable identifiers (`candidateId`) until explicitly verified, edited, or rejected by attending clinicians. Confirmations are durably persisted to the database.
+- Kiosk Consent: Kiosk intake sessions require explicit patient consent acknowledgment before collecting clinical responses.
+- Multi-Tab Isolation: Offline mutation queues are scoped to the authenticated actor and synchronize across browser tabs via storage events, tearing down on session reset or logout.
 - Raw patient language is preserved where clinically useful.
 - Deletion requires explicit policy; never casually hard-delete health records.

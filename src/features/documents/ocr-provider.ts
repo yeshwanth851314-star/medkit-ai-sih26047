@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 import { env } from "@/config/env";
 import { DocumentExtractionResult, documentExtractionResultSchema } from "./types";
 import { SYNTHETIC_DOCUMENT_FIXTURES } from "./document-service";
@@ -87,13 +88,37 @@ Output ONLY a JSON object conforming strictly to this format:
 
     const latencyMs = Date.now() - startTime;
     const text = response.text || "{}";
-    const parsed = JSON.parse(text);
+    let rawParsed: unknown;
+    try {
+      rawParsed = JSON.parse(text);
+    } catch {
+      throw new Error("OCR model output could not be parsed as valid JSON.");
+    }
+
+    const liveOcrModelOutputSchema = documentExtractionResultSchema.pick({
+      documentType: true,
+      confidence: true,
+      extractedData: true,
+    }).extend({
+      extractedData: z.record(z.any()).refine((data) => Object.keys(data).length > 0, {
+        message: "extractedData cannot be empty",
+      }),
+    });
+
+    const parseResult = liveOcrModelOutputSchema.safeParse(rawParsed);
+    if (!parseResult.success) {
+      throw new Error(
+        `OCR extraction output failed validation: ${parseResult.error.issues.map((i) => i.message).join(", ")}. Document type, confidence, or non-empty extracted data was absent.`
+      );
+    }
+
+    const parsed = parseResult.data;
 
     const result: OCRExtractionResponse = {
       documentId: options.documentId,
-      documentType: parsed.documentType || "prescription",
-      confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.92,
-      extractedData: parsed.extractedData || {},
+      documentType: parsed.documentType,
+      confidence: parsed.confidence,
+      extractedData: parsed.extractedData,
       disclaimer: "Extracted from uploaded document — verify before use.",
       status: "extracted",
       providerMeta: {
@@ -134,6 +159,19 @@ export class DeterministicDemoOCRProvider implements OCRProvider {
 }
 
 /**
+ * Unavailable OCR Provider for production environments without configured API credentials
+ */
+export class UnavailableOCRProvider implements OCRProvider {
+  readonly name = "gemini-vision" as const;
+
+  async extract(_options: OCRExtractionOptions): Promise<OCRExtractionResponse> {
+    throw new Error(
+      "Document OCR service unavailable: live AI credentials are not configured in production mode."
+    );
+  }
+}
+
+/**
  * Resilient OCR Provider wrapper with 8s timeout and automatic fallback
  */
 export class ResilientOCRProvider implements OCRProvider {
@@ -150,9 +188,14 @@ export class ResilientOCRProvider implements OCRProvider {
   async extract(options: OCRExtractionOptions): Promise<OCRExtractionResponse> {
     const hasRealImage = Boolean(options.imageBase64 && options.imageBase64.trim().length > 50);
 
-    // If client requested mockId explicitly without real image, bypass live API directly (demo fixtures only)
-    if (options.mockId && !hasRealImage) {
-      return this.fallback.extract(options);
+    // Reject client-supplied mockId switches when operating in production mode
+    if (options.mockId) {
+      if (!env.isDemoMode) {
+        throw new Error("Synthetic fixture selection (mockId) is strictly prohibited in production mode.");
+      }
+      if (!hasRealImage) {
+        return this.fallback.extract(options);
+      }
     }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -166,11 +209,11 @@ export class ResilientOCRProvider implements OCRProvider {
       return await Promise.race([this.primary.extract(options), timeoutPromise]);
     } catch (err: any) {
       // CRITICAL CLINICAL SAFETY:
-      // If real patient document image was submitted, NEVER silently substitute fabricated synthetic medications or lab values.
-      // Doing so could inject false diagnoses, allergies, or dosages into the patient's permanent record.
-      if (hasRealImage) {
+      // If real patient document image was submitted or in production mode,
+      // NEVER silently substitute fabricated synthetic medications or lab values.
+      if (hasRealImage || !env.isDemoMode) {
         console.error(
-          `[Clinical Safety Alert] OCR provider failed on real document: ${err.message}. Refusing synthetic fallback.`
+          `[Clinical Safety Alert] OCR provider failed on live document: ${err.message}. Refusing synthetic fallback.`
         );
         throw new Error(
           `Document OCR extraction unavailable (${err.message}). For patient safety, live medical records cannot fall back to synthetic clinical fixtures. Please enter clinical details manually or retry.`
@@ -203,6 +246,11 @@ export function getOCRProvider(): OCRProvider {
     const primary = new LiveOCRProvider(env.geminiApiKey!);
     const fallback = new DeterministicDemoOCRProvider();
     return new ResilientOCRProvider(primary, fallback, 8000);
+  }
+
+  // In production mode, if live credentials are not available, fail closed
+  if (!env.isDemoMode) {
+    return new UnavailableOCRProvider();
   }
 
   return new DeterministicDemoOCRProvider();

@@ -5,9 +5,10 @@ import { ClinicalCase } from "@/types/database";
 export async function attachAyushAssessmentToCase(
   caseId: string,
   input: AyushAssessmentInput,
-  clinicianName?: string
+  clinicianName?: string,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
 ): Promise<ClinicalCase> {
-  const existing = await getCaseById(caseId);
+  const existing = await getCaseById(caseId, actorOrToken);
   if (!existing) throw new Error("Case not found");
 
   if (existing.status === "final") {
@@ -20,10 +21,14 @@ export async function attachAyushAssessmentToCase(
     verifiedAt: new Date().toISOString(),
   });
 
-  const updated = await updateCase(caseId, {
-    case_type: "ayush",
-    ayush_assessment: validated as any,
-  });
+  const updated = await updateCase(
+    caseId,
+    {
+      case_type: "ayush",
+      ayush_assessment: validated as any,
+    },
+    actorOrToken
+  );
 
   if (!updated) throw new Error("Failed to save AYUSH assessment");
   return updated;

@@ -58,7 +58,7 @@ export async function requirePatientAccess(
     };
   }
 
-  const patient = await getPatientById(patientId);
+  const patient = await getPatientById(patientId, user);
   if (!patient) {
     return {
       authorized: false,
@@ -66,7 +66,30 @@ export async function requirePatientAccess(
     };
   }
 
-  // Facility-level boundary check: if both user and patient have facilityId, they must match
+  // Strict facility-level boundary check:
+  // Unassigned legacy patient records require administrative reconciliation
+  if (!patient.facility_id && user.role !== "admin") {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "FORBIDDEN: Unassigned legacy patient record requires administrative reconciliation" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  // Clinician without facility assignment cannot access facility records unless administrator
+  if (!user.facilityId && user.role !== "admin") {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "FORBIDDEN: Clinician has no facility assignment" },
+        { status: 403 }
+      ),
+    };
+  }
+
+  // Facility-level boundary check: clinician and patient facilities must match
   if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
     return {
       authorized: false,
@@ -94,7 +117,7 @@ export async function requireCaseAccess(
     };
   }
 
-  const clinicalCase = await getCaseById(caseId);
+  const clinicalCase = await getCaseById(caseId, user);
   if (!clinicalCase) {
     return {
       authorized: false,
@@ -125,7 +148,7 @@ export async function requireDocumentAccess(
     };
   }
 
-  const doc = await getDocumentById(documentId);
+  const doc = await getDocumentById(documentId, user);
   if (!doc) {
     return {
       authorized: false,
@@ -146,9 +169,10 @@ export async function requireDocumentAccess(
  */
 export async function requireCaseBelongsToPatient(
   caseId: string,
-  patientId: string
+  patientId: string,
+  actorOrToken?: AuthUser | string | null
 ): Promise<ObjectGuardResult<ClinicalCase>> {
-  const clinicalCase = await getCaseById(caseId);
+  const clinicalCase = await getCaseById(caseId, actorOrToken);
   if (!clinicalCase) {
     return {
       authorized: false,

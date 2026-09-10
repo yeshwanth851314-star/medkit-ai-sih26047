@@ -1,14 +1,38 @@
 import { env } from "@/config/env";
-import { getSupabaseClient } from "@/lib/db/supabase";
+import {
+  getAuthorizedSupabaseClient,
+  getServiceSupabaseClient,
+} from "@/lib/db/supabase";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { logAuditEvent } from "@/features/security/audit-service";
 import { ConsentRecord, RecordConsentInput, consentRecordSchema } from "./types";
+import { AuthUser } from "@/features/auth/types";
 
 /**
  * Persist patient clinical case-taking consent.
  * Every case intake MUST be tied to an explicit consent record.
  */
 export async function recordPatientConsent(input: RecordConsentInput): Promise<ConsentRecord> {
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(input.actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+    }
+    const { data, error } = await supabase.rpc("rpc_record_consent_with_audit", {
+      p_patient_id: input.patientId,
+      p_purpose: input.purpose || "clinical_care_and_case_taking",
+      p_scope: input.scope || ["voice_recording", "document_extraction", "ai_summary"],
+      p_language: input.language || "en",
+      p_method: input.consentMethod || "touch_acknowledgement",
+      p_version: input.consentVersion || "v1.0",
+    });
+    if (error) {
+      console.error("Supabase rpc_record_consent_with_audit error:", error);
+      throw new Error(`Failed to persist clinical consent: ${error.message}`);
+    }
+    return data as ConsentRecord;
+  }
+
   const consentId = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -32,33 +56,28 @@ export async function recordPatientConsent(input: RecordConsentInput): Promise<C
   };
 
   const validated = consentRecordSchema.parse(record);
+  await mockDb.recordConsent(validated);
 
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    const { data, error } = await supabase.from("consents").insert([validated]).select().single();
-    if (error) {
-      console.error("Supabase recordPatientConsent error:", error);
-      throw new Error(`Failed to persist clinical consent: ${error.message}`);
-    }
-  } else {
-    await mockDb.recordConsent(validated);
+  // Record immutable audit event in demo mode
+  try {
+    await logAuditEvent({
+      actorId: input.actorId || input.patientId,
+      actorRole: input.actorRole || "patient",
+      action: "CONSENT_RECORDED",
+      resourceType: "patients",
+      resourceId: input.patientId,
+      metadata: {
+        consentId: validated.id,
+        purpose: validated.purpose,
+        scope: validated.scope,
+        method: validated.consent_method,
+        language: validated.language,
+      },
+    });
+  } catch (auditErr) {
+    mockDb.revokeConsent(validated.id, "Audit logging failed");
+    throw auditErr;
   }
-
-  // Record immutable audit event
-  await logAuditEvent({
-    actorId: input.actorId || input.patientId,
-    actorRole: input.actorRole || "patient",
-    action: "CONSENT_RECORDED",
-    resourceType: "patients",
-    resourceId: input.patientId,
-    metadata: {
-      consentId: validated.id,
-      purpose: validated.purpose,
-      scope: validated.scope,
-      method: validated.consent_method,
-      language: validated.language,
-    },
-  });
 
   return validated;
 }
@@ -67,12 +86,17 @@ export async function recordPatientConsent(input: RecordConsentInput): Promise<C
  * Verify that a patient has an active, non-revoked consent record.
  */
 export async function verifyPatientConsent(
-  patientId: string
+  patientId: string,
+  requiredScope?: "voice_recording" | "document_extraction" | "ai_summary",
+  actorOrToken?: AuthUser | string | null
 ): Promise<{ valid: boolean; consent?: ConsentRecord; reason?: string }> {
-  const supabase = getSupabaseClient();
   let consent: ConsentRecord | null = null;
 
-  if (supabase && !env.isDemoMode) {
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+    }
     const { data, error } = await supabase
       .from("consents")
       .select("*")
@@ -106,6 +130,14 @@ export async function verifyPatientConsent(
     };
   }
 
+  if (requiredScope && (!consent.scope || !consent.scope.includes(requiredScope))) {
+    return {
+      valid: false,
+      consent,
+      reason: `Patient clinical consent does not permit '${requiredScope}'.`,
+    };
+  }
+
   return {
     valid: true,
     consent,
@@ -119,40 +151,33 @@ export async function verifyPatientConsent(
 export async function revokePatientConsent(
   consentId: string,
   actorId?: string,
-  reason?: string
+  reason?: string,
+  actorOrToken?: AuthUser | string | null
 ): Promise<ConsentRecord> {
-  const now = new Date().toISOString();
-  let updated: ConsentRecord | null = null;
-
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    const { data, error } = await supabase
-      .from("consents")
-      .update({
-        revoked: true,
-        revoked_at: now,
-        status: "revoked",
-        actor_id: actorId || null,
-        revocation_reason: reason || "Revoked by clinician",
-      })
-      .eq("id", consentId)
-      .select()
-      .single();
-
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+    }
+    const { data, error } = await supabase.rpc("rpc_revoke_consent_with_audit", {
+      p_consent_id: consentId,
+      p_reason: reason || "Revoked by clinician",
+    });
     if (error) {
-      console.error("Supabase revokePatientConsent error:", error);
+      console.error("Supabase rpc_revoke_consent_with_audit error:", error);
       throw new Error(`Failed to revoke clinical consent: ${error.message}`);
     }
-    updated = data as ConsentRecord;
-  } else {
-    updated = (await mockDb.revokeConsent(consentId, actorId, reason)) as ConsentRecord | null;
+    return data as ConsentRecord;
   }
 
+  const callerRole = typeof actorOrToken === "object" ? actorOrToken?.role : undefined;
+  const callerFacility = typeof actorOrToken === "object" ? actorOrToken?.facilityId || undefined : undefined;
+  const updated = (await mockDb.revokeConsent(consentId, actorId, reason, callerRole, callerFacility)) as ConsentRecord | null;
   if (!updated) {
     throw new Error(`Consent record '${consentId}' not found.`);
   }
 
-  // Audit revocation
+  // Audit revocation in demo mode
   await logAuditEvent({
     actorId: actorId || updated.patient_id,
     action: "UPDATE_PATIENT",
@@ -171,9 +196,15 @@ export async function revokePatientConsent(
 /**
  * Retrieve consent record by ID.
  */
-export async function getConsentById(consentId: string): Promise<ConsentRecord | null> {
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
+export async function getConsentById(
+  consentId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ConsentRecord | null> {
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+    }
     const { data, error } = await supabase.from("consents").select("*").eq("id", consentId).maybeSingle();
     if (error) {
       console.error("Supabase getConsentById error:", error);

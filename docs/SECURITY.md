@@ -42,9 +42,13 @@ All clinical API endpoints enforce server-side validation via `requireApiAuth(re
 
 ## 3. Database Security & Row Level Security (RLS)
 
-- **Fail-Closed Architecture**: In production mode (`NEXT_PUBLIC_DEMO_MODE=false`), any failure in database connectivity or query execution fails closed (throws explicit 500 error), preventing silent fallback to mock data.
-- **PostgreSQL Row Level Security (RLS)**: Enabled across all 7 production tables (`profiles`, `patients`, `consents`, `cases`, `documents`, `audit_logs`, `red_flag_events`).
-- **Audit Immutability**: The `audit_logs` table has policies permitting `INSERT` and `SELECT`, but strictly disallows `UPDATE` and `DELETE`, ensuring an untamperable audit trail.
+- **Fail-Closed Architecture**: In production mode (`NEXT_PUBLIC_DEMO_MODE=false`), any failure in database connectivity or query execution fails closed (throws explicit 500/503 error), preventing silent fallback to mock data.
+- **PostgreSQL Row Level Security (RLS)**: Enabled across all production tables (`profiles`, `patients`, `consents`, `cases`, `documents`, `sync_mutations`, `audit_logs`, `red_flag_events`, `case_amendments`).
+- **Institutional Facility Isolation**:
+  - All legacy permissive policies are explicitly purged (`DROP POLICY IF EXISTS`) to eliminate logical `OR` bypass in PostgreSQL.
+  - Queries are strictly scoped to the clinician's assigned facility (`facility_id = public.current_user_facility()`).
+  - Private storage bucket `clinical-documents` enforces path-based facility checks: `patients/<patient_id>/...`.
+- **Audit Immutability**: The `audit_logs` table permits `INSERT` and `SELECT`, but strictly disallows `UPDATE` and `DELETE`, ensuring an untamperable audit trail.
 
 ---
 
@@ -55,3 +59,14 @@ All clinical API endpoints enforce server-side validation via `requireApiAuth(re
   - Masking for ABHA IDs (`**-****-****-0123`)
   - Masking for patient names (`R***** V****`)
 - **Error Sanitization**: Database strings, connection URIs, credentials, and server stack traces are filtered using `sanitizeErrorMessage()`.
+
+---
+
+## 5. Kiosk Privacy, Offline Isolation & Concurrency
+
+- **Mandatory Consent Before Intake**: Unauthenticated kiosk intake cannot begin collecting clinical data without explicit patient consent acknowledgment (`consentAcknowledged: true`).
+- **Actor-Scoped Offline Storage**: LocalStorage mutation queues are strictly isolated by actor ID (`medkit_offline_queue_${actorId}`).
+- **Cross-Tab Synchronization**: Real-time `window.addEventListener("storage", ...)` keeps open browser tabs synchronized and prevents stale in-memory queue collisions.
+- **Session Cleanup**: Kiosk completion or clinician logout destroys the active actor queue and clears ephemeral intake capability tokens.
+- **Optimistic Concurrency**: Draft updates evaluate base timestamps (`expectedUpdatedAt`) and reject concurrent overwrites with `409 Conflict`.
+

@@ -57,6 +57,19 @@ export async function POST(request: Request) {
       }
     }
 
+    // Patient consent verification for voice recording modality
+    const patientId = auth.capability?.patientId || body.patientId;
+    if (patientId) {
+      const { verifyPatientConsent } = await import("@/features/consent/consent-service");
+      const consentCheck = await verifyPatientConsent(patientId, "voice_recording");
+      if (!consentCheck.valid) {
+        return NextResponse.json(
+          { error: `Consent violation: ${consentCheck.reason || "Patient consent does not permit voice recording"}` },
+          { status: 403 }
+        );
+      }
+    }
+
     const speechProvider = getSpeechProvider();
 
     const result = await speechProvider.transcribe({

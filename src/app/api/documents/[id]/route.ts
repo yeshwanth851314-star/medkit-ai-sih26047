@@ -18,7 +18,7 @@ export async function GET(
       return docCheck.errorResponse;
     }
 
-    const doc = await getDocumentById(id);
+    const doc = await getDocumentById(id, auth.user);
     if (!doc) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
@@ -28,7 +28,7 @@ export async function GET(
 
     let signedUrl: string | null = null;
     if (wantsSignedUrl && doc.storage_path) {
-      signedUrl = await getDocumentSignedUrl(doc.storage_path, 300); // 5-minute expiry
+      signedUrl = await getDocumentSignedUrl(doc.storage_path, 300, auth.user); // 5-minute expiry
     }
 
     await logAuditEvent({
@@ -38,6 +38,7 @@ export async function GET(
       resourceType: "documents",
       resourceId: id,
       metadata: { requestedSignedUrl: wantsSignedUrl },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({ document: doc, signedUrl });

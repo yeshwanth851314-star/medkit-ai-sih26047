@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCaseById, updateCase, getSupabaseClient } from "@/lib/db/supabase";
+import { getCaseById, updateCase, getAuthorizedSupabaseClient, getServiceSupabaseClient } from "@/lib/db/supabase";
+import { mockDb } from "@/lib/db/mock-adapter";
 import { env } from "@/config/env";
 import { evaluateClinicalRedFlags } from "@/features/red-flags/rules-engine";
 import { requireApiAuth } from "@/lib/auth/api-guard";
@@ -53,48 +54,59 @@ export async function POST(
     const { ruleId } = body;
 
     const currentRedFlags = c.red_flags || [];
+    const ackTimestamp = new Date().toISOString();
+    const ackAuthor = auth.user.fullName || auth.user.id || "Attending Doctor";
+
     const updatedRedFlags = currentRedFlags.map((rf) => {
       if (rf.rule_id === ruleId) {
         return {
           ...rf,
-          acknowledged_by: auth.user.fullName || "Attending Doctor",
-          acknowledged_at: new Date().toISOString(),
+          acknowledged_by: ackAuthor,
+          acknowledged_at: ackTimestamp,
         };
       }
       return rf;
     });
 
-    await updateCase(id, { red_flags: updatedRedFlags });
-
-    const supabase = getSupabaseClient();
-    if (supabase && !env.isDemoMode) {
-      try {
-        await supabase
-          .from("red_flag_events")
-          .update({
-            acknowledged_by: auth.user.fullName || auth.user.id,
-            acknowledged_at: new Date().toISOString(),
-          })
-          .eq("case_id", id)
-          .eq("rule_id", ruleId);
-      } catch (err) {
-        console.warn("Failed to update red_flag_events table:", err);
-      }
+    if (c.status === "draft") {
+      await updateCase(id, { red_flags: updatedRedFlags }, auth.user);
     }
 
-    await logAuditEvent({
-      actorId: auth.user.id,
-      actorRole: auth.user.role,
-      action: "ACKNOWLEDGE_RED_FLAG",
-      resourceType: "cases",
-      resourceId: id,
-      metadata: { action: "acknowledge_red_flag", ruleId },
-    });
+    if (env.isDemoMode) {
+      mockDb.updateRedFlagEvent(id, ruleId, ackAuthor, ackTimestamp, auth.user.role, auth.user.facilityId || undefined);
+      await logAuditEvent({
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
+        action: "ACKNOWLEDGE_RED_FLAG",
+        resourceType: "cases",
+        resourceId: id,
+        metadata: { action: "acknowledge_red_flag", ruleId },
+      });
+    } else {
+      const supabase = getAuthorizedSupabaseClient(auth.user) || getServiceSupabaseClient();
+      if (!supabase) {
+        throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+      }
+      const { error } = await supabase.rpc("rpc_acknowledge_red_flag_with_audit", {
+        p_case_id: id,
+        p_rule_id: ruleId,
+      });
+      if (error) {
+        console.error("Supabase rpc_acknowledge_red_flag_with_audit error:", error);
+        throw new Error(`Database error acknowledging red flag: ${error.message}`);
+      }
+    }
 
     return NextResponse.json({ success: true, redFlags: updatedRedFlags });
   } catch (err: any) {
     console.error("POST acknowledge red flag error:", err);
-    return NextResponse.json({ error: "Failed to acknowledge red flag" }, { status: 500 });
+    if (err.message?.includes("NOT_FOUND_OR_ALREADY_ACKNOWLEDGED")) {
+      return NextResponse.json({ error: err.message }, { status: 404 });
+    }
+    if (err.message?.includes("FORBIDDEN")) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: err.message || "Failed to acknowledge red flag" }, { status: 500 });
   }
 }
 

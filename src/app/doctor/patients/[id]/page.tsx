@@ -27,20 +27,24 @@ export default async function PatientProfilePage({
 }) {
   const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
-  const patient = await getPatientDetails(id);
+  const patient = await getPatientDetails(id, user);
 
   if (!patient) {
     notFound();
   }
 
-  // Enforce facility boundary check on server-rendered patient page
-  if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
+  // Enforce fail-closed facility boundary check on server-rendered patient page
+  if (user.role !== "admin") {
+    if (!user.facilityId || !patient.facility_id || user.facilityId !== patient.facility_id) {
+      notFound();
+    }
+  } else if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
     notFound();
   }
 
   const [cases, documents] = await Promise.all([
-    getCasesByPatientId(id),
-    getDocumentsByPatientId(id),
+    getCasesByPatientId(id, user),
+    getDocumentsByPatientId(id, user),
   ]);
 
   return (

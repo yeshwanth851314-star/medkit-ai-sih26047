@@ -134,6 +134,11 @@ export interface FhirCompositionSection {
 export interface FhirCompositionResource {
   resourceType: "Composition";
   id: string;
+  meta?: {
+    profile?: string[];
+    versionId?: string;
+    lastUpdated?: string;
+  };
   status: "preliminary" | "final" | "amended" | "entered-in-error";
   type: FhirCodeableConcept;
   subject: FhirReference;
@@ -163,10 +168,15 @@ export interface FhirR4Bundle {
   meta: {
     profile: string[];
     lastUpdated: string;
+    tag?: Array<{
+      system?: string;
+      code?: string;
+      display?: string;
+    }>;
   };
   identifier?: FhirIdentifier;
   type: "document" | "collection" | "transaction";
   timestamp: string;
   entry: FhirBundleEntry[];
-  abdmComplianceNotice: string;
+  abdmComplianceNotice?: string;
 }

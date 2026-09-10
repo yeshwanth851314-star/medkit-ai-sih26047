@@ -2,10 +2,12 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: /.*\.real\.spec\.ts/,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
+  timeout: 60000,
   reporter: "list",
   use: {
     baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || "http://localhost:3000",

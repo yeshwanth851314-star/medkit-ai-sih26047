@@ -7,13 +7,13 @@ export default async function DoctorLayout({
   children: React.ReactNode;
 }) {
   // Server-rendered guard: validates authentic cryptographic session token and clinical role
-  await requireServerAuth({
+  const user = await requireServerAuth({
     allowedRoles: ["doctor", "clinician", "staff", "admin"],
   });
 
   return (
     <>
-      <DoctorTour />
+      <DoctorTour doctorId={user.id} />
       {children}
     </>
   );

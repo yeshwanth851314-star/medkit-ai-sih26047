@@ -191,7 +191,7 @@ describe("Phase 4: Request Abuse & Quota Protection", () => {
 
   describe("POST /api/cases/[id]/summary Quota & Abuse Protections", () => {
     it("enforces rate limiting on repeated summary generation requests", async () => {
-      const caseId = "c1111111-1111-4111-8111-111111111111";
+      const caseId = "c2222222-2222-4222-8222-222222222222";
       const makeReq = () =>
         new Request(`http://localhost:3000/api/cases/${caseId}/summary`, {
           method: "POST",

@@ -4,20 +4,30 @@ import { requireServerAuth } from "@/lib/auth/server-guard";
 import { getCaseDetails } from "@/features/cases/case-service";
 import { getPatientDetails } from "@/features/patients/patient-service";
 import { formatDate, formatDateTime } from "@/lib/utils";
-import { Printer, ArrowLeft, Activity } from "lucide-react";
+import { ArrowLeft, Activity } from "lucide-react";
+import { PrintButton } from "@/components/cases/print-button";
 
 export default async function PrintCaseSheetPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
+  const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
-  const c = await getCaseDetails(id);
+  const c = await getCaseDetails(id, user);
   if (!c) notFound();
 
-  const patient = await getPatientDetails(c.patient_id);
+  const patient = await getPatientDetails(c.patient_id, user);
   if (!patient) notFound();
+
+  // Enforce facility boundary check: logged-in clinician must have clinical access to patient
+  if (user.role !== "admin") {
+    if (!user.facilityId || !patient.facility_id || user.facilityId !== patient.facility_id) {
+      notFound();
+    }
+  } else if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
+    notFound();
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8 text-black bg-white min-h-screen">
@@ -29,14 +39,7 @@ export default async function PrintCaseSheetPage({
         >
           <ArrowLeft className="h-4 w-4" /> Back to Interactive Case
         </Link>
-        <button
-          onClick={() => {
-            if (typeof window !== "undefined") window.print();
-          }}
-          className="inline-flex items-center gap-2 rounded-lg bg-clinical-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-clinical-700"
-        >
-          <Printer className="h-4 w-4" /> Print / Save as PDF
-        </button>
+        <PrintButton />
       </div>
 
       {/* Hospital / Institutional Header */}

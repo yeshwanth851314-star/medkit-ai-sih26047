@@ -3,6 +3,7 @@ import { recordPatientConsent, verifyPatientConsent } from "@/features/consent/c
 import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 import { requirePatientAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
+import { env } from "@/config/env";
 
 export async function GET(request: Request) {
   try {
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const verification = await verifyPatientConsent(patientId);
+    const verification = await verifyPatientConsent(patientId, undefined, auth.user);
     return NextResponse.json(verification);
   } catch (err: any) {
     console.error("GET /api/consents error:", err);
@@ -65,16 +66,21 @@ export async function POST(request: Request) {
       consentMethod: consentMethod || "touch_acknowledgement",
       scope: scope || ["voice_recording", "document_extraction", "ai_summary"],
       purpose: purpose || "clinical_care_and_case_taking",
+      actorOrToken: auth.user,
+      actorId: auth.user?.id || (auth.capability ? `kiosk:${auth.capability.sessionId}` : undefined),
+      actorRole: auth.user?.role || "patient",
     });
 
-    await logAuditEvent({
-      actorId: auth.user?.id || `kiosk:${auth.capability?.sessionId || "anonymous"}`,
-      actorRole: auth.user?.role || "patient",
-      action: "CONSENT_RECORDED",
-      resourceType: "consents",
-      resourceId: consent.id,
-      metadata: { patientId, language, consentMethod },
-    });
+    if (env.isDemoMode) {
+      await logAuditEvent({
+        actorId: auth.user?.id || `kiosk:${auth.capability?.sessionId || "anonymous"}`,
+        actorRole: auth.user?.role || "patient",
+        action: "CONSENT_RECORDED",
+        resourceType: "consents",
+        resourceId: consent.id,
+        metadata: { patientId, language, consentMethod },
+      });
+    }
 
     return NextResponse.json({ success: true, consent }, { status: 201 });
   } catch (err: any) {

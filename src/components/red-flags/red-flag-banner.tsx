@@ -5,6 +5,8 @@ import { RedFlagAlertItem } from "@/features/red-flags/types";
 import { AlertTriangle, ShieldAlert, CheckCircle2, UserCheck } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 
+import { ContextualHelp } from "@/components/help/contextual-help";
+
 export function RedFlagBanner({
   alerts,
   caseId,
@@ -65,17 +67,18 @@ export function RedFlagBanner({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
-                    {alert.severity} Clinical Signal
+                    CRITICAL CLINICAL RED FLAG
                   </span>
                   <span className="text-xs text-red-800 font-medium">
                     Rule Ref: <code>{alert.ruleId}</code>
                   </span>
+                  <ContextualHelp topic="red_flags" />
                 </div>
                 <h3 className="mt-1 text-sm font-bold text-red-900 leading-snug">
                   {alert.message}
                 </h3>
-                <p className="mt-1 text-xs text-red-700 leading-relaxed">
-                  Safety protocol: Non-diagnostic clinical signal. Clinician examination and triage assessment recommended immediately.
+                <p className="mt-1 text-xs text-red-700 leading-relaxed italic">
+                  Potential red flag detected — immediate clinical assessment recommended. Non-diagnostic alert.
                 </p>
               </div>
             </div>

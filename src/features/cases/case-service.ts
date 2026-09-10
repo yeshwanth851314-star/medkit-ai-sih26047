@@ -1,30 +1,49 @@
-import { createCase, updateCase, getCaseById, getCasesByPatientId, getSupabaseClient } from "@/lib/db/supabase";
+import {
+  createCase,
+  updateCase,
+  getCaseById,
+  getCasesByPatientId,
+  getCaseAmendments,
+  createCaseAmendment,
+  getAuthorizedSupabaseClient,
+  getServiceSupabaseClient,
+} from "@/lib/db/supabase";
 import { env } from "@/config/env";
 import { ClinicalCase } from "@/types/database";
 import { CaseInput } from "./types";
+import { AuthUser } from "@/features/auth/types";
 
 export async function createCaseDraft(
   input: CaseInput,
-  createdBy?: string | null
+  createdBy?: string | null,
+  actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalCase> {
+  if (input.status === "final") {
+    throw new Error("CANNOT_CREATE_FINAL: Cases must be created as drafts and finalized through the verified clinical workflow.");
+  }
+
+  const patientId = input.patientId || (input as any).patient_id;
+  const chiefComplaint = (input.chiefComplaint || (input as any).chief_complaint || "").trim();
+
   const newCase = await createCase({
-    patient_id: input.patientId,
-    consent_id: input.consentId || null,
+    patient_id: patientId,
+    consent_id: input.consentId || (input as any).consent_id || null,
     created_by: createdBy || null,
-    status: (input.status as any) || "draft",
-    case_type: input.caseType || "general",
-    patient_language: input.patientLanguage || "en",
-    chief_complaint: input.chiefComplaint.trim(),
-    raw_patient_complaint: input.rawPatientComplaint || null,
+    status: "draft",
+    case_type: input.caseType || (input as any).case_type || "general",
+    patient_language: input.patientLanguage || (input as any).patient_language || "en",
+    chief_complaint: chiefComplaint,
+    raw_patient_complaint: input.rawPatientComplaint || (input as any).raw_patient_complaint || null,
     hpi: input.hpi || null,
-    past_history: input.pastHistory || null,
-    family_history: input.familyHistory || null,
-    personal_history: input.personalHistory || null,
-    medication_history: input.medicationHistory || null,
-    allergy_history: input.allergyHistory || null,
+    past_history: input.pastHistory || (input as any).past_history || null,
+    family_history: input.familyHistory || (input as any).family_history || null,
+    personal_history: input.personalHistory || (input as any).personal_history || null,
+    medication_history: input.medicationHistory || (input as any).medication_history || null,
+    allergy_history: input.allergyHistory || (input as any).allergy_history || null,
     examination: input.examination || null,
-    assessment_plan: input.assessmentPlan || null,
-    ayush_assessment: input.ayushAssessment || null,
+    assessment_plan: input.assessmentPlan || (input as any).assessment_plan || null,
+    ayush_assessment: input.ayushAssessment || (input as any).ayush_assessment || null,
+    red_flags: input.red_flags || (input as any).redFlags || null,
     provenance: input.provenance || {
       chief_complaint: "patient",
       hpi: "patient",
@@ -33,22 +52,34 @@ export async function createCaseDraft(
       assessment_plan: "clinician",
     },
     finalized_at: null,
-  });
+  }, actorOrToken);
 
   return newCase;
 }
 
 export async function updateCaseDraft(
   id: string,
-  updates: Partial<CaseInput>
+  updates: Partial<CaseInput>,
+  options?: { expectedUpdatedAt?: string; actor?: AuthUser | string | null }
 ): Promise<ClinicalCase> {
-  const existing = await getCaseById(id);
+  const existing = await getCaseById(id, options?.actor);
   if (!existing) {
     throw new Error("Case not found");
   }
 
   if (existing.status === "final") {
     throw new Error("CANNOT_MUTATE_FINAL: Finalized cases cannot be directly modified. Create an addendum or revision.");
+  }
+
+  // Optimistic concurrency control
+  if (options?.expectedUpdatedAt && existing.updated_at) {
+    const existingTime = new Date(existing.updated_at).getTime();
+    const expectedTime = new Date(options.expectedUpdatedAt).getTime();
+    if (existingTime > expectedTime + 1000) {
+      throw new Error(
+        `CONFLICT_CONCURRENT_UPDATE: Case was modified by another clinician or session at ${existing.updated_at}. Expected ${options.expectedUpdatedAt}.`
+      );
+    }
   }
 
   const patch: Partial<ClinicalCase> = {};
@@ -70,8 +101,9 @@ export async function updateCaseDraft(
   if ((updates as any).red_flags !== undefined) patch.red_flags = (updates as any).red_flags;
   if ((updates as any).redFlags !== undefined) patch.red_flags = (updates as any).redFlags;
   if (updates.provenance !== undefined) patch.provenance = updates.provenance;
+  patch.updated_at = new Date().toISOString();
 
-  const updated = await updateCase(id, patch);
+  const updated = await updateCase(id, patch, options?.actor);
   if (!updated) {
     throw new Error("Failed to update case");
   }
@@ -81,9 +113,10 @@ export async function updateCaseDraft(
 
 export async function finalizeCase(
   id: string,
-  clinicianId?: string | null
+  clinicianId?: string | null,
+  actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalCase> {
-  const existing = await getCaseById(id);
+  const existing = await getCaseById(id, actorOrToken);
   if (!existing) {
     throw new Error("Case not found");
   }
@@ -96,25 +129,49 @@ export async function finalizeCase(
     throw new Error("VALIDATION_ERROR: Cannot finalize case without a valid chief complaint");
   }
 
-  const finalized = await updateCase(id, {
-    status: "final",
-    finalized_at: new Date().toISOString(),
-    finalized_by: clinicianId || null,
-  });
+  if (env.isDemoMode) {
+    const finalized = await updateCase(id, {
+      status: "final",
+      finalized_at: new Date().toISOString(),
+      finalized_by: clinicianId || null,
+    }, actorOrToken);
 
-  if (!finalized) {
-    throw new Error("Failed to finalize case");
+    if (!finalized) {
+      throw new Error("Failed to finalize case");
+    }
+
+    return finalized;
   }
 
-  return finalized;
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_finalize_case_with_audit", {
+    p_case_id: id,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_finalize_case_with_audit error:", error);
+    throw new Error(`Database error finalizing case ${id}: ${error.message}`);
+  }
+
+  return data as ClinicalCase;
 }
 
-export async function getCaseDetails(id: string): Promise<ClinicalCase | null> {
-  return getCaseById(id);
+export async function getCaseDetails(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase | null> {
+  return getCaseById(id, actorOrToken);
 }
 
-export async function getPatientCases(patientId: string): Promise<ClinicalCase[]> {
-  return getCasesByPatientId(patientId);
+export async function getPatientCases(
+  patientId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalCase[]> {
+  return getCasesByPatientId(patientId, actorOrToken);
 }
 
 export async function addCaseAmendment(
@@ -124,9 +181,10 @@ export async function addCaseAmendment(
     actorName: string;
     reason: string;
     notes: string;
-  }
+  },
+  actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalCase> {
-  const existing = await getCaseById(caseId);
+  const existing = await getCaseById(caseId, actorOrToken);
   if (!existing) {
     throw new Error("Case not found");
   }
@@ -135,45 +193,80 @@ export async function addCaseAmendment(
     throw new Error("CANNOT_AMEND_DRAFT: Amendments can only be appended to finalized clinical records.");
   }
 
-  const existingAmendments = existing.amendments || [];
-  const version = existingAmendments.length + 1;
+  if (env.isDemoMode) {
+    const existingAmendments = await getCaseAmendments(caseId, actorOrToken);
+    const version = existingAmendments.length + 1;
 
-  const newAmendment = {
-    id: `amend-${crypto.randomUUID().slice(0, 8)}`,
-    version,
-    actor_id: amendment.actorId,
-    actor_name: amendment.actorName,
-    timestamp: new Date().toISOString(),
-    reason: amendment.reason,
-    notes: amendment.notes,
-  };
+    const newAmendmentRecord = {
+      id: crypto.randomUUID(),
+      case_id: caseId,
+      author_id: amendment.actorId,
+      author_name: amendment.actorName,
+      reason: amendment.reason,
+      notes: amendment.notes,
+      version,
+      created_at: new Date().toISOString(),
+    };
 
-  const updated = await updateCase(caseId, {
-    amendments: [...existingAmendments, newAmendment],
+    await createCaseAmendment(newAmendmentRecord, actorOrToken);
+
+    // Note: We do NOT mutate the canonical cases row in PostgreSQL cases table!
+    // Finalized clinical records are immutable at the database level.
+    // We return the synthesized view with the newly appended amendment.
+    const mergedAmendments = [
+      ...existingAmendments.map((a: any) => ({
+        id: a.id,
+        version: a.version,
+        actor_id: a.author_id || a.actor_id,
+        actor_name: a.author_name || a.actor_name,
+        timestamp: a.created_at || a.timestamp,
+        reason: a.reason,
+        notes: a.notes,
+      })),
+      {
+        id: newAmendmentRecord.id,
+        version: newAmendmentRecord.version,
+        actor_id: newAmendmentRecord.author_id,
+        actor_name: newAmendmentRecord.author_name,
+        timestamp: newAmendmentRecord.created_at,
+        reason: newAmendmentRecord.reason,
+        notes: newAmendmentRecord.notes,
+      },
+    ];
+
+    return {
+      ...existing,
+      amendments: mergedAmendments,
+    };
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { error } = await supabase.rpc("rpc_add_amendment_with_audit", {
+    p_case_id: caseId,
+    p_reason: amendment.reason,
+    p_notes: amendment.notes,
   });
 
-  if (!updated) {
-    throw new Error("Failed to record clinical amendment");
+  if (error) {
+    console.error("Supabase rpc_add_amendment_with_audit error:", error);
+    throw new Error(`Database error amending case ${caseId}: ${error.message}`);
   }
 
-  // Persist to dedicated immutable case_amendments table when Supabase is active
-  const supabase = getSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    try {
-      await supabase.from("case_amendments").insert([
-        {
-          case_id: caseId,
-          author_id: amendment.actorId,
-          author_name: amendment.actorName,
-          reason: amendment.reason,
-          notes: amendment.notes,
-          version,
-        },
-      ]);
-    } catch (err) {
-      console.warn("Notice: Failed to insert dedicated case_amendments row", err);
-    }
-  }
-
-  return updated;
+  const allAmendments = await getCaseAmendments(caseId, actorOrToken);
+  return {
+    ...existing,
+    amendments: allAmendments.map((a: any) => ({
+      id: a.id,
+      version: a.version,
+      actor_id: a.author_id || a.actor_id,
+      actor_name: a.author_name || a.actor_name,
+      timestamp: a.created_at || a.timestamp,
+      reason: a.reason,
+      notes: a.notes,
+    })),
+  };
 }

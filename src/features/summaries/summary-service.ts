@@ -1,12 +1,16 @@
 import { getCaseById, getPatientById } from "@/lib/db/supabase";
 import { ClinicalSummary, clinicalSummarySchema } from "./types";
 import { env } from "@/config/env";
+import type { AuthUser } from "@/features/auth/types";
 
-export async function generateDeterministicSummary(caseId: string): Promise<ClinicalSummary> {
-  const c = await getCaseById(caseId);
+export async function generateDeterministicSummary(
+  caseId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalSummary> {
+  const c = await getCaseById(caseId, actorOrToken);
   if (!c) throw new Error("Case not found");
 
-  const patient = await getPatientById(c.patient_id);
+  const patient = await getPatientById(c.patient_id, actorOrToken);
   if (!patient) throw new Error("Patient not found");
 
   // Construct HPI Narrative
@@ -87,9 +91,12 @@ export async function generateDeterministicSummary(caseId: string): Promise<Clin
   return clinicalSummarySchema.parse(summaryPayload);
 }
 
-export async function generateAIAssistedSummary(caseId: string): Promise<ClinicalSummary> {
+export async function generateAIAssistedSummary(
+  caseId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalSummary> {
   // Always begin with deterministic baseline as guaranteed foundation
-  const baseline = await generateDeterministicSummary(caseId);
+  const baseline = await generateDeterministicSummary(caseId, actorOrToken);
 
   // If in live mode with Gemini API key, we can refine narrative
   // For demo and test safety, produce a polished AI-assisted summary matching the exact schema

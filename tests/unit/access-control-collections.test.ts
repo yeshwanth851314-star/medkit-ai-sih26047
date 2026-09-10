@@ -151,12 +151,28 @@ describe("Phase 2 & 3: Collection Authorization and Scoped Kiosk Issuance", () =
       expect(res.status).toBe(403);
     });
 
+    it("rejects kiosk intake when consent acknowledgement is missing or false with 400", async () => {
+      const req = new Request("http://localhost:3000/api/interviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: "te",
+          consentAcknowledged: false,
+        }),
+      });
+      const res = await postInterviews(req);
+      expect(res.status).toBe(400);
+      const err = await res.json();
+      expect(err.error).toContain("CONSENT_REQUIRED");
+    });
+
     it("allows kiosk intake with default or empty patientId and returns scoped intake token", async () => {
       const req = new Request("http://localhost:3000/api/interviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           language: "te",
+          consentAcknowledged: true,
         }),
       });
       const res = await postInterviews(req);

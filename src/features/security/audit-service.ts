@@ -1,6 +1,7 @@
 import { mockDb } from "../../lib/db/mock-adapter";
-import { getSupabaseClient } from "../../lib/db/supabase";
+import { getAuthorizedSupabaseClient, getServiceSupabaseClient } from "../../lib/db/supabase";
 import { env } from "@/config/env";
+import { AuthUser } from "../auth/types";
 import { AuditAction, ClinicalAuditLog, clinicalAuditSchema } from "./types";
 
 /**
@@ -28,6 +29,7 @@ export async function logAuditEvent(params: {
   resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts";
   resourceId: string;
   metadata?: Record<string, any>;
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null;
 }): Promise<ClinicalAuditLog> {
   const entry: ClinicalAuditLog = {
     id: crypto.randomUUID(),
@@ -44,7 +46,7 @@ export async function logAuditEvent(params: {
   const isCritical = CRITICAL_AUDIT_ACTIONS.has(validated.action as AuditAction);
 
   if (!env.isDemoMode) {
-    const supabase = getSupabaseClient();
+    const supabase = getAuthorizedSupabaseClient(params.actorOrToken) || getServiceSupabaseClient();
     if (!supabase) {
       if (isCritical) {
         throw new Error(
@@ -124,9 +126,10 @@ export async function logAuditEvent(params: {
  */
 export async function getAuditTrailForResource(
   resourceType: string,
-  resourceId: string
+  resourceId: string,
+  actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalAuditLog[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
   if (supabase && !env.isDemoMode) {
     try {
       const { data, error } = await supabase
@@ -162,8 +165,10 @@ export async function getAuditTrailForResource(
 /**
  * Query entire audit trail (for hospital compliance / administrators)
  */
-export async function getAllAuditLogs(): Promise<ClinicalAuditLog[]> {
-  const supabase = getSupabaseClient();
+export async function getAllAuditLogs(
+  actorOrToken?: AuthUser | string | null
+): Promise<ClinicalAuditLog[]> {
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
   if (supabase && !env.isDemoMode) {
     try {
       const { data, error } = await supabase

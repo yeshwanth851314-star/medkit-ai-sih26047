@@ -79,14 +79,38 @@ Output ONLY a JSON object with this exact structure:
 
     const latencyMs = Date.now() - startTime;
     const text = response.text || "{}";
-    const parsed = JSON.parse(text);
+    let rawParsed: unknown;
+    try {
+      rawParsed = JSON.parse(text);
+    } catch {
+      throw new Error("Speech recognition model output could not be parsed as valid JSON.");
+    }
+
+    const liveSpeechModelOutputSchema = transcriptionResponseSchema.pick({
+      rawTranscript: true,
+      confidence: true,
+    }).extend({
+      rawTranscript: transcriptionResponseSchema.shape.rawTranscript.min(1, "rawTranscript cannot be empty"),
+      language: transcriptionResponseSchema.shape.language.optional(),
+      normalizedEntities: transcriptionResponseSchema.shape.normalizedEntities.optional(),
+      englishTranslation: transcriptionResponseSchema.shape.englishTranslation.optional(),
+    });
+
+    const parseResult = liveSpeechModelOutputSchema.safeParse(rawParsed);
+    if (!parseResult.success) {
+      throw new Error(
+        `Speech recognition output failed validation: ${parseResult.error.issues.map((i) => i.message).join(", ")}. Raw transcript or confidence was absent.`
+      );
+    }
+
+    const parsed = parseResult.data;
 
     const result: SpeechTranscriptionResponse = {
       id: `tr-${crypto.randomUUID().slice(0, 8)}`,
       mode: "voice",
-      language: options.language || "en",
-      rawTranscript: parsed.rawTranscript || "Clinical audio transcribed successfully",
-      confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.95,
+      language: parsed.language || options.language || "en",
+      rawTranscript: parsed.rawTranscript,
+      confidence: parsed.confidence,
       status: parsed.confidence < 0.6 ? "needs_review" : "confirmed",
       requiresManualEdit: parsed.confidence < 0.6,
       englishTranslation: parsed.englishTranslation || undefined,
@@ -141,6 +165,19 @@ export class DeterministicDemoSpeechProvider implements SpeechProvider {
 }
 
 /**
+ * Unavailable Speech Provider for production environments without configured API credentials
+ */
+export class UnavailableSpeechProvider implements SpeechProvider {
+  readonly name = "gemini-audio" as const;
+
+  async transcribe(_options: SpeechTranscriptionOptions): Promise<SpeechTranscriptionResponse> {
+    throw new Error(
+      "Speech recognition service unavailable: live AI credentials are not configured in production mode."
+    );
+  }
+}
+
+/**
  * Resilient Speech Provider wrapper with 8s timeout and automatic fallback
  */
 export class ResilientSpeechProvider implements SpeechProvider {
@@ -157,9 +194,14 @@ export class ResilientSpeechProvider implements SpeechProvider {
   async transcribe(options: SpeechTranscriptionOptions): Promise<SpeechTranscriptionResponse> {
     const hasRealAudio = Boolean(options.audioBase64 && options.audioBase64.trim().length > 50);
 
-    // If client requested mockId explicitly without real audio, bypass live API directly (demo fixtures only)
-    if (options.mockId && !hasRealAudio) {
-      return this.fallback.transcribe(options);
+    // Reject client-supplied mockId switches when operating in production mode
+    if (options.mockId) {
+      if (!env.isDemoMode) {
+        throw new Error("Synthetic fixture selection (mockId) is strictly prohibited in production mode.");
+      }
+      if (!hasRealAudio) {
+        return this.fallback.transcribe(options);
+      }
     }
 
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -173,11 +215,11 @@ export class ResilientSpeechProvider implements SpeechProvider {
       return await Promise.race([this.primary.transcribe(options), timeoutPromise]);
     } catch (err: any) {
       // CLINICAL SAFETY ENFORCEMENT:
-      // If real patient audio was submitted, NEVER silently substitute fabricated synthetic text.
-      // Doing so could mask critical medical emergencies (e.g. replacing acute chest pain with cough).
-      if (hasRealAudio) {
+      // If real patient audio was submitted or in production mode,
+      // NEVER silently substitute fabricated synthetic text.
+      if (hasRealAudio || !env.isDemoMode) {
         console.error(
-          `[Clinical Safety Alert] Speech provider failed on real audio: ${err.message}. Refusing synthetic fallback.`
+          `[Clinical Safety Alert] Speech provider failed on live audio: ${err.message}. Refusing synthetic fallback.`
         );
         throw new Error(
           `Speech recognition service unavailable (${err.message}). For patient safety, live audio cannot fall back to synthetic text. Please retry or enter your symptoms manually.`
@@ -210,6 +252,11 @@ export function getSpeechProvider(): SpeechProvider {
     const primary = new LiveSpeechProvider(env.geminiApiKey!);
     const fallback = new DeterministicDemoSpeechProvider();
     return new ResilientSpeechProvider(primary, fallback, 8000);
+  }
+
+  // In production mode, if live credentials are not available, fail closed
+  if (!env.isDemoMode) {
+    return new UnavailableSpeechProvider();
   }
 
   return new DeterministicDemoSpeechProvider();

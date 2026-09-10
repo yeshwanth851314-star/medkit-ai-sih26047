@@ -60,7 +60,7 @@ export default function PatientKioskIntakePage() {
       const res = await fetch("/api/interviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language }),
+        body: JSON.stringify({ language, consentAcknowledged: true }),
       });
       const data = await res.json();
       if (res.ok && data.sessionId) {

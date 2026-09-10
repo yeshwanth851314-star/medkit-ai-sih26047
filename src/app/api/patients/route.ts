@@ -10,14 +10,22 @@ export async function GET(request: Request) {
   });
   if ("errorResponse" in auth) return auth.errorResponse;
 
+  // Unassigned clinicians (non-admin) cannot query patient records
+  if (auth.user.role !== "admin" && !auth.user.facilityId) {
+    return NextResponse.json(
+      { error: "Access denied: Clinician must be assigned to an active facility to access patient records" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("search") || undefined;
-    const allPatients = await searchPatients(q);
-    // Enforce facility boundary scoping
-    const patients = auth.user.facilityId
-      ? allPatients.filter((p) => !p.facility_id || p.facility_id === auth.user.facilityId)
-      : allPatients;
+    const allPatients = await searchPatients(q, auth.user);
+    // Enforce strict facility boundary scoping
+    const patients = auth.user.role === "admin"
+      ? allPatients
+      : allPatients.filter((p) => p.facility_id === auth.user.facilityId);
     return NextResponse.json({ patients });
   } catch (err) {
     console.error("GET /api/patients error:", err);
@@ -31,6 +39,14 @@ export async function POST(request: Request) {
   });
   if ("errorResponse" in auth) return auth.errorResponse;
 
+  // Unassigned clinicians (non-admin) cannot register patient records
+  if (auth.user.role !== "admin" && !auth.user.facilityId) {
+    return NextResponse.json(
+      { error: "Access denied: Clinician must be assigned to an active facility to register patients" },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const validated = patientRegistrationSchema.safeParse(body);
@@ -43,7 +59,11 @@ export async function POST(request: Request) {
     }
 
     const ignoreDuplicate = Boolean(body.ignoreDuplicateWarning);
-    const result = await registerPatient(validated.data, { ignoreDuplicateWarning: ignoreDuplicate });
+    const result = await registerPatient(validated.data, {
+      ignoreDuplicateWarning: ignoreDuplicate,
+      facilityId: auth.user.facilityId || undefined,
+      actor: auth.user,
+    });
 
     if (result.duplicateWarning && !ignoreDuplicate) {
       return NextResponse.json(
@@ -61,7 +81,7 @@ export async function POST(request: Request) {
       action: "CREATE_PATIENT",
       resourceType: "patients",
       resourceId: result.patient.id,
-      metadata: { patient_code: result.patient.patient_code },
+      metadata: { patient_code: result.patient.patient_code, facility_id: auth.user.facilityId },
     });
 
     return NextResponse.json({ success: true, patient: result.patient }, { status: 201 });

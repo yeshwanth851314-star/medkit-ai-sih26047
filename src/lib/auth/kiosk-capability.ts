@@ -3,17 +3,42 @@ import { NextResponse } from "next/server";
 import { getSessionSecret } from "./jwt";
 import { authenticateApiRequest } from "./api-guard";
 import { AuthUser } from "@/features/auth/types";
+import { env } from "@/config/env";
 
 export interface IntakeCapabilityPayload {
   type: "kiosk_intake";
   sessionId: string;
   patientId: string;
+  facilityId?: string | null;
+  consentId?: string | null;
   scope: string[];
   iat: number;
   exp: number;
 }
 
 const DEFAULT_INTAKE_EXPIRATION = 2 * 60 * 60; // 2 hours
+
+const globalForRevocations = globalThis as unknown as {
+  __medkit_revoked_capability_sessions?: Set<string>;
+};
+
+if (!globalForRevocations.__medkit_revoked_capability_sessions) {
+  globalForRevocations.__medkit_revoked_capability_sessions = new Set();
+}
+
+const revokedSessions: Set<string> = globalForRevocations.__medkit_revoked_capability_sessions;
+
+export function revokeIntakeCapabilityToken(sessionId: string): void {
+  revokedSessions.add(sessionId);
+  // Durably mark intake session status as abandoned in persistent store
+  import("@/lib/db/supabase").then(({ updateIntakeSession }) => {
+    updateIntakeSession(sessionId, { status: "abandoned" }).catch(() => {});
+  });
+}
+
+export function isIntakeCapabilityRevoked(sessionId: string): boolean {
+  return revokedSessions.has(sessionId);
+}
 
 function base64UrlEncode(str: string | Buffer): string {
   const buf = typeof str === "string" ? Buffer.from(str) : str;
@@ -36,6 +61,8 @@ export function signIntakeCapabilityToken(
   data: {
     sessionId: string;
     patientId: string;
+    facilityId?: string | null;
+    consentId?: string | null;
     scope?: string[];
   },
   expiresInSeconds: number = DEFAULT_INTAKE_EXPIRATION,
@@ -48,6 +75,8 @@ export function signIntakeCapabilityToken(
     type: "kiosk_intake",
     sessionId: data.sessionId,
     patientId: data.patientId,
+    facilityId: data.facilityId || null,
+    consentId: data.consentId || null,
     scope: data.scope || ["intake:answer", "intake:submit", "voice:transcribe", "consent:grant"],
     iat: now,
     exp: now + expiresInSeconds,
@@ -97,6 +126,9 @@ export function verifyIntakeCapabilityToken(
   try {
     const payload: IntakeCapabilityPayload = JSON.parse(base64UrlDecode(encodedPayload));
     if (payload.type !== "kiosk_intake") return null;
+
+    // Check if capability token was revoked upon session completion or teardown
+    if (isIntakeCapabilityRevoked(payload.sessionId)) return null;
 
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) return null;
@@ -190,6 +222,28 @@ export async function requireIntakeOrClinicalAuth(
       errorResponse: NextResponse.json(
         { error: `FORBIDDEN: Intake capability token lacks required scope '${options.requiredScope}'` },
         { status: 403 }
+      ),
+    };
+  }
+
+  // Validate durable session in persistent store
+  const { getIntakeSessionById } = await import("@/lib/db/supabase");
+  const dbSession = await getIntakeSessionById(capability.sessionId);
+  if (!dbSession && !env.isDemoMode) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "UNAUTHORIZED: Kiosk intake session does not exist" },
+        { status: 401 }
+      ),
+    };
+  }
+  if (dbSession && (dbSession.status !== "active" || new Date(dbSession.expires_at).getTime() < Date.now())) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "UNAUTHORIZED: Kiosk intake session has expired or been terminated" },
+        { status: 401 }
       ),
     };
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { submitInterviewAnswer } from "@/features/interview/interview-service";
+import { submitInterviewAnswerAsync } from "@/features/interview/interview-service";
 import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 
 export async function POST(
@@ -23,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: "Answer text is required" }, { status: 400 });
     }
 
-    const result = submitInterviewAnswer(id, answer, inputMode || "touch");
+    const result = await submitInterviewAnswerAsync(id, answer, inputMode || "touch");
 
     return NextResponse.json({
       session: result.session,

@@ -59,8 +59,9 @@ export function completeDoctorOnboarding(doctorId?: string): void {
   try {
     const key = getDoctorStorageKey(doctorId);
     window.localStorage.setItem(key, "true");
-    // Also set base key for backwards compatibility
-    window.localStorage.setItem(DOCTOR_ONBOARDING_KEY_PREFIX, "true");
+    if (!doctorId) {
+      window.localStorage.setItem(DOCTOR_ONBOARDING_KEY_PREFIX, "true");
+    }
   } catch (err) {
     console.warn("Failed to persist doctor onboarding completion", err);
   }

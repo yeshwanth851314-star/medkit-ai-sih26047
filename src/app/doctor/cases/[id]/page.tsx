@@ -8,9 +8,12 @@ import { CaseActionsBar } from "@/components/cases/case-actions-bar";
 import { AyushCaseDisplay } from "@/components/ayush/ayush-case-display";
 import { ClinicalSummaryCard } from "@/components/summary/clinical-summary-card";
 import { generateDeterministicSummary } from "@/features/summaries/summary-service";
+import { ClinicalSummary } from "@/features/summaries/types";
 import { compareConsecutiveVisits } from "@/features/timeline/timeline-service";
 import { VisitComparisonView } from "@/components/timeline/visit-comparison";
 import { ContextualHelp } from "@/components/help/contextual-help";
+import { RedFlagBanner } from "@/components/red-flags/red-flag-banner";
+import { RedFlagAlertItem } from "@/features/red-flags/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Stethoscope,
@@ -36,29 +39,31 @@ export default async function CaseDetailsPage({
 }) {
   const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
-  const c = await getCaseDetails(id);
+  const c = await getCaseDetails(id, user);
 
   if (!c) {
     notFound();
   }
 
-  const [patient, documents, initialSummary, visitComparison] = await Promise.all([
-    getPatientDetails(c.patient_id),
-    getDocumentsByPatientId(c.patient_id),
-    generateDeterministicSummary(c.id).catch(() => null),
-    compareConsecutiveVisits(c.patient_id, c.id).catch(() => null),
+  const [patient, documents, fallbackSummary, visitComparison] = await Promise.all([
+    getPatientDetails(c.patient_id, user),
+    getDocumentsByPatientId(c.patient_id, user),
+    c.ai_summary ? Promise.resolve(null) : generateDeterministicSummary(c.id, user).catch(() => null),
+    compareConsecutiveVisits(c.patient_id, c.id, user).catch(() => null),
   ]);
 
-  // Enforce facility boundary check on server-rendered case page
-  if (user.facilityId && patient?.facility_id && user.facilityId !== patient.facility_id) {
+  // Enforce fail-closed facility boundary check on server-rendered case page
+  if (user.role !== "admin") {
+    if (!user.facilityId || !patient?.facility_id || user.facilityId !== patient.facility_id) {
+      notFound();
+    }
+  } else if (user.facilityId && patient?.facility_id && user.facilityId !== patient.facility_id) {
     notFound();
   }
 
-  if (initialSummary && c.assessment_plan?.summary) {
+  const initialSummary = (c.ai_summary as unknown as ClinicalSummary | null) || fallbackSummary;
+  if (initialSummary && c.assessment_plan?.summary && !initialSummary.hpiNarrative) {
     initialSummary.hpiNarrative = c.assessment_plan.summary;
-    if (c.status === "final") {
-      initialSummary.status = "confirmed";
-    }
   }
 
   return (
@@ -163,30 +168,33 @@ export default async function CaseDetailsPage({
       )}
 
       {/* Red Flag Alert Notice if present */}
-      {c.red_flags && c.red_flags.length > 0 ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900 space-y-2" role="alert">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-sm text-red-700">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
-              CRITICAL CLINICAL RED FLAG
+      {(() => {
+        const redFlagAlerts: RedFlagAlertItem[] = (c.red_flags || []).map((rf: any) => ({
+          ruleId: rf.ruleId || rf.rule_id || "RED_FLAG_ALERT",
+          ruleVersion: rf.ruleVersion || rf.rule_version || "1.0",
+          severity: (rf.severity?.toLowerCase() || "critical") as any,
+          message: rf.message || "Potential red flag detected — immediate clinical assessment recommended.",
+          clinicalRationale: rf.clinicalRationale || rf.clinical_rationale,
+          triggeredAt: rf.triggeredAt || rf.triggered_at || c.created_at,
+          acknowledgedBy: rf.acknowledgedBy || rf.acknowledged_by,
+          acknowledgedAt: rf.acknowledgedAt || rf.acknowledged_at,
+        }));
+
+        if (redFlagAlerts.length > 0) {
+          return <RedFlagBanner alerts={redFlagAlerts} caseId={c.id} />;
+        }
+
+        return (
+          <div className="rounded-xl border border-surface-200 bg-surface-50/80 p-3.5 text-xs text-slate-600 flex items-center justify-between no-print">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span className="font-semibold text-slate-800">No rule-based red flags detected</span>
+              <ContextualHelp topic="red_flags" />
             </div>
-            <ContextualHelp topic="red_flags" />
+            <span className="text-[11px] text-slate-400 hidden sm:inline">Deterministic safety check evaluated</span>
           </div>
-          <p className="text-xs font-medium">{c.red_flags[0].message}</p>
-          <div className="text-[11px] text-red-600 italic">
-            Potential red flag detected — immediate clinical assessment recommended. Non-diagnostic alert.
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-surface-200 bg-surface-50/80 p-3.5 text-xs text-slate-600 flex items-center justify-between no-print">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span className="font-semibold text-slate-800">No rule-based red flags detected</span>
-            <ContextualHelp topic="red_flags" />
-          </div>
-          <span className="text-[11px] text-slate-400 hidden sm:inline">Deterministic safety check evaluated</span>
-        </div>
-      )}
+        );
+      })()}
 
       {/* AI-Assisted Clinical Summary Section */}
       {initialSummary && (

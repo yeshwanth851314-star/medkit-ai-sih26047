@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import {
   hasCompletedDoctorOnboarding,
@@ -172,7 +172,11 @@ const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export function DoctorTour() {
+export interface DoctorTourProps {
+  doctorId?: string;
+}
+
+export function DoctorTour({ doctorId }: DoctorTourProps = {}) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<"welcome" | "tour">("welcome");
@@ -183,7 +187,7 @@ export function DoctorTour() {
   useEffect(() => {
     // Check if first-time doctor login (only auto-open on doctor home / triage queue)
     const isDoctorHome = pathname === "/doctor/patients" || pathname === "/doctor/dashboard";
-    const completed = hasCompletedDoctorOnboarding();
+    const completed = hasCompletedDoctorOnboarding(doctorId);
     if (!completed && isDoctorHome) {
       setMode("welcome");
       setIsOpen(true);
@@ -199,7 +203,7 @@ export function DoctorTour() {
 
     window.addEventListener(REPLAY_TOUR_EVENT, handleReplay);
     return () => window.removeEventListener(REPLAY_TOUR_EVENT, handleReplay);
-  }, [pathname]);
+  }, [pathname, doctorId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -209,6 +213,11 @@ export function DoctorTour() {
       previousFocusRef.current?.focus();
     }
   }, [isOpen]);
+
+  const handleDismiss = useCallback(() => {
+    completeDoctorOnboarding(doctorId);
+    setIsOpen(false);
+  }, [doctorId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -249,16 +258,11 @@ export function DoctorTour() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, mode, currentStepIndex]);
+  }, [isOpen, mode, currentStepIndex, handleDismiss]);
 
   const handleStartTour = () => {
     setMode("tour");
     setCurrentStepIndex(0);
-  };
-
-  const handleDismiss = () => {
-    completeDoctorOnboarding();
-    setIsOpen(false);
   };
 
   const handleNext = () => {
@@ -266,7 +270,7 @@ export function DoctorTour() {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
       // Completed all 5 steps
-      completeDoctorOnboarding();
+      completeDoctorOnboarding(doctorId);
       setIsOpen(false);
     }
   };
@@ -286,7 +290,7 @@ export function DoctorTour() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="tour-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200 motion-reduce:animate-none motion-reduce:transition-none"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 transition-opacity duration-200 motion-reduce:transition-none"
     >
       <div
         ref={dialogRef}

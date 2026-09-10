@@ -6,6 +6,7 @@ export interface Profile {
   role: UserRole;
   facility_id?: string | null;
   is_active: boolean;
+  active?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -119,6 +120,7 @@ export interface ClinicalCase {
     summary?: string | null;
     plan?: string | null;
   } | null;
+  ai_summary?: Record<string, any> | null;
   ayush_assessment?: AyushAssessment | null;
   red_flags?: RedFlagAlert[] | null;
   provenance?: ClinicalProvenance | null;
@@ -183,4 +185,44 @@ export interface AuditLogEntry {
   resource_id: string;
   metadata?: Record<string, any>;
   created_at: string;
+}
+
+export interface IntakeSessionRecord {
+  id: string;
+  facility_id: string;
+  patient_id: string;
+  consent_id?: string | null;
+  language: "en" | "te";
+  status: "active" | "submitted" | "abandoned" | "expired";
+  current_question_id?: string | null;
+  answers: Record<string, any>;
+  compiled_case_id?: string | null;
+  expires_at: string;
+  started_at: string;
+  completed_at?: string | null;
+}
+
+export interface SyncMutationRecord {
+  id: string;
+  idempotency_key: string;
+  user_id: string;
+  entity: string;
+  action: string;
+  resource_id?: string | null;
+  payload_hash?: string | null;
+  status: "in_progress" | "pending" | "completed" | "failed";
+  error_message?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface KioskInstance {
+  id: string;
+  facility_id: string;
+  name: string;
+  secret_hash: string;
+  status: "active" | "disabled" | "revoked";
+  created_at: string;
+  expires_at?: string | null;
+  last_active_at?: string | null;
 }

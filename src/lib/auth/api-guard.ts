@@ -11,7 +11,13 @@ export function extractBearerOrCookieToken(request: Request): string | null {
     return authHeader.slice(7).trim();
   }
 
-  // 2. Check Cookie header
+  // 2. Check forwarded middleware token header
+  const forwarded = request.headers.get("x-medkit-session-token");
+  if (forwarded) {
+    return forwarded.trim();
+  }
+
+  // 3. Check Cookie header
   const cookieHeader = request.headers.get("cookie") || "";
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]*)`));
   if (match && match[1]) {
@@ -24,7 +30,22 @@ export function extractBearerOrCookieToken(request: Request): string | null {
 export async function authenticateApiRequest(request: Request): Promise<AuthUser | null> {
   const token = extractBearerOrCookieToken(request);
   if (!token) return null;
-  return verifySessionToken(token);
+  const user = verifySessionToken(token);
+  if (!user) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (user.refreshToken && user.tokenExpiresAt && user.tokenExpiresAt - now < 300) {
+    const { refreshClinicianSession } = await import("@/features/auth/auth-service");
+    const refreshed = await refreshClinicianSession(user.refreshToken);
+    if (refreshed) {
+      return refreshed.user;
+    } else if (user.tokenExpiresAt < now) {
+      // Expired access token and refresh failed
+      return null;
+    }
+  }
+
+  return user;
 }
 
 export async function requireApiAuth(

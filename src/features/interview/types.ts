@@ -30,6 +30,7 @@ export interface InterviewSession {
   id: string;
   patientId: string;
   consentId?: string | null;
+  facilityId?: string | null;
   language: "en" | "te";
   status: "active" | "submitted" | "abandoned";
   consentGiven: boolean;

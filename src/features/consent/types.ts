@@ -44,4 +44,5 @@ export interface RecordConsentInput {
   consentVersion?: string;
   actorId?: string;
   actorRole?: string;
+  actorOrToken?: any;
 }

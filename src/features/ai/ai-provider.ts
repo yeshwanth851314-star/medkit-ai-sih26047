@@ -3,6 +3,7 @@ import { env } from "@/config/env";
 import { ClinicalSummary } from "@/features/summaries/types";
 import { generateDeterministicSummary } from "@/features/summaries/summary-service";
 import { getCaseById, getPatientById } from "@/lib/db/supabase";
+import type { AuthUser } from "@/features/auth/types";
 
 export interface AIProviderMeta {
   provider: "gemini-2.5-flash" | "deterministic-demo";
@@ -18,7 +19,7 @@ export interface AIClinicalSummaryResult extends ClinicalSummary {
 
 export interface AIProvider {
   readonly name: "gemini-2.5-flash" | "deterministic-demo";
-  generateClinicalSummary(caseId: string): Promise<AIClinicalSummaryResult>;
+  generateClinicalSummary(caseId: string, actorOrToken?: AuthUser | string | null): Promise<AIClinicalSummaryResult>;
 }
 
 const CLINICAL_SYSTEM_INSTRUCTION = `You are an AI Clinical Assistant for MedKit AI, an intelligent clinical case-taking and physician copilot platform (SIH26047).
@@ -40,12 +41,12 @@ export class GeminiProvider implements AIProvider {
     this.client = new GoogleGenAI({ apiKey });
   }
 
-  async generateClinicalSummary(caseId: string): Promise<AIClinicalSummaryResult> {
+  async generateClinicalSummary(caseId: string, actorOrToken?: AuthUser | string | null): Promise<AIClinicalSummaryResult> {
     const startTime = Date.now();
-    const c = await getCaseById(caseId);
+    const c = await getCaseById(caseId, actorOrToken);
     if (!c) throw new Error("Case not found");
 
-    const patient = await getPatientById(c.patient_id);
+    const patient = await getPatientById(c.patient_id, actorOrToken);
     if (!patient) throw new Error("Patient not found");
 
     const clinicalInput = {
@@ -127,9 +128,9 @@ Return a JSON object conforming to:
 export class DeterministicDemoAIProvider implements AIProvider {
   readonly name = "deterministic-demo" as const;
 
-  async generateClinicalSummary(caseId: string): Promise<AIClinicalSummaryResult> {
+  async generateClinicalSummary(caseId: string, actorOrToken?: AuthUser | string | null): Promise<AIClinicalSummaryResult> {
     const startTime = Date.now();
-    const summary = await generateDeterministicSummary(caseId);
+    const summary = await generateDeterministicSummary(caseId, actorOrToken);
     const latencyMs = Date.now() - startTime;
 
     return {
@@ -158,7 +159,7 @@ export class ResilientAIProvider implements AIProvider {
     this.name = primary.name;
   }
 
-  async generateClinicalSummary(caseId: string): Promise<AIClinicalSummaryResult> {
+  async generateClinicalSummary(caseId: string, actorOrToken?: AuthUser | string | null): Promise<AIClinicalSummaryResult> {
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(
         () => reject(new Error(`AI provider '${this.primary.name}' timed out after ${this.timeoutMs}ms`)),
@@ -168,14 +169,14 @@ export class ResilientAIProvider implements AIProvider {
 
     try {
       return await Promise.race([
-        this.primary.generateClinicalSummary(caseId),
+        this.primary.generateClinicalSummary(caseId, actorOrToken),
         timeoutPromise,
       ]);
     } catch (err: any) {
       console.warn(
         `Primary AI provider '${this.primary.name}' failed or timed out: ${err.message}. Falling back to '${this.fallback.name}'`
       );
-      const fallbackResult = await this.fallback.generateClinicalSummary(caseId);
+      const fallbackResult = await this.fallback.generateClinicalSummary(caseId, actorOrToken);
       return {
         ...fallbackResult,
         providerMeta: {

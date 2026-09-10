@@ -15,20 +15,24 @@ export default async function PatientTimelinePage({
 }) {
   const user = await requireServerAuth({ allowedRoles: ["doctor", "clinician", "staff", "admin"] });
   const { id } = await params;
-  const patient = await getPatientDetails(id);
+  const patient = await getPatientDetails(id, user);
 
   if (!patient) {
     notFound();
   }
 
-  // Enforce facility boundary check on server-rendered timeline page
-  if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
+  // Enforce fail-closed facility boundary check on server-rendered timeline page
+  if (user.role !== "admin") {
+    if (!user.facilityId || !patient.facility_id || user.facilityId !== patient.facility_id) {
+      notFound();
+    }
+  } else if (user.facilityId && patient.facility_id && user.facilityId !== patient.facility_id) {
     notFound();
   }
 
   const [milestones, comparison] = await Promise.all([
-    buildPatientTimeline(id),
-    compareConsecutiveVisits(id),
+    buildPatientTimeline(id, user),
+    compareConsecutiveVisits(id, undefined, user),
   ]);
 
   return (

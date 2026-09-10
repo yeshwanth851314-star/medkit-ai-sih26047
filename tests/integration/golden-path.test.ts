@@ -205,7 +205,7 @@ describe("Phase 17: SIH26047 Complete Golden Path Integration Test", () => {
 
     expect(fhirBundle.resourceType).toBe("Bundle");
     expect(fhirBundle.type).toBe("document");
-    expect(fhirBundle.abdmComplianceNotice).toBe(
+    expect(fhirBundle.meta.tag?.[0]?.display).toBe(
       "FHIR-compatible representation / ABDM integration-ready architecture"
     );
 

@@ -2,20 +2,42 @@ import { OfflineEntity, OfflineQueueItem, offlineQueueItemSchema } from "./types
 
 class OfflineQueueManager {
   private queue: OfflineQueueItem[] = [];
+  private currentActorId: string = "default";
 
   constructor() {
     this.loadFromStorage();
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("storage", (e) => {
+        if (e.key === this.getStorageKey()) {
+          this.loadFromStorage();
+        }
+      });
+    }
+  }
+
+  public setActor(actorId?: string | null): void {
+    const nextActor = actorId && actorId.trim() ? actorId.trim() : "default";
+    if (this.currentActorId !== nextActor) {
+      this.currentActorId = nextActor;
+      this.loadFromStorage();
+    }
+  }
+
+  public getStorageKey(): string {
+    return `medkit_offline_queue_${this.currentActorId}`;
   }
 
   private loadFromStorage() {
     if (typeof window !== "undefined" && window.localStorage) {
       try {
-        const stored = window.localStorage.getItem("medkit_offline_queue");
+        const stored = window.localStorage.getItem(this.getStorageKey());
         if (stored) {
           this.queue = JSON.parse(stored);
+        } else {
+          this.queue = [];
         }
       } catch {
-        // Fallback to in-memory queue
+        this.queue = [];
       }
     }
   }
@@ -23,10 +45,22 @@ class OfflineQueueManager {
   private persist() {
     if (typeof window !== "undefined" && window.localStorage) {
       try {
-        window.localStorage.setItem("medkit_offline_queue", JSON.stringify(this.queue));
+        window.localStorage.setItem(this.getStorageKey(), JSON.stringify(this.queue));
       } catch {
         // Storage might be full or restricted
       }
+    }
+  }
+
+  public clearUserQueue(actorId?: string | null): void {
+    const key = actorId ? `medkit_offline_queue_${actorId.trim()}` : this.getStorageKey();
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+    }
+    if (!actorId || actorId === this.currentActorId) {
+      this.queue = [];
     }
   }
 
@@ -49,11 +83,37 @@ class OfflineQueueManager {
       }
     }
 
-    // Idempotency check: if an item with the same idempotencyKey already exists, return existing
+    // Idempotency check: if an item with the same idempotencyKey already exists, update payload and return existing
     if (idempotencyKey) {
       const existing = this.queue.find((i) => i.idempotencyKey === idempotencyKey);
       if (existing) {
+        existing.payload = { ...existing.payload, ...payload };
+        existing.timestamp = new Date().toISOString();
+        this.persist();
         return existing;
+      }
+    }
+
+    // Deduplicate offline draft updates targeting the same record ID
+    if (action === "update") {
+      const targetId =
+        payload.id || payload.caseId || payload.patientId || payload.case_id || payload.patient_id;
+      const existingPending = this.queue.find(
+        (i) =>
+          i.syncStatus === "pending" &&
+          i.entity === entity &&
+          i.action === "update" &&
+          (i.payload?.id === targetId ||
+            i.payload?.caseId === targetId ||
+            i.payload?.patientId === targetId ||
+            i.payload?.case_id === targetId ||
+            i.payload?.patient_id === targetId)
+      );
+      if (existingPending) {
+        existingPending.payload = { ...existingPending.payload, ...payload };
+        existingPending.timestamp = new Date().toISOString();
+        this.persist();
+        return existingPending;
       }
     }
 

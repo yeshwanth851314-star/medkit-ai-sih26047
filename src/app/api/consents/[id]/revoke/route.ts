@@ -18,6 +18,19 @@ export async function POST(
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
 
+    // Authorize consent revocation: ensure consent exists and belongs to a patient in caller's facility
+    const { getConsentById } = await import("@/features/consent/consent-service");
+    const { requirePatientAccess } = await import("@/lib/auth/object-guard");
+    const existingConsent = await getConsentById(id);
+    if (!existingConsent) {
+      return NextResponse.json({ error: "Consent record not found" }, { status: 404 });
+    }
+
+    const patientCheck = await requirePatientAccess(auth.user, existingConsent.patient_id);
+    if (!patientCheck.authorized) {
+      return patientCheck.errorResponse;
+    }
+
     // Derive actor identity strictly from authenticated server context, NEVER client body
     const actorId = auth.user.id;
     const reason = body.reason || "Patient requested consent revocation";

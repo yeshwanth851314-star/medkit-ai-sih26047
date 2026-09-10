@@ -3,6 +3,7 @@ import { getCaseDetails, updateCaseDraft, finalizeCase, addCaseAmendment } from 
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requireCaseAccess } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
+import { env } from "@/config/env";
 
 export async function GET(
   request: Request,
@@ -54,16 +55,19 @@ export async function PATCH(
         );
       }
 
-      const finalized = await finalizeCase(id, auth.user.id);
+      const finalized = await finalizeCase(id, auth.user.id, auth.user);
 
-      await logAuditEvent({
-        actorId: auth.user.id,
-        actorRole: auth.user.role,
-        action: "FINALIZE_CASE",
-        resourceType: "cases",
-        resourceId: id,
-        metadata: { status: "final" },
-      });
+      if (env.isDemoMode) {
+        await logAuditEvent({
+          actorId: auth.user.id,
+          actorRole: auth.user.role,
+          action: "FINALIZE_CASE",
+          resourceType: "cases",
+          resourceId: id,
+          metadata: { status: "final" },
+          actorOrToken: auth.user,
+        });
+      }
 
       return NextResponse.json({ success: true, case: finalized });
     }
@@ -84,30 +88,40 @@ export async function PATCH(
         );
       }
 
-      const amended = await addCaseAmendment(id, {
-        actorId: auth.user.id,
-        actorName: auth.user.fullName || "Attending Physician",
-        reason: body.reason,
-        notes: body.notes,
-      });
-
-      await logAuditEvent({
-        actorId: auth.user.id,
-        actorRole: auth.user.role,
-        action: "AMEND_CASE",
-        resourceType: "cases",
-        resourceId: id,
-        metadata: {
+      const amended = await addCaseAmendment(
+        id,
+        {
+          actorId: auth.user.id,
+          actorName: auth.user.fullName || "Attending Physician",
           reason: body.reason,
-          version: amended.amendments?.length,
+          notes: body.notes,
         },
-      });
+        auth.user
+      );
+
+      if (env.isDemoMode) {
+        await logAuditEvent({
+          actorId: auth.user.id,
+          actorRole: auth.user.role,
+          action: "AMEND_CASE",
+          resourceType: "cases",
+          resourceId: id,
+          metadata: {
+            reason: body.reason,
+            version: amended.amendments?.length,
+          },
+          actorOrToken: auth.user,
+        });
+      }
 
       return NextResponse.json({ success: true, case: amended });
     }
 
     // Standard draft update
-    const updated = await updateCaseDraft(id, body);
+    const updated = await updateCaseDraft(id, body, {
+      expectedUpdatedAt: body.expectedUpdatedAt,
+      actor: auth.user,
+    });
 
     await logAuditEvent({
       actorId: auth.user.id,
@@ -116,6 +130,7 @@ export async function PATCH(
       resourceType: "cases",
       resourceId: id,
       metadata: { fields_updated: Object.keys(body) },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({ success: true, case: updated });
@@ -123,6 +138,9 @@ export async function PATCH(
     console.error("PATCH /api/cases/[id] error:", err);
     if (err.message && err.message.includes("CANNOT_MUTATE_FINAL")) {
       return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    if (err.message && err.message.includes("CONFLICT_CONCURRENT_UPDATE")) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
     }
     return NextResponse.json({ error: err.message || "Failed to update case" }, { status: 500 });
   }

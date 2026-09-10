@@ -8,8 +8,11 @@ export function generatePatientCode(): string {
   return `MED-2026-${randomDigits}`;
 }
 
-export async function checkDuplicatePatient(input: PatientRegistrationInput): Promise<DuplicatePatientWarning> {
-  const existingPatients = await getPatients();
+export async function checkDuplicatePatient(
+  input: PatientRegistrationInput,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
+): Promise<DuplicatePatientWarning> {
+  const existingPatients = await getPatients(undefined, actorOrToken);
 
   // Rule 1: Check phone match if phone provided
   if (input.phone && input.phone.trim()) {
@@ -53,20 +56,30 @@ export async function checkDuplicatePatient(input: PatientRegistrationInput): Pr
   return { isDuplicateSuspect: false };
 }
 
-export async function searchPatients(query?: string): Promise<Patient[]> {
-  return getPatients(query);
+export async function searchPatients(
+  query?: string,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
+): Promise<Patient[]> {
+  return getPatients(query, actorOrToken);
 }
 
-export async function getPatientDetails(id: string): Promise<Patient | null> {
-  return getPatientById(id);
+export async function getPatientDetails(
+  id: string,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
+): Promise<Patient | null> {
+  return getPatientById(id, actorOrToken);
 }
 
 export async function registerPatient(
   input: PatientRegistrationInput,
-  options?: { ignoreDuplicateWarning?: boolean }
+  options?: {
+    ignoreDuplicateWarning?: boolean;
+    facilityId?: string | null;
+    actor?: import("@/features/auth/types").AuthUser | null;
+  }
 ): Promise<{ patient: Patient; duplicateWarning?: DuplicatePatientWarning }> {
   // Check for duplicate suspicion
-  const duplicateWarning = await checkDuplicatePatient(input);
+  const duplicateWarning = await checkDuplicatePatient(input, options?.actor);
   if (duplicateWarning.isDuplicateSuspect && !options?.ignoreDuplicateWarning) {
     // Return early with warning so UI can display confirmation modal
     return {
@@ -77,16 +90,20 @@ export async function registerPatient(
 
   const patientCode = generatePatientCode();
 
-  const newPatient = await createPatient({
-    patient_code: patientCode,
-    full_name: input.fullName.trim(),
-    date_of_birth: input.dateOfBirth || null,
-    gender: genderToDb(input.gender),
-    phone: input.phone || null,
-    address: input.address || null,
-    blood_group: input.bloodGroup === "Unknown" ? null : input.bloodGroup,
-    emergency_contact: input.emergencyContact || null,
-  });
+  const newPatient = await createPatient(
+    {
+      patient_code: patientCode,
+      full_name: input.fullName.trim(),
+      date_of_birth: input.dateOfBirth || null,
+      gender: genderToDb(input.gender),
+      phone: input.phone || null,
+      address: input.address || null,
+      blood_group: input.bloodGroup === "Unknown" ? null : input.bloodGroup,
+      emergency_contact: input.emergencyContact || null,
+      facility_id: options?.facilityId || (input as any).facilityId || (input as any).facility_id || null,
+    },
+    options?.actor
+  );
 
   return {
     patient: newPatient,

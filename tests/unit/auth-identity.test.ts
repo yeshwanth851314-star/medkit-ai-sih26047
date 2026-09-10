@@ -65,4 +65,25 @@ describe("Phase 1: Deterministic Request-Bound Supabase Identity & Auth Architec
     const client = getSupabaseClient("test-token");
     expect(client).not.toBeNull();
   });
+
+  it("extracts access token truthfully from AuthUser and never falls back to service key", async () => {
+    const { extractAccessToken, getAuthorizedSupabaseClient } = await import("../../src/lib/db/supabase");
+    const userWithToken = {
+      id: "u-1",
+      email: "u1@test.com",
+      fullName: "Dr. Test User",
+      role: "doctor" as const,
+      supabaseToken: "user-session-jwt-token",
+    };
+    expect(extractAccessToken(userWithToken)).toBe("user-session-jwt-token");
+    expect(extractAccessToken(null)).toBeUndefined();
+
+    // Authorized client for unauthenticated caller must NOT use service key
+    const unauthedClient = getAuthorizedSupabaseClient(null);
+    expect(unauthedClient).not.toBeNull();
+    const headers = (unauthedClient as any)?.rest?.headers;
+    if (headers) {
+      expect(headers.apikey).not.toBe("mock-service-role-key-xyz-789");
+    }
+  });
 });

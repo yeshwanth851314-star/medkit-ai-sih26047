@@ -195,4 +195,10 @@ describe("Phase 10: Document Intelligence & OCR Tests", () => {
     expect(demoResult.documentId).toBe("doc-0001");
     expect(demoResult.extractedData.medications).toBeDefined();
   });
+
+  it("fails closed when clinician attempts to confirm a medication not in candidate extractions", async () => {
+    await expect(
+      confirmExtractionMedication("doc-0001", "Nonexistent Drug 100mg")
+    ).rejects.toThrow(/is not an extraction candidate/);
+  });
 });

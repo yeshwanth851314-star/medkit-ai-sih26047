@@ -2,10 +2,13 @@ import { getCasesByPatientId, getDocumentsByPatientId, getCaseById } from "@/lib
 import { TimelineMilestone, VisitComparisonResult, MedicationDelta, VitalsDelta } from "./types";
 import { ClinicalCase } from "@/types/database";
 
-export async function buildPatientTimeline(patientId: string): Promise<TimelineMilestone[]> {
+export async function buildPatientTimeline(
+  patientId: string,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
+): Promise<TimelineMilestone[]> {
   const [cases, documents] = await Promise.all([
-    getCasesByPatientId(patientId),
-    getDocumentsByPatientId(patientId),
+    getCasesByPatientId(patientId, actorOrToken),
+    getDocumentsByPatientId(patientId, actorOrToken),
   ]);
 
   const milestones: TimelineMilestone[] = [];
@@ -67,9 +70,10 @@ export async function buildPatientTimeline(patientId: string): Promise<TimelineM
 
 export async function compareConsecutiveVisits(
   patientId: string,
-  targetCaseId?: string
+  targetCaseId?: string,
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
 ): Promise<VisitComparisonResult | null> {
-  const cases = await getCasesByPatientId(patientId);
+  const cases = await getCasesByPatientId(patientId, actorOrToken);
   if (cases.length === 0) return null;
 
   // Identify current case and previous case

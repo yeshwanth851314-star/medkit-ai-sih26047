@@ -14,6 +14,9 @@ export interface AuthUser {
   fullName: string;
   role: UserRole;
   facilityId?: string | null;
+  supabaseToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: number;
 }
 
 export interface AuthSession {

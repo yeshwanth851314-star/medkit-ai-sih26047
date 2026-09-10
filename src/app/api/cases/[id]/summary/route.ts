@@ -21,7 +21,15 @@ export async function GET(
       return caseCheck.errorResponse;
     }
 
-    const summary = await generateDeterministicSummary(id);
+    const clinicalCase = caseCheck.data;
+
+    // Reload persisted summary from database if present
+    if (clinicalCase.ai_summary && Object.keys(clinicalCase.ai_summary).length > 0) {
+      return NextResponse.json({ summary: clinicalCase.ai_summary });
+    }
+
+    // GET is strictly idempotent: compute deterministic summary without mutating the database
+    const summary = await generateDeterministicSummary(id, auth.user);
     return NextResponse.json({ summary });
   } catch (err: any) {
     console.error("GET summary error:", err);
@@ -45,12 +53,39 @@ export async function POST(
       return caseCheck.errorResponse;
     }
 
+    const clinicalCase = caseCheck.data;
     const body = await request.json().catch(() => ({}));
+
+    // Protect finalized cases: NEVER overwrite summary or assessment plan in place
+    if (clinicalCase.status === "final") {
+      // If caller provides an amendment/addendum, route through addCaseAmendment
+      if (body.action === "amend" || body.addendum || (body.reason && (body.notes || body.amendment || body.narrative))) {
+        const { addCaseAmendment } = await import("@/features/cases/case-service");
+        const updatedCase = await addCaseAmendment(
+          id,
+          {
+            actorId: auth.user.id,
+            actorName: auth.user.fullName || auth.user.id,
+            reason: body.reason || "Clinical addendum to finalized case",
+            notes: body.notes || body.amendment || body.narrative || "Addendum notes",
+          },
+          auth.user
+        );
+        return NextResponse.json({ success: true, amended: true, case: updatedCase });
+      }
+
+      return NextResponse.json(
+        {
+          error: "Case is finalized and locked. Assessment plan and summary cannot be overwritten in place. Post-finalization notes must be appended as signed addenda.",
+        },
+        { status: 409 }
+      );
+    }
 
     // Handle clinician confirmation action
     if (body.action === "confirm") {
       const now = new Date().toISOString();
-      const baseline = body.summary || (await generateDeterministicSummary(id));
+      const baseline = body.summary || clinicalCase.ai_summary || (await generateDeterministicSummary(id, auth.user));
       const confirmedSummary = {
         ...baseline,
         hpiNarrative: body.narrative || baseline.hpiNarrative || "",
@@ -60,13 +95,19 @@ export async function POST(
         editedByClinician: Boolean(body.editedByClinician),
       };
 
+      const existingPlan = clinicalCase.assessment_plan?.plan || null;
+      const preservedPlan = body.plan !== undefined && body.plan !== null && body.plan !== ""
+        ? body.plan
+        : existingPlan;
+
       const { updateCase } = await import("@/lib/db/supabase");
       await updateCase(id, {
+        ai_summary: confirmedSummary,
         assessment_plan: {
           summary: confirmedSummary.hpiNarrative,
-          plan: body.plan || null,
+          plan: preservedPlan,
         },
-      });
+      }, auth.user);
 
       const { logAuditEvent } = await import("@/features/security/audit-service");
       await logAuditEvent({
@@ -98,8 +139,18 @@ export async function POST(
 
     const aiProvider = getAIProvider();
     const summary = useAI
-      ? await aiProvider.generateClinicalSummary(id)
-      : await generateDeterministicSummary(id);
+      ? await aiProvider.generateClinicalSummary(id, auth.user)
+      : await generateDeterministicSummary(id, auth.user);
+
+    // Persist generated summary into ai_summary column and preserve existing plan
+    const { updateCase } = await import("@/lib/db/supabase");
+    await updateCase(id, {
+      ai_summary: summary,
+      assessment_plan: {
+        summary: summary.hpiNarrative,
+        plan: clinicalCase.assessment_plan?.plan || null,
+      },
+    }, auth.user);
 
     return NextResponse.json({ summary });
   } catch (err: any) {

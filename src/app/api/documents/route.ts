@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { validateDocumentFile } from "@/features/documents/document-service";
-import { getDocumentsByPatientId, createDocument, uploadDocumentToStorage } from "@/lib/db/supabase";
+import {
+  getDocumentsByPatientId,
+  createDocument,
+  uploadDocumentToStorage,
+  deleteDocumentFromStorage,
+} from "@/lib/db/supabase";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { requirePatientAccess, requireCaseBelongsToPatient } from "@/lib/auth/object-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
@@ -22,7 +27,7 @@ export async function GET(request: Request) {
       return patientAccess.errorResponse;
     }
 
-    const documents = await getDocumentsByPatientId(patientId);
+    const documents = await getDocumentsByPatientId(patientId, auth.user);
 
     await logAuditEvent({
       actorId: auth.user.id,
@@ -31,6 +36,7 @@ export async function GET(request: Request) {
       resourceType: "documents",
       resourceId: patientId,
       metadata: { count: documents.length },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({ documents });
@@ -52,6 +58,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required document metadata" }, { status: 400 });
     }
 
+    if (!fileBase64 || typeof fileBase64 !== "string" || fileBase64.trim().length === 0) {
+      return NextResponse.json({ error: "fileBase64 (non-empty document file data) is required" }, { status: 400 });
+    }
+
     const patientAccess = await requirePatientAccess(auth.user, patientId);
     if (!patientAccess.authorized) {
       return patientAccess.errorResponse;
@@ -64,63 +74,84 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validate file metadata
-    const validation = validateDocumentFile({ mimeType, sizeBytes: sizeBytes || 1024 });
+    // Decode and calculate actual file buffer size
+    const fileBuffer = Buffer.from(fileBase64, "base64");
+    if (fileBuffer.length === 0) {
+      return NextResponse.json({ error: "Uploaded document file cannot be empty" }, { status: 400 });
+    }
+    const decodedSize = fileBuffer.length;
+
+    // Validate file metadata against real decoded bytes
+    const validation = validateDocumentFile({ mimeType, sizeBytes: decodedSize });
     if (!validation.valid) {
       return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
-    const docId = `doc-${crypto.randomUUID().slice(0, 8)}`;
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    // Generate valid RFC 4122 UUID for database schema compatibility
+    const docId = crypto.randomUUID();
 
-    // 1. Upload file bytes to private Supabase Storage first
-    // If storage upload fails, fail closed — do NOT create an orphaned or fake document record.
-    let storagePath = `/private/documents/${patientId}/${docId}/${safeName}`;
-    if (fileBase64) {
-      try {
-        const fileBuffer = Buffer.from(fileBase64, "base64");
-        const uploadRes = await uploadDocumentToStorage(
-          patientId,
-          caseId || null,
-          docId,
-          fileName,
-          fileBuffer,
-          mimeType
-        );
-        storagePath = uploadRes.storagePath;
-      } catch (uploadErr: any) {
-        console.error("Failed to upload document bytes to private storage:", uploadErr);
-        return NextResponse.json(
-          { error: `Document storage failure: ${uploadErr.message || "Failed to persist document to private storage."}` },
-          { status: 500 }
-        );
-      }
+    // 1. Upload file bytes to private Storage FIRST
+    let storagePath: string;
+    try {
+      const uploadRes = await uploadDocumentToStorage(
+        patientId,
+        caseId || null,
+        docId,
+        fileName,
+        fileBuffer,
+        mimeType,
+        auth.user
+      );
+      storagePath = uploadRes.storagePath;
+    } catch (uploadErr: any) {
+      console.error("Failed to upload document bytes to private storage:", uploadErr);
+      return NextResponse.json(
+        { error: `Document storage failure: ${uploadErr.message || "Failed to persist document to private storage."}` },
+        { status: 500 }
+      );
     }
 
     // 2. Persist document record referencing the verified storage object
-    const newDoc = await createDocument({
-      id: docId,
-      patient_id: patientId,
-      case_id: caseId || null,
-      uploaded_by: auth.user.fullName || auth.user.id,
-      storage_path: storagePath,
-      original_filename: fileName,
-      mime_type: mimeType,
-      file_size: sizeBytes || (fileBase64 ? Math.ceil((fileBase64.length * 3) / 4) : 1024),
-      document_type: documentType || "prescription",
-      processing_status: "uploaded" as const,
-      ocr_confidence: null,
-      extracted_data: null,
-      error_message: null,
-    });
+    // If DB insertion fails, compensate by deleting the uploaded storage object
+    let newDoc;
+    try {
+      newDoc = await createDocument(
+        {
+          id: docId,
+          patient_id: patientId,
+          case_id: caseId || null,
+          uploaded_by: auth.user.fullName || auth.user.id,
+          storage_path: storagePath,
+          original_filename: fileName,
+          mime_type: mimeType,
+          file_size: decodedSize,
+          document_type: documentType || "prescription",
+          processing_status: "uploaded" as const,
+          ocr_confidence: null,
+          extracted_data: null,
+          error_message: null,
+        },
+        auth.user
+      );
+    } catch (dbErr: any) {
+      console.error("Failed to persist document row, compensating storage upload:", dbErr);
+      await deleteDocumentFromStorage(storagePath, auth.user).catch((cleanupErr) => {
+        console.error("Storage compensation cleanup failed:", cleanupErr);
+      });
+      return NextResponse.json(
+        { error: "Failed to persist document metadata. Upload aborted and compensated." },
+        { status: 500 }
+      );
+    }
 
     await logAuditEvent({
       actorId: auth.user.id,
       actorRole: auth.user.role,
       action: "UPLOAD_DOCUMENT",
       resourceType: "documents",
-      resourceId: docId,
-      metadata: { fileName, mimeType, patientId },
+      resourceId: newDoc.id,
+      metadata: { patient_id: patientId, file_name: fileName, file_size: decodedSize },
+      actorOrToken: auth.user,
     });
 
     return NextResponse.json({ success: true, document: newDoc }, { status: 201 });
