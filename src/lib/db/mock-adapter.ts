@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Patient, ClinicalCase, MedicalDocument, AuditLogEntry, IntakeSessionRecord } from "@/types/database";
 
 // In-memory data store seeded from synthetic fixtures
@@ -578,8 +579,12 @@ class MockDatabaseAdapter {
     const kiosk = this.kioskInstances.get(kioskId);
     if (!kiosk || kiosk.status !== "active") return null;
     if (kiosk.expires_at && new Date(kiosk.expires_at).getTime() < Date.now()) return null;
-    if (kiosk.secret_hash !== secret && kiosk.secret_hash !== `hash-${secret}`) {
-      // In tests, allow plain match or basic hash
+    const sha256Hash = crypto.createHash("sha256").update(secret).digest("hex");
+    if (
+      kiosk.secret_hash !== secret &&
+      kiosk.secret_hash !== sha256Hash &&
+      kiosk.secret_hash !== `hash-${secret}`
+    ) {
       return null;
     }
     kiosk.last_active_at = new Date().toISOString();
@@ -590,18 +595,21 @@ class MockDatabaseAdapter {
     id?: string;
     facility_id: string;
     name: string;
-    secret: string;
+    secret?: string;
+    secretHash?: string;
     status?: "active" | "disabled" | "revoked";
+    expiresAt?: string | null;
   }): Promise<any> {
     const id = instance.id || crypto.randomUUID();
+    const secretHash = instance.secretHash || instance.secret || "";
     const record = {
       id,
       facility_id: instance.facility_id,
       name: instance.name,
-      secret_hash: instance.secret,
+      secret_hash: secretHash,
       status: instance.status || "active",
       created_at: new Date().toISOString(),
-      expires_at: null,
+      expires_at: instance.expiresAt || null,
       last_active_at: null,
     };
     this.kioskInstances.set(id, record);
@@ -684,6 +692,7 @@ class MockDatabaseAdapter {
     sessionId: string;
     kioskId: string;
     kioskSecret: string;
+    redFlags?: any[];
   }): Promise<ClinicalCase> {
     const kiosk = await this.verifyKioskCredentials(params.kioskId, params.kioskSecret);
     if (!kiosk) {
@@ -731,10 +740,22 @@ class MockDatabaseAdapter {
       chief_complaint: chiefComplaint.trim(),
       raw_patient_complaint: chiefComplaint.trim(),
       hpi: null,
+      red_flags: params.redFlags && params.redFlags.length > 0 ? params.redFlags : null,
       assessment_plan: {
         summary: `Compiled from kiosk intake session ${params.sessionId}`,
       },
     });
+
+    if (params.redFlags && params.redFlags.length > 0) {
+      for (const rf of params.redFlags) {
+        this.recordRedFlagEvent({
+          case_id: newCase.id,
+          rule_id: rf.ruleId,
+          severity: (rf.severity || "HIGH").toUpperCase(),
+          trigger_text: rf.message || `Triggered red flag ${rf.ruleId}`,
+        });
+      }
+    }
 
     session.status = "submitted";
     session.completed_at = new Date().toISOString();
@@ -744,6 +765,7 @@ class MockDatabaseAdapter {
       sessionId: params.sessionId,
       patientId: session.patient_id,
       facilityId: kiosk.facility_id,
+      redFlagsCount: params.redFlags?.length || 0,
     });
 
     return newCase;

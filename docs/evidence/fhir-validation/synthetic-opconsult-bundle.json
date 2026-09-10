@@ -8,8 +8,7 @@
   "meta": {
     "profile": [
       "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
-      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle",
-      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord"
+      "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle"
     ],
     "lastUpdated": "2026-09-01T11:00:00Z",
     "tag": [

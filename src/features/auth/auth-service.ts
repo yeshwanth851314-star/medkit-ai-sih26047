@@ -169,3 +169,15 @@ export async function refreshClinicianSession(
 export function parseSessionToken(token: string): AuthUser | null {
   return verifySessionToken(token);
 }
+
+export async function signOutClinician(supabaseToken?: string): Promise<void> {
+  if (!supabaseToken || env.isDemoMode) return;
+  const client = getSupabaseClient(supabaseToken);
+  if (client) {
+    try {
+      await client.auth.signOut();
+    } catch (err) {
+      console.warn("Notice: Supabase signOut failed:", err);
+    }
+  }
+}

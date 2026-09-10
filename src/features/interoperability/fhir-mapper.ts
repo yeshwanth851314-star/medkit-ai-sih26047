@@ -528,7 +528,6 @@ export function mapCaseToFhirBundle(params: {
       profile: [
         "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
         "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle",
-        "https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord",
       ],
       lastUpdated: timestamp,
       tag: [

@@ -76,19 +76,41 @@ export async function POST(request: Request) {
         consentId = consentRecord.id;
       }
     } else {
-      // Independent kiosk intake: resolve kiosk credentials strictly from headers/body (Blocker 5)
-      const kioskId =
-        body.kioskId ||
-        request.headers.get("x-kiosk-id") ||
-        (env.isDemoMode ? "00000000-0000-0000-0000-000000000001" : null);
-      const kioskSecret =
-        body.kioskSecret ||
-        request.headers.get("x-kiosk-secret") ||
-        (env.isDemoMode ? "kiosk-secret-hyd-01" : null);
+      // Independent kiosk intake: resolve kiosk credentials from HttpOnly cookie, headers, or body
+      let kioskId: string | null = null;
+      let kioskSecret: string | null = null;
+
+      const cookieHeader = request.headers.get("cookie");
+      if (cookieHeader) {
+        const match = cookieHeader.match(/(?:^|;\s*)medkit_kiosk_credential=([^;]*)/);
+        if (match) {
+          try {
+            const raw = decodeURIComponent(match[1]);
+            const parsed = JSON.parse(raw);
+            if (parsed.kioskId && parsed.kioskSecret) {
+              kioskId = parsed.kioskId;
+              kioskSecret = parsed.kioskSecret;
+            }
+          } catch {}
+        }
+      }
+
+      if (!kioskId) {
+        kioskId = body.kioskId || request.headers.get("x-kiosk-id") || null;
+      }
+      if (!kioskSecret) {
+        kioskSecret = body.kioskSecret || request.headers.get("x-kiosk-secret") || null;
+      }
+
+      // Fallback to demo kiosk credentials strictly in demo mode
+      if ((!kioskId || !kioskSecret) && env.isDemoMode) {
+        kioskId = "00000000-0000-0000-0000-000000000001";
+        kioskSecret = "kiosk-secret-hyd-01";
+      }
 
       if (!kioskId || !kioskSecret) {
         return NextResponse.json(
-          { error: "UNAUTHORIZED: Kiosk authentication credentials required (kioskId and kioskSecret)" },
+          { error: "UNAUTHORIZED: Kiosk authentication credentials required (provisioned cookie or kioskId and kioskSecret)" },
           { status: 401 }
         );
       }

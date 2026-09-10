@@ -13,9 +13,11 @@ import {
   reserveIdempotencyKey,
   updateSyncMutationStatus,
   recordProcessedIdempotencyKey,
+  executeIdempotentMutation,
 } from "@/lib/db/supabase";
 import { requirePatientAccess, requireCaseAccess } from "@/lib/auth/object-guard";
 import { MedicalDocument } from "@/types/database";
+import { env } from "@/config/env";
 
 export async function POST(request: Request) {
   const auth = await requireApiAuth(request, {
@@ -52,6 +54,54 @@ export async function POST(request: Request) {
           .createHash("sha256")
           .update(JSON.stringify(item.payload || {}))
           .digest("hex");
+
+        if (!env.isDemoMode && (item.entity === "cases" || item.entity === "patients")) {
+          try {
+            const result = await executeIdempotentMutation({
+              idempotencyKey: item.idempotencyKey,
+              userId: auth.user.id,
+              entity: item.entity,
+              action: item.action,
+              payloadHash,
+              payload: item.payload,
+              actorOrToken: auth.user,
+            });
+
+            succeeded.push(item.id);
+
+            await logAuditEvent({
+              actorId: auth.user.id,
+              actorRole: auth.user.role,
+              action: "SYNC_OFFLINE_OPERATION",
+              resourceType: item.entity,
+              resourceId: result.mutationId || item.id,
+              metadata: offlineQueue.minimizePayloadForAudit(item as OfflineQueueItem),
+              actorOrToken: auth.user,
+            });
+
+            continue;
+          } catch (rpcErr: any) {
+            if (rpcErr.message?.includes("CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH")) {
+              failed.push({
+                id: item.id,
+                error: "CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH: The idempotency key was previously reserved with a different payload.",
+              });
+              continue;
+            }
+            if (rpcErr.message?.includes("LOCKED_IN_PROGRESS")) {
+              failed.push({
+                id: item.id,
+                error: "LOCKED_IN_PROGRESS: Mutation is currently being processed by another worker",
+              });
+              continue;
+            }
+            failed.push({
+              id: item.id,
+              error: rpcErr.message || "Database error executing idempotent mutation",
+            });
+            continue;
+          }
+        }
 
         const reservation = await reserveIdempotencyKey({
           key: item.idempotencyKey,

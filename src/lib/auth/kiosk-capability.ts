@@ -28,12 +28,19 @@ if (!globalForRevocations.__medkit_revoked_capability_sessions) {
 
 const revokedSessions: Set<string> = globalForRevocations.__medkit_revoked_capability_sessions;
 
-export function revokeIntakeCapabilityToken(sessionId: string): void {
+export async function revokeIntakeCapabilityToken(
+  sessionId: string,
+  options?: { targetStatus?: "abandoned" | "submitted" }
+): Promise<void> {
   revokedSessions.add(sessionId);
-  // Durably mark intake session status as abandoned in persistent store
-  import("@/lib/db/supabase").then(({ updateIntakeSession }) => {
-    updateIntakeSession(sessionId, { status: "abandoned" }).catch(() => {});
-  });
+  const status = options?.targetStatus || "abandoned";
+  // Durably mark intake session status in persistent store
+  try {
+    const { updateIntakeSession } = await import("@/lib/db/supabase");
+    await updateIntakeSession(sessionId, { status });
+  } catch (err) {
+    console.error(`Failed to durably revoke intake session ${sessionId}:`, err);
+  }
 }
 
 export function isIntakeCapabilityRevoked(sessionId: string): boolean {

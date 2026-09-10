@@ -1,16 +1,71 @@
 -- MedKit AI — Production Integrity Closure Master Migration
 -- Migration: 20260910000001_production_integrity_closure.sql
 -- Description:
---   1. Creates public.kiosk_instances table with cryptographically hashed credentials and RLS.
---   2. Hardens rpc_revoke_consent_with_audit with full active profile, allowed role, patient, facility, and already-revoked checks.
---   3. Hardens rpc_acknowledge_red_flag_with_audit with patient facility validation and zero-row throw.
---   4. Upgrades rpc_kiosk_bootstrap_intake to enforce kiosk credentials, consent acknowledgement, and strict facility derivation.
---   5. Creates rpc_submit_intake_to_case for safe, transactional kiosk draft case creation under RLS.
---   6. Creates rpc_execute_idempotent_mutation for atomic ledger reservation and execution in a single transaction.
---   7. Implements granular function privilege inventory (granting RLS helpers to authenticated/service_role, kiosk to anon, clinical to authenticated).
+--   1. Harmonizes sync_mutations table schema and constraints.
+--   2. Creates public.kiosk_instances table with cryptographically hashed credentials and RLS (purged of hardcoded secrets).
+--   3. Hardens rpc_revoke_consent_with_audit with full active profile, allowed role, patient, facility, and already-revoked checks.
+--   4. Hardens rpc_acknowledge_red_flag_with_audit with patient facility validation and zero-row throw.
+--   5. Upgrades rpc_kiosk_bootstrap_intake to enforce kiosk credentials, consent acknowledgement, and strict facility derivation.
+--   6. Implements dedicated kiosk session RPCs (rpc_get_kiosk_intake_session, rpc_submit_kiosk_answer, rpc_update_kiosk_intake_session, rpc_revoke_kiosk_session) under RLS.
+--   7. Creates rpc_submit_intake_to_case for safe, transactional kiosk draft case creation with red flag persistence under RLS.
+--   8. Creates rpc_execute_idempotent_mutation for atomic ledger reservation and execution in a single database transaction.
+--   9. Implements granular function privilege inventory (granting RLS helpers to authenticated/service_role, kiosk to anon, clinical to authenticated).
 
 --------------------------------------------------------------------------------
--- 1. Kiosk Instances Table & Seed
+-- 1. Sync Mutations Table Schema Harmonization
+--------------------------------------------------------------------------------
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'sync_mutations') THEN
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS payload_hash TEXT;
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS payload JSONB;
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS result_metadata JSONB;
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 1;
+    ALTER TABLE public.sync_mutations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+    ALTER TABLE public.sync_mutations DROP CONSTRAINT IF EXISTS sync_mutations_status_check;
+    ALTER TABLE public.sync_mutations ADD CONSTRAINT sync_mutations_status_check CHECK (status IN ('pending', 'in_progress', 'completed', 'failed'));
+  ELSE
+    CREATE TABLE public.sync_mutations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      idempotency_key TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      action TEXT NOT NULL,
+      resource_id TEXT,
+      payload_hash TEXT,
+      payload JSONB,
+      status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'in_progress', 'completed', 'failed')),
+      error_message TEXT,
+      result_metadata JSONB,
+      lease_expires_at TIMESTAMPTZ,
+      attempts INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_sync_mutations_composite ON public.sync_mutations(user_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_sync_mutations_key ON public.sync_mutations(idempotency_key);
+
+ALTER TABLE public.sync_mutations ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Authenticated clinicians and users can manage sync mutations" ON public.sync_mutations;
+  CREATE POLICY "Authenticated clinicians and users can manage sync mutations"
+    ON public.sync_mutations FOR ALL
+    TO authenticated
+    USING (
+      user_id = auth.uid()::text
+      OR public.current_user_role() IN ('doctor', 'clinician', 'staff', 'admin')
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+--------------------------------------------------------------------------------
+-- 2. Kiosk Instances Table (No hardcoded credentials)
 --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.kiosk_instances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -41,18 +96,8 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
--- Seed default demo kiosk instance (secret: 'kiosk-secret-hyd-01')
-INSERT INTO public.kiosk_instances (id, facility_id, name, secret_hash, status)
-VALUES (
-  '00000000-0000-0000-0000-000000000001',
-  'fac-hyd-01',
-  'AIIA Hyderabad Reception Kiosk 01',
-  encode(sha256('kiosk-secret-hyd-01'::bytea), 'hex'),
-  'active'
-) ON CONFLICT (id) DO NOTHING;
-
 --------------------------------------------------------------------------------
--- 2. Hardened rpc_revoke_consent_with_audit
+-- 3. Hardened rpc_revoke_consent_with_audit
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_revoke_consent_with_audit(
   p_consent_id UUID,
@@ -145,7 +190,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 --------------------------------------------------------------------------------
--- 3. Hardened rpc_acknowledge_red_flag_with_audit
+-- 4. Hardened rpc_acknowledge_red_flag_with_audit
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_acknowledge_red_flag_with_audit(
   p_case_id UUID,
@@ -235,9 +280,10 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 --------------------------------------------------------------------------------
--- 4. Hardened rpc_kiosk_bootstrap_intake
+-- 5. Hardened rpc_kiosk_bootstrap_intake
 --------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.rpc_kiosk_bootstrap_intake(TEXT, TEXT, TEXT, TEXT, DATE, TEXT);
+DROP FUNCTION IF EXISTS public.rpc_kiosk_bootstrap_intake(UUID, TEXT, TEXT, TEXT, BOOLEAN, TEXT, DATE, TEXT);
 
 CREATE OR REPLACE FUNCTION public.rpc_kiosk_bootstrap_intake(
   p_kiosk_id UUID,
@@ -284,9 +330,9 @@ BEGIN
     RAISE EXCEPTION 'FORBIDDEN: Kiosk credentials expired';
   END IF;
 
-  -- Check secret hash (supports SHA-256 or direct match for dev)
+  -- Check strict SHA-256 secret hash match
   v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
-  IF v_kiosk.secret_hash != v_secret_hash AND v_kiosk.secret_hash != p_kiosk_secret THEN
+  IF v_kiosk.secret_hash != v_secret_hash THEN
     RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
   END IF;
 
@@ -410,12 +456,242 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 --------------------------------------------------------------------------------
--- 5. rpc_submit_intake_to_case (Kiosk Case Creation under RLS)
+-- 6. Dedicated Kiosk Session RPCs under RLS
 --------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.rpc_get_kiosk_intake_session(
+  p_kiosk_id UUID,
+  p_kiosk_secret TEXT,
+  p_session_id UUID
+) RETURNS public.intake_sessions AS $$
+DECLARE
+  v_kiosk public.kiosk_instances;
+  v_session public.intake_sessions;
+  v_secret_hash TEXT;
+BEGIN
+  IF p_kiosk_id IS NULL OR p_kiosk_secret IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Kiosk credentials required';
+  END IF;
+
+  SELECT * INTO v_kiosk FROM public.kiosk_instances WHERE id = p_kiosk_id;
+  IF NOT FOUND OR v_kiosk.status != 'active' THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Active kiosk instance required';
+  END IF;
+
+  v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
+  IF v_kiosk.secret_hash != v_secret_hash THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
+  END IF;
+
+  SELECT * INTO v_session FROM public.intake_sessions WHERE id = p_session_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'SESSION_NOT_FOUND: Intake session % does not exist', p_session_id;
+  END IF;
+
+  IF v_session.facility_id != v_kiosk.facility_id THEN
+    RAISE EXCEPTION 'FORBIDDEN: Session facility does not match kiosk facility';
+  END IF;
+
+  RETURN v_session;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+CREATE OR REPLACE FUNCTION public.rpc_submit_kiosk_answer(
+  p_kiosk_id UUID,
+  p_kiosk_secret TEXT,
+  p_session_id UUID,
+  p_question_key TEXT,
+  p_raw_answer TEXT,
+  p_input_mode TEXT DEFAULT 'touch',
+  p_next_question_id TEXT DEFAULT NULL
+) RETURNS public.intake_sessions AS $$
+DECLARE
+  v_kiosk public.kiosk_instances;
+  v_session public.intake_sessions;
+  v_secret_hash TEXT;
+  v_now TIMESTAMPTZ := now();
+  v_answer_obj JSONB;
+  v_updated_answers JSONB;
+  v_new_status TEXT;
+  v_completed_at TIMESTAMPTZ;
+BEGIN
+  IF p_kiosk_id IS NULL OR p_kiosk_secret IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Kiosk credentials required';
+  END IF;
+
+  SELECT * INTO v_kiosk FROM public.kiosk_instances WHERE id = p_kiosk_id;
+  IF NOT FOUND OR v_kiosk.status != 'active' THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Active kiosk instance required';
+  END IF;
+
+  v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
+  IF v_kiosk.secret_hash != v_secret_hash THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
+  END IF;
+
+  SELECT * INTO v_session FROM public.intake_sessions WHERE id = p_session_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'SESSION_NOT_FOUND: Intake session % does not exist', p_session_id;
+  END IF;
+
+  IF v_session.status != 'active' THEN
+    RAISE EXCEPTION 'SESSION_NOT_ACTIVE: Session status is %, expected active', v_session.status;
+  END IF;
+
+  IF v_session.expires_at < v_now THEN
+    RAISE EXCEPTION 'SESSION_EXPIRED: Intake session has expired';
+  END IF;
+
+  IF v_session.facility_id != v_kiosk.facility_id THEN
+    RAISE EXCEPTION 'FORBIDDEN: Session facility does not match kiosk facility';
+  END IF;
+
+  v_answer_obj := jsonb_build_object(
+    'questionKey', p_question_key,
+    'rawAnswer', p_raw_answer,
+    'inputMode', COALESCE(p_input_mode, 'touch'),
+    'timestamp', v_now
+  );
+
+  v_updated_answers := COALESCE(v_session.answers, '{}'::jsonb) || jsonb_build_object(p_question_key, v_answer_obj);
+  
+  IF p_next_question_id IS NULL THEN
+    v_new_status := 'submitted';
+    v_completed_at := v_now;
+  ELSE
+    v_new_status := 'active';
+    v_completed_at := NULL;
+  END IF;
+
+  UPDATE public.intake_sessions
+  SET answers = v_updated_answers,
+      current_question_id = p_next_question_id,
+      status = v_new_status,
+      completed_at = COALESCE(v_completed_at, completed_at)
+  WHERE id = p_session_id
+  RETURNING * INTO v_session;
+
+  RETURN v_session;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+CREATE OR REPLACE FUNCTION public.rpc_update_kiosk_intake_session(
+  p_kiosk_id UUID,
+  p_kiosk_secret TEXT,
+  p_session_id UUID,
+  p_current_question_id TEXT DEFAULT NULL,
+  p_answers JSONB DEFAULT NULL,
+  p_status TEXT DEFAULT NULL
+) RETURNS public.intake_sessions AS $$
+DECLARE
+  v_kiosk public.kiosk_instances;
+  v_session public.intake_sessions;
+  v_secret_hash TEXT;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF p_kiosk_id IS NULL OR p_kiosk_secret IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Kiosk credentials required';
+  END IF;
+
+  SELECT * INTO v_kiosk FROM public.kiosk_instances WHERE id = p_kiosk_id;
+  IF NOT FOUND OR v_kiosk.status != 'active' THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Active kiosk instance required';
+  END IF;
+
+  v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
+  IF v_kiosk.secret_hash != v_secret_hash THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
+  END IF;
+
+  SELECT * INTO v_session FROM public.intake_sessions WHERE id = p_session_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'SESSION_NOT_FOUND: Intake session % does not exist', p_session_id;
+  END IF;
+
+  IF v_session.facility_id != v_kiosk.facility_id THEN
+    RAISE EXCEPTION 'FORBIDDEN: Session facility does not match kiosk facility';
+  END IF;
+
+  UPDATE public.intake_sessions
+  SET current_question_id = COALESCE(p_current_question_id, current_question_id),
+      answers = COALESCE(p_answers, answers),
+      status = COALESCE(p_status, status),
+      completed_at = CASE WHEN p_status IN ('submitted', 'abandoned') THEN v_now ELSE completed_at END
+  WHERE id = p_session_id
+  RETURNING * INTO v_session;
+
+  RETURN v_session;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+CREATE OR REPLACE FUNCTION public.rpc_revoke_kiosk_session(
+  p_kiosk_id UUID,
+  p_kiosk_secret TEXT,
+  p_session_id UUID
+) RETURNS VOID AS $$
+DECLARE
+  v_kiosk public.kiosk_instances;
+  v_session public.intake_sessions;
+  v_secret_hash TEXT;
+  v_now TIMESTAMPTZ := now();
+BEGIN
+  IF p_kiosk_id IS NULL OR p_kiosk_secret IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Kiosk credentials required';
+  END IF;
+
+  SELECT * INTO v_kiosk FROM public.kiosk_instances WHERE id = p_kiosk_id;
+  IF NOT FOUND OR v_kiosk.status != 'active' THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Active kiosk instance required';
+  END IF;
+
+  v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
+  IF v_kiosk.secret_hash != v_secret_hash THEN
+    RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
+  END IF;
+
+  SELECT * INTO v_session FROM public.intake_sessions WHERE id = p_session_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  IF v_session.facility_id != v_kiosk.facility_id THEN
+    RAISE EXCEPTION 'FORBIDDEN: Session facility does not match kiosk facility';
+  END IF;
+
+  UPDATE public.intake_sessions
+  SET status = 'abandoned',
+      completed_at = v_now
+  WHERE id = p_session_id;
+
+  INSERT INTO public.audit_logs (
+    actor_id,
+    action,
+    resource_type,
+    resource_id,
+    metadata,
+    created_at
+  ) VALUES (
+    'kiosk:' || p_kiosk_id::text,
+    'KIOSK_SESSION_REVOKED',
+    'intake_sessions',
+    p_session_id::text,
+    jsonb_build_object('reason', 'abandoned_or_revoked', 'facilityId', v_kiosk.facility_id),
+    v_now
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+--------------------------------------------------------------------------------
+-- 7. rpc_submit_intake_to_case (Kiosk Case Creation under Schema Contract & RLS)
+--------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.rpc_submit_intake_to_case(UUID, UUID, TEXT);
+DROP FUNCTION IF EXISTS public.rpc_submit_intake_to_case(UUID, UUID, TEXT, JSONB);
+
 CREATE OR REPLACE FUNCTION public.rpc_submit_intake_to_case(
   p_session_id UUID,
   p_kiosk_id UUID,
-  p_kiosk_secret TEXT
+  p_kiosk_secret TEXT,
+  p_red_flags JSONB DEFAULT '[]'::jsonb
 ) RETURNS public.cases AS $$
 DECLARE
   v_kiosk public.kiosk_instances;
@@ -423,8 +699,11 @@ DECLARE
   v_consent public.consents;
   v_case public.cases;
   v_chief_complaint TEXT;
+  v_raw_complaint TEXT;
   v_secret_hash TEXT;
   v_now TIMESTAMPTZ := now();
+  v_hpi JSONB := '{}'::jsonb;
+  v_rf RECORD;
 BEGIN
   -- 1. Validate Kiosk credentials
   IF p_kiosk_id IS NULL OR p_kiosk_secret IS NULL THEN
@@ -437,7 +716,7 @@ BEGIN
   END IF;
 
   v_secret_hash := encode(sha256(p_kiosk_secret::bytea), 'hex');
-  IF v_kiosk.secret_hash != v_secret_hash AND v_kiosk.secret_hash != p_kiosk_secret THEN
+  IF v_kiosk.secret_hash != v_secret_hash THEN
     RAISE EXCEPTION 'UNAUTHORIZED: Invalid kiosk secret';
   END IF;
 
@@ -466,44 +745,95 @@ BEGIN
     RAISE EXCEPTION 'CONSENT_REQUIRED: Valid unrevoked consent is required to compile case';
   END IF;
 
-  -- 4. Extract and Validate Chief Complaint
-  v_chief_complaint := v_session.answers->'Q_CHIEF_COMPLAINT'->>'value';
+  -- 4. Extract and Validate Chief Complaint from answers JSONB
+  v_chief_complaint := COALESCE(
+    v_session.answers->'chief_complaint'->>'rawAnswer',
+    v_session.answers->'Q_CHIEF_COMPLAINT'->>'rawAnswer',
+    v_session.answers->'chief_complaint'->>'value',
+    v_session.answers->'Q_CHIEF_COMPLAINT'->>'value',
+    v_session.answers->>'chief_complaint'
+  );
+  v_raw_complaint := v_chief_complaint;
+
   IF v_chief_complaint IS NULL OR length(trim(v_chief_complaint)) < 3 THEN
-    v_chief_complaint := v_session.answers->>'chief_complaint';
-    IF v_chief_complaint IS NULL OR length(trim(v_chief_complaint)) < 3 THEN
-      RAISE EXCEPTION 'INVALID_INTAKE: Chief complaint is required (min 3 characters)';
-    END IF;
+    RAISE EXCEPTION 'INVALID_INTAKE: Chief complaint is required (min 3 characters)';
   END IF;
 
-  -- 5. Insert Draft Case (Strictly draft; kiosk callers can never finalize)
+  -- 5. Build HPI from captured answers
+  v_hpi := jsonb_build_object(
+    'onset', COALESCE(v_session.answers->'chest_onset'->>'rawAnswer', v_session.answers->'general_onset'->>'rawAnswer'),
+    'duration', v_session.answers->'cough_duration'->>'rawAnswer',
+    'character', v_session.answers->'cough_type'->>'rawAnswer',
+    'radiation', v_session.answers->'chest_radiation'->>'rawAnswer'
+  );
+
+  -- 6. Insert Draft Case conforming strictly to public.cases schema
   INSERT INTO public.cases (
     id,
     patient_id,
-    status,
+    consent_id,
+    case_type,
+    patient_language,
     chief_complaint,
-    symptoms,
-    clinical_notes,
+    raw_patient_complaint,
+    hpi,
+    past_history,
+    red_flags,
+    status,
+    provenance,
     created_at,
     updated_at
   ) VALUES (
     gen_random_uuid(),
     v_session.patient_id,
+    v_session.consent_id,
+    'general',
+    COALESCE(v_session.language, 'en'),
+    trim(v_chief_complaint),
+    v_raw_complaint,
+    v_hpi,
+    CASE WHEN v_session.answers ? 'past_conditions' 
+      THEN jsonb_build_object('conditions', jsonb_build_array(v_session.answers->'past_conditions'->>'rawAnswer'))
+      ELSE NULL 
+    END,
+    COALESCE(p_red_flags, '[]'::jsonb),
     'draft',
-    v_chief_complaint,
-    ARRAY[]::text[],
-    'Compiled from kiosk intake session ' || p_session_id::text,
+    jsonb_build_object('chief_complaint', 'patient', 'hpi', 'patient'),
     v_now,
     v_now
   ) RETURNING * INTO v_case;
 
-  -- 6. Transition Session to 'submitted'
+  -- 7. Persist red flag events for clinical triage tracking atomically
+  IF p_red_flags IS NOT NULL AND jsonb_array_length(p_red_flags) > 0 THEN
+    FOR v_rf IN SELECT * FROM jsonb_to_recordset(p_red_flags) AS (
+      "ruleId" TEXT,
+      "severity" TEXT,
+      "message" TEXT
+    ) LOOP
+      INSERT INTO public.red_flag_events (
+        case_id,
+        rule_id,
+        severity,
+        trigger_text,
+        created_at
+      ) VALUES (
+        v_case.id,
+        v_rf."ruleId",
+        v_rf."severity",
+        COALESCE(v_rf."message", 'Triggered red flag ' || v_rf."ruleId"),
+        v_now
+      );
+    END LOOP;
+  END IF;
+
+  -- 8. Transition Session to 'submitted'
   UPDATE public.intake_sessions
   SET status = 'submitted',
       completed_at = v_now,
       compiled_case_id = v_case.id
   WHERE id = p_session_id;
 
-  -- 7. Audit Log
+  -- 9. Audit Log
   INSERT INTO public.audit_logs (
     actor_id,
     action,
@@ -519,7 +849,8 @@ BEGIN
     jsonb_build_object(
       'sessionId', p_session_id,
       'patientId', v_session.patient_id,
-      'facilityId', v_kiosk.facility_id
+      'facilityId', v_kiosk.facility_id,
+      'redFlagsCount', COALESCE(jsonb_array_length(p_red_flags), 0)
     ),
     v_now
   );
@@ -529,7 +860,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 --------------------------------------------------------------------------------
--- 6. rpc_execute_idempotent_mutation (True Atomic Idempotency)
+-- 8. rpc_execute_idempotent_mutation (True Atomic Idempotency & Schema Contract)
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.rpc_execute_idempotent_mutation(
   p_idempotency_key TEXT,
@@ -540,14 +871,36 @@ CREATE OR REPLACE FUNCTION public.rpc_execute_idempotent_mutation(
 ) RETURNS JSONB AS $$
 DECLARE
   v_caller_id UUID;
+  v_caller_role TEXT;
+  v_caller_facility TEXT;
+  v_caller_active BOOLEAN;
   v_existing public.sync_mutations;
   v_mutation_id UUID;
+  v_resource_id UUID;
+  v_target_patient_id UUID;
+  v_target_case_id UUID;
+  v_patient public.patients;
+  v_case public.cases;
   v_now TIMESTAMPTZ := now();
   v_lease_expiry TIMESTAMPTZ := v_now + interval '30 seconds';
+  v_result_summary JSONB;
 BEGIN
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN
     RAISE EXCEPTION 'UNAUTHORIZED: Authentication required for idempotent mutation';
+  END IF;
+
+  -- Validate caller profile
+  SELECT role, facility_id, COALESCE(is_active, true)
+  INTO v_caller_role, v_caller_facility, v_caller_active
+  FROM public.profiles WHERE id = v_caller_id;
+
+  IF NOT FOUND OR v_caller_active IS NOT TRUE THEN
+    RAISE EXCEPTION 'FORBIDDEN: Profile missing or inactive';
+  END IF;
+
+  IF v_caller_role NOT IN ('doctor', 'clinician', 'staff', 'admin') THEN
+    RAISE EXCEPTION 'FORBIDDEN: Role % not permitted to execute mutations', v_caller_role;
   END IF;
 
   IF p_idempotency_key IS NULL OR length(trim(p_idempotency_key)) = 0 THEN
@@ -557,7 +910,7 @@ BEGIN
   -- Row lock sync_mutations entry
   SELECT * INTO v_existing 
   FROM public.sync_mutations 
-  WHERE user_id = v_caller_id AND idempotency_key = p_idempotency_key 
+  WHERE user_id = v_caller_id::text AND idempotency_key = p_idempotency_key 
   FOR UPDATE;
 
   IF FOUND THEN
@@ -570,7 +923,8 @@ BEGIN
         'status', 'completed',
         'isReplay', true,
         'completedAt', v_existing.completed_at,
-        'summary', v_existing.summary
+        'resourceId', v_existing.resource_id,
+        'summary', v_existing.result_metadata
       );
     END IF;
 
@@ -578,12 +932,12 @@ BEGIN
       RAISE EXCEPTION 'LOCKED_IN_PROGRESS: Mutation is currently being processed by another worker';
     END IF;
 
-    -- Reclaim lease on expired or pending entry
+    -- Reclaim lease
     UPDATE public.sync_mutations
     SET status = 'in_progress',
         payload_hash = p_payload_hash,
         lease_expires_at = v_lease_expiry,
-        attempts = v_existing.attempts + 1,
+        attempts = COALESCE(v_existing.attempts, 1) + 1,
         updated_at = v_now
     WHERE id = v_existing.id;
     v_mutation_id := v_existing.id;
@@ -603,7 +957,7 @@ BEGIN
       updated_at
     ) VALUES (
       gen_random_uuid(),
-      v_caller_id,
+      v_caller_id::text,
       p_idempotency_key,
       p_entity,
       p_action,
@@ -617,11 +971,147 @@ BEGIN
     ) RETURNING id INTO v_mutation_id;
   END IF;
 
-  -- Mark mutation completed in same transaction
+  -- Perform business mutation atomically inside this transaction
+  IF p_entity = 'cases' THEN
+    IF v_caller_role = 'staff' THEN
+      RAISE EXCEPTION 'ROLE_UNAUTHORIZED: Staff members cannot create or update clinical cases.';
+    END IF;
+
+    IF p_action = 'create' THEN
+      v_target_patient_id := COALESCE((p_payload->>'patientId')::uuid, (p_payload->>'patient_id')::uuid);
+      IF v_target_patient_id IS NULL THEN
+        RAISE EXCEPTION 'INVALID_PAYLOAD: Case creation requires patientId.';
+      END IF;
+
+      SELECT * INTO v_patient FROM public.patients WHERE id = v_target_patient_id;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'PATIENT_NOT_FOUND: Target patient does not exist';
+      END IF;
+
+      IF v_caller_role != 'admin' THEN
+        IF v_caller_facility IS NULL OR v_patient.facility_id IS NULL OR v_caller_facility != v_patient.facility_id THEN
+          RAISE EXCEPTION 'FACILITY_ACCESS_DENIED: Cannot create case outside assigned facility';
+        END IF;
+      END IF;
+
+      INSERT INTO public.cases (
+        id,
+        patient_id,
+        clinician_id,
+        consent_id,
+        case_type,
+        patient_language,
+        chief_complaint,
+        raw_patient_complaint,
+        hpi,
+        past_history,
+        medications,
+        allergies,
+        red_flags,
+        status,
+        provenance,
+        created_at,
+        updated_at
+      ) VALUES (
+        COALESCE((p_payload->>'id')::uuid, gen_random_uuid()),
+        v_target_patient_id,
+        v_caller_id,
+        (p_payload->>'consentId')::uuid,
+        COALESCE(p_payload->>'caseType', 'general'),
+        COALESCE(p_payload->>'patientLanguage', 'en'),
+        COALESCE(p_payload->>'chiefComplaint', p_payload->>'chief_complaint', 'Chief complaint pending'),
+        p_payload->>'rawPatientComplaint',
+        COALESCE(p_payload->'hpi', '{}'::jsonb),
+        p_payload->'pastHistory',
+        COALESCE(p_payload->'medications', '[]'::jsonb),
+        COALESCE(p_payload->'allergies', '[]'::jsonb),
+        COALESCE(p_payload->'red_flags', p_payload->'redFlags', '[]'::jsonb),
+        'draft',
+        COALESCE(p_payload->'provenance', '{}'::jsonb),
+        v_now,
+        v_now
+      ) RETURNING id INTO v_resource_id;
+
+      v_result_summary := jsonb_build_object('success', true, 'caseId', v_resource_id);
+
+    ELSIF p_action IN ('update', 'update_draft') THEN
+      v_target_case_id := COALESCE((p_payload->>'id')::uuid, (p_payload->>'caseId')::uuid);
+      IF v_target_case_id IS NULL THEN
+        RAISE EXCEPTION 'INVALID_PAYLOAD: Case update requires id.';
+      END IF;
+
+      SELECT * INTO v_case FROM public.cases WHERE id = v_target_case_id FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'CASE_NOT_FOUND: Target case does not exist';
+      END IF;
+
+      SELECT * INTO v_patient FROM public.patients WHERE id = v_case.patient_id;
+      IF v_caller_role != 'admin' THEN
+        IF v_caller_facility IS NULL OR v_patient.facility_id IS NULL OR v_caller_facility != v_patient.facility_id THEN
+          RAISE EXCEPTION 'FACILITY_ACCESS_DENIED: Cannot update case outside assigned facility';
+        END IF;
+      END IF;
+
+      IF v_case.status = 'final' THEN
+        RAISE EXCEPTION 'IMMUTABLE_FINAL_CASE: Finalized cases cannot be mutated directly';
+      END IF;
+
+      UPDATE public.cases
+      SET chief_complaint = COALESCE(p_payload->>'chiefComplaint', p_payload->>'chief_complaint', chief_complaint),
+          raw_patient_complaint = COALESCE(p_payload->>'rawPatientComplaint', raw_patient_complaint),
+          hpi = COALESCE(p_payload->'hpi', hpi),
+          past_history = COALESCE(p_payload->'pastHistory', past_history),
+          medications = COALESCE(p_payload->'medications', medications),
+          allergies = COALESCE(p_payload->'allergies', allergies),
+          red_flags = COALESCE(p_payload->'red_flags', p_payload->'redFlags', red_flags),
+          updated_at = v_now
+      WHERE id = v_target_case_id
+      RETURNING id INTO v_resource_id;
+
+      v_result_summary := jsonb_build_object('success', true, 'caseId', v_resource_id);
+    ELSE
+      RAISE EXCEPTION 'UNSUPPORTED_ACTION: Action % on cases is not supported', p_action;
+    END IF;
+
+  ELSIF p_entity = 'patients' THEN
+    IF p_action = 'create' THEN
+      INSERT INTO public.patients (
+        id,
+        patient_code,
+        full_name,
+        date_of_birth,
+        gender,
+        phone,
+        facility_id,
+        created_at,
+        updated_at
+      ) VALUES (
+        COALESCE((p_payload->>'id')::uuid, gen_random_uuid()),
+        COALESCE(p_payload->>'patientCode', 'MED-' || to_char(v_now, 'YYYYMMDD') || '-' || upper(substr(md5(random()::text), 1, 6))),
+        COALESCE(p_payload->>'fullName', 'Unnamed Patient'),
+        (p_payload->>'dateOfBirth')::date,
+        p_payload->>'gender',
+        p_payload->>'phone',
+        v_caller_facility,
+        v_now,
+        v_now
+      ) RETURNING id INTO v_resource_id;
+
+      v_result_summary := jsonb_build_object('success', true, 'patientId', v_resource_id);
+    ELSE
+      RAISE EXCEPTION 'UNSUPPORTED_ACTION: Action % on patients is not supported', p_action;
+    END IF;
+  ELSE
+    v_resource_id := COALESCE((p_payload->>'id')::uuid, gen_random_uuid());
+    v_result_summary := jsonb_build_object('success', true, 'entity', p_entity, 'action', p_action);
+  END IF;
+
+  -- Complete mutation record atomically
   UPDATE public.sync_mutations
   SET status = 'completed',
       completed_at = v_now,
-      summary = jsonb_build_object('success', true, 'action', p_action, 'entity', p_entity),
+      resource_id = v_resource_id::text,
+      result_metadata = v_result_summary,
       updated_at = v_now
   WHERE id = v_mutation_id;
 
@@ -640,6 +1130,7 @@ BEGIN
     jsonb_build_object(
       'action', p_action,
       'mutationId', v_mutation_id,
+      'resourceId', v_resource_id,
       'payloadHash', p_payload_hash
     ),
     v_now
@@ -649,13 +1140,15 @@ BEGIN
     'idempotencyKey', p_idempotency_key,
     'status', 'completed',
     'isReplay', false,
-    'mutationId', v_mutation_id
+    'mutationId', v_mutation_id,
+    'resourceId', v_resource_id,
+    'summary', v_result_summary
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 --------------------------------------------------------------------------------
--- 7. Granular Function Privilege Inventory & Access Control
+-- 9. Granular Function Privilege Inventory & Access Control
 --------------------------------------------------------------------------------
 -- Revoke all function privileges from PUBLIC and anon by default
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
@@ -679,4 +1172,8 @@ GRANT EXECUTE ON FUNCTION public.rpc_execute_idempotent_mutation(TEXT, TEXT, TEX
 
 -- Explicit grants for Kiosk RPCs (can be invoked by anonymous kiosk or authenticated)
 GRANT EXECUTE ON FUNCTION public.rpc_kiosk_bootstrap_intake(UUID, TEXT, TEXT, TEXT, BOOLEAN, TEXT, DATE, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.rpc_submit_intake_to_case(UUID, UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.rpc_get_kiosk_intake_session(UUID, TEXT, UUID) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.rpc_submit_kiosk_answer(UUID, TEXT, UUID, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.rpc_update_kiosk_intake_session(UUID, TEXT, UUID, TEXT, JSONB, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.rpc_revoke_kiosk_session(UUID, TEXT, UUID) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.rpc_submit_intake_to_case(UUID, UUID, TEXT, JSONB) TO anon, authenticated, service_role;

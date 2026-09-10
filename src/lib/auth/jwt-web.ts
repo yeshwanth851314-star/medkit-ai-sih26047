@@ -220,8 +220,12 @@ export async function inspectSessionTokenWeb(
     }
 
     const now = Math.floor(Date.now() / 1000);
-    const isExpired = Boolean(parsed.exp && parsed.exp < now);
-    const willExpireSoon = Boolean(parsed.exp && parsed.exp - now < 300);
+    // Align expiration check strictly with embedded Supabase tokenExpiresAt
+    const effectiveExp = parsed.tokenExpiresAt
+      ? Math.min(parsed.exp, parsed.tokenExpiresAt)
+      : parsed.exp;
+    const isExpired = Boolean(effectiveExp && effectiveExp <= now);
+    const willExpireSoon = Boolean(effectiveExp && effectiveExp - now < 300);
 
     const user: AuthUser = {
       id: parsed.sub,

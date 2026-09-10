@@ -769,10 +769,55 @@ export async function executeIdempotentMutation(params: {
   return data as any;
 }
 
+export async function registerKioskInstance(instance: {
+  id?: string;
+  facility_id: string;
+  name: string;
+  secretHash: string;
+  status?: "active" | "disabled" | "revoked";
+  expiresAt?: string | null;
+  actorOrToken?: AuthUser | string | null;
+}): Promise<any> {
+  if (env.isDemoMode) {
+    return mockDb.registerKioskInstance({
+      id: instance.id,
+      facility_id: instance.facility_id,
+      name: instance.name,
+      secretHash: instance.secretHash,
+      status: instance.status,
+      expiresAt: instance.expiresAt,
+    });
+  }
+
+  const supabase = getAuthorizedSupabaseClient(instance.actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase
+    .from("kiosk_instances")
+    .insert({
+      id: instance.id || undefined,
+      facility_id: instance.facility_id,
+      name: instance.name,
+      secret_hash: instance.secretHash,
+      status: instance.status || "active",
+      expires_at: instance.expiresAt || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to register kiosk instance: ${error.message}`);
+  }
+  return data;
+}
+
 export async function submitIntakeToCase(params: {
   sessionId: string;
   kioskId: string;
   kioskSecret: string;
+  redFlags?: any[];
 }): Promise<ClinicalCase> {
   if (env.isDemoMode) {
     return mockDb.submitIntakeToCase(params);
@@ -787,6 +832,7 @@ export async function submitIntakeToCase(params: {
     p_session_id: params.sessionId,
     p_kiosk_id: params.kioskId,
     p_kiosk_secret: params.kioskSecret,
+    p_red_flags: params.redFlags || [],
   });
 
   if (error) {
@@ -795,6 +841,96 @@ export async function submitIntakeToCase(params: {
   }
 
   return data as ClinicalCase;
+}
+
+export async function getKioskIntakeSession(params: {
+  kioskId: string;
+  kioskSecret: string;
+  sessionId: string;
+}): Promise<IntakeSessionRecord | null> {
+  if (env.isDemoMode) {
+    return mockDb.getIntakeSessionById(params.sessionId);
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_get_kiosk_intake_session", {
+    p_kiosk_id: params.kioskId,
+    p_kiosk_secret: params.kioskSecret,
+    p_session_id: params.sessionId,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_get_kiosk_intake_session error:", error.message);
+    throw new Error(`Database error fetching kiosk intake session: ${error.message}`);
+  }
+
+  return (data || null) as IntakeSessionRecord | null;
+}
+
+export async function submitKioskAnswer(params: {
+  kioskId: string;
+  kioskSecret: string;
+  sessionId: string;
+  questionKey: string;
+  rawAnswer: string;
+  inputMode?: string;
+  nextQuestionId?: string | null;
+}): Promise<IntakeSessionRecord> {
+  if (env.isDemoMode) {
+    return mockDb.updateIntakeSession(params.sessionId, {
+      current_question_id: params.nextQuestionId || undefined,
+    }) as any;
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_submit_kiosk_answer", {
+    p_kiosk_id: params.kioskId,
+    p_kiosk_secret: params.kioskSecret,
+    p_session_id: params.sessionId,
+    p_question_key: params.questionKey,
+    p_raw_answer: params.rawAnswer,
+    p_input_mode: params.inputMode || "touch",
+    p_next_question_id: params.nextQuestionId || null,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_submit_kiosk_answer error:", error.message);
+    throw new Error(`Database error submitting kiosk answer: ${error.message}`);
+  }
+
+  return data as IntakeSessionRecord;
+}
+
+export async function revokeKioskSession(params: {
+  kioskId: string;
+  kioskSecret: string;
+  sessionId: string;
+}): Promise<void> {
+  if (env.isDemoMode) {
+    await mockDb.updateIntakeSession(params.sessionId, { status: "abandoned" });
+    return;
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) return;
+
+  const { error } = await supabase.rpc("rpc_revoke_kiosk_session", {
+    p_kiosk_id: params.kioskId,
+    p_kiosk_secret: params.kioskSecret,
+    p_session_id: params.sessionId,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_revoke_kiosk_session error:", error.message);
+  }
 }
 
 export async function updateSyncMutationStatus(params: {

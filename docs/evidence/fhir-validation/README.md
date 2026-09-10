@@ -16,8 +16,8 @@ MedKit AI transforms patient intake cases, clinical notes, prescriptions, and AY
 | Bundle Element / Resource | Profile / Target | Invariant / Structural Rule | Conformance Status |
 | :--- | :--- | :--- | :--- |
 | **Root Bundle** | `DocumentBundle` | `resourceType = "Bundle"`, `type = "document"`, UUID `identifier` | **CONFORMANT** |
-| **Root Bundle Profile** | `DocumentBundle` / `OPConsultRecord` | Declared in `meta.profile[]` | **CONFORMANT** |
-| **Composition (entry[0])** | `OPConsultRecord` | Mandatory first resource in Document Bundle; status `final` or `preliminary` | **CONFORMANT** |
+| **Root Bundle Profile** | `DocumentBundle` | Declared in `Bundle.meta.profile[]` (`https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle`) | **CONFORMANT** |
+| **Composition (entry[0])** | `OPConsultRecord` | Mandatory first resource in Document Bundle; declared in `Composition.meta.profile[]` (`https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord`) | **CONFORMANT** |
 | **Composition.type** | SNOMED CT `371530004` | "Clinical consultation report" coding with display | **CONFORMANT** |
 | **Composition.subject** | Target `Patient` | Must reference `urn:uuid:<patient-uuid>` | **CONFORMANT** |
 | **Composition.encounter**| Target `Encounter` | Must reference `urn:uuid:<encounter-uuid>` | **CONFORMANT** |

@@ -46,16 +46,19 @@ export function pruneExpiredSessions(): number {
  * Durably tear down an interview session upon completion or cancellation
  */
 export async function teardownInterviewSession(sessionId: string): Promise<void> {
-  revokeIntakeCapabilityToken(sessionId);
   const session = activeSessions.get(sessionId);
   if (session) {
     session.status = "submitted";
     session.endedAt = new Date().toISOString();
   }
-  await updateIntakeSession(sessionId, {
+  const dbPromise = updateIntakeSession(sessionId, {
     status: "submitted",
     completed_at: new Date().toISOString(),
-  }).catch(() => {});
+  }).catch((err) => {
+    console.error(`Failed to durably update intake session ${sessionId} to submitted:`, err);
+  });
+  const revokePromise = revokeIntakeCapabilityToken(sessionId, { targetStatus: "submitted" });
+  await Promise.all([dbPromise, revokePromise]);
 }
 
 export function createInterviewSession(
@@ -286,10 +289,37 @@ export async function compileInterviewToCase(
   // If in production mode with kiosk credentials, use the dedicated transactional RPC
   if (!env.isDemoMode && options?.kioskId && options?.kioskSecret) {
     const { submitIntakeToCase } = await import("@/lib/db/supabase");
+    const answers = session.answers || {};
+    const chiefComplaint =
+      answers.chief_complaint?.rawAnswer ||
+      answers.Q_CHIEF_COMPLAINT?.rawAnswer ||
+      (answers.chief_complaint as any)?.value ||
+      (answers.Q_CHIEF_COMPLAINT as any)?.value ||
+      "";
+    const hpi: any = {
+      onset: answers.chest_onset?.rawAnswer || answers.general_onset?.rawAnswer || null,
+      duration: answers.cough_duration?.rawAnswer || null,
+      character: answers.cough_type?.rawAnswer || null,
+      radiation: answers.chest_radiation?.rawAnswer || null,
+      associated_symptoms: [],
+    };
+    if (answers.chest_associated?.rawAnswer) {
+      hpi.associated_symptoms.push(answers.chest_associated.rawAnswer);
+    }
+    if (answers.cough_fever?.rawAnswer) {
+      hpi.associated_symptoms.push(answers.cough_fever.rawAnswer);
+    }
+    const redFlags = evaluateClinicalRedFlags({
+      chiefComplaint,
+      rawPatientComplaint: chiefComplaint,
+      hpi,
+    });
+
     const newCase = await submitIntakeToCase({
       sessionId,
       kioskId: options.kioskId,
       kioskSecret: options.kioskSecret,
+      redFlags,
     });
     (session as any).compiledCaseId = newCase.id;
     await teardownInterviewSession(sessionId);

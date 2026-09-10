@@ -35,12 +35,14 @@ test.describe("MedKit AI: Non-Demo Real Infrastructure E2E Suite", () => {
       console.warn("[BLOCKED EXTERNAL] Real infrastructure not configured.");
       console.warn("  - Live Supabase instance is unreachable or credentials are unconfigured.");
       console.warn("  - Host environment must provide running Supabase containers or cloud project.");
-      console.warn("  - Production path fail-closed integrity verified.");
+      console.warn("  - Production non-demo E2E test fails closed as required.");
       console.warn("================================================================================");
 
-      // Explicit fail-closed assertion required by Blocker 13
-      expect("Real infrastructure not configured").toContain("Real infrastructure not configured");
-      return;
+      throw new Error(
+        "[BLOCKED EXTERNAL] Real infrastructure not configured for live non-demo E2E suite.\n" +
+        "  - Target URL is unreachable or credentials are missing.\n" +
+        "  - Use 'npm run test:e2e' for full mock/demo UI verification."
+      );
     }
 
     expect(isRealInfraAvailable).toBe(true);

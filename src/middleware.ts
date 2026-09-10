@@ -9,30 +9,51 @@ import {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isDoctorRoute = pathname.startsWith("/doctor");
+  const isProtectedApiRoute =
+    pathname.startsWith("/api/cases") ||
+    pathname.startsWith("/api/patients") ||
+    pathname.startsWith("/api/documents") ||
+    pathname.startsWith("/api/consents") ||
+    pathname.startsWith("/api/timeline");
 
-  // Protected paths requiring clinical authentication
-  if (pathname.startsWith("/doctor")) {
-    const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (isDoctorRoute || isProtectedApiRoute) {
+    let sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    if (!sessionToken) {
+      const authHeader = request.headers.get("authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        sessionToken = authHeader.slice(7).trim();
+      }
+    }
 
-    if (!sessionCookie) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirectTo", pathname);
-      return NextResponse.redirect(loginUrl);
+    if (!sessionToken) {
+      if (isDoctorRoute) {
+        const loginUrl = new URL("/login", request.url);
+        loginUrl.searchParams.set("redirectTo", pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      return NextResponse.next();
     }
 
     // Inspect session: signature validity, expiration, and refresh token presence
-    const inspection = await inspectSessionTokenWeb(sessionCookie);
+    const inspection = await inspectSessionTokenWeb(sessionToken);
 
     if (!inspection.valid) {
       // Check legacy demo token fallback if in demo mode
-      const demoUser = await verifySessionTokenWeb(sessionCookie);
+      const demoUser = await verifySessionTokenWeb(sessionToken);
       if (!demoUser || !["doctor", "clinician", "staff", "admin"].includes(demoUser.role)) {
-        const loginUrl = new URL("/login", request.url);
-        loginUrl.searchParams.set("redirectTo", pathname);
-        loginUrl.searchParams.set("error", "invalid_session");
-        const response = NextResponse.redirect(loginUrl);
-        response.cookies.delete(SESSION_COOKIE_NAME);
-        return response;
+        if (isDoctorRoute) {
+          const loginUrl = new URL("/login", request.url);
+          loginUrl.searchParams.set("redirectTo", pathname);
+          loginUrl.searchParams.set("error", "invalid_session");
+          const response = NextResponse.redirect(loginUrl);
+          response.cookies.delete(SESSION_COOKIE_NAME);
+          return response;
+        } else {
+          const response = NextResponse.json({ error: "UNAUTHORIZED: Invalid session token" }, { status: 401 });
+          response.cookies.delete(SESSION_COOKIE_NAME);
+          return response;
+        }
       }
       return NextResponse.next();
     }
@@ -47,18 +68,23 @@ export async function middleware(request: NextRequest) {
         activeUser = refreshed.user;
         rotatedToken = refreshed.token;
       } else if (inspection.isExpired) {
-        // Token is expired and refresh failed: invalidate session cookie and redirect to login
-        const loginUrl = new URL("/login", request.url);
-        loginUrl.searchParams.set("redirectTo", pathname);
-        loginUrl.searchParams.set("error", "session_expired");
-        const response = NextResponse.redirect(loginUrl);
-        response.cookies.delete(SESSION_COOKIE_NAME);
-        return response;
+        if (isDoctorRoute) {
+          const loginUrl = new URL("/login", request.url);
+          loginUrl.searchParams.set("redirectTo", pathname);
+          loginUrl.searchParams.set("error", "session_expired");
+          const response = NextResponse.redirect(loginUrl);
+          response.cookies.delete(SESSION_COOKIE_NAME);
+          return response;
+        } else {
+          const response = NextResponse.json({ error: "UNAUTHORIZED: Session expired and refresh failed" }, { status: 401 });
+          response.cookies.delete(SESSION_COOKIE_NAME);
+          return response;
+        }
       }
     }
 
-    // Verify authorized role
-    if (!["doctor", "clinician", "staff", "admin"].includes(activeUser.role)) {
+    // Verify authorized role for doctor route
+    if (isDoctorRoute && !["doctor", "clinician", "staff", "admin"].includes(activeUser.role)) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirectTo", pathname);
       loginUrl.searchParams.set("error", "unauthorized_role");
@@ -67,7 +93,7 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    // Forward active user identity in request headers to downstream Server Components
+    // Forward active user identity in request headers to downstream Server Components and API route handlers
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-medkit-user-id", activeUser.id);
     requestHeaders.set("x-medkit-user-role", activeUser.role);
@@ -104,5 +130,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/doctor/:path*"],
+  matcher: [
+    "/doctor/:path*",
+    "/api/cases/:path*",
+    "/api/patients/:path*",
+    "/api/documents/:path*",
+    "/api/consents/:path*",
+    "/api/timeline/:path*",
+  ],
 };
