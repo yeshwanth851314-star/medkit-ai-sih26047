@@ -844,7 +844,7 @@ export async function getKioskIntakeSession(params: {
   sessionId: string;
 }): Promise<IntakeSessionRecord | null> {
   if (env.isDemoMode) {
-    return mockDb.getIntakeSessionById(params.sessionId);
+    return mockDb.getKioskIntakeSession(params);
   }
 
   const supabase = getSupabaseClient() || getServiceSupabaseClient();
@@ -983,35 +983,107 @@ export async function revokeKioskSessionDurable(
   }
 }
 
-export async function isSessionDurableRevoked(sessionId: string): Promise<boolean> {
+export type DurableSessionState =
+  | { status: "active"; session: IntakeSessionRecord }
+  | { status: "revoked"; reason?: string }
+  | { status: "expired" }
+  | { status: "submitted" }
+  | { status: "abandoned" };
+
+export async function verifyDurableSessionState(params: {
+  sessionId: string;
+  kioskId?: string;
+  kioskSecret?: string;
+}): Promise<DurableSessionState> {
   if (env.isDemoMode) {
-    return mockDb.isSessionRevoked(sessionId);
+    if (mockDb.isSessionRevoked(params.sessionId)) {
+      return { status: "revoked" };
+    }
+    const session = await mockDb.getIntakeSessionById(params.sessionId);
+    if (!session) {
+      // In demo mode, if session is not explicitly stored in mockDb, treat unrevoked token as active
+      return {
+        status: "active",
+        session: {
+          id: params.sessionId,
+          patient_id: "",
+          facility_id: "",
+          status: "active",
+          language: "en",
+          current_question_id: "Q_CHIEF_COMPLAINT",
+          answers: {},
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+          started_at: new Date().toISOString(),
+        },
+      };
+    }
+    if (session.status === "abandoned") return { status: "abandoned" };
+    if (session.status === "submitted") return { status: "submitted" };
+    if (new Date(session.expires_at).getTime() < Date.now()) return { status: "expired" };
+    return { status: "active", session };
   }
 
   const supabase = getSupabaseClient() || getServiceSupabaseClient();
-  if (!supabase) return false;
-
-  // Check revocation table first
-  const { data: revData } = await supabase
-    .from("kiosk_capability_revocations")
-    .select("session_id")
-    .eq("session_id", sessionId)
-    .maybeSingle();
-
-  if (revData) return true;
-
-  // Check intake_sessions table status
-  const { data: sessionData } = await supabase
-    .from("intake_sessions")
-    .select("status, expires_at")
-    .eq("id", sessionId)
-    .maybeSingle();
-
-  if (sessionData && (sessionData.status === "abandoned" || sessionData.status === "submitted" || new Date(sessionData.expires_at).getTime() < Date.now())) {
-    return true;
+  if (!supabase) {
+    throw new Error("DATABASE_UNAVAILABLE: Supabase client is not configured to verify session state (fail-closed).");
   }
 
-  return false;
+  // If kiosk credentials provided, use the secure RPC as the authoritative session lookup
+  if (params.kioskId && params.kioskSecret) {
+    const { data, error } = await supabase.rpc("rpc_get_kiosk_intake_session", {
+      p_kiosk_id: params.kioskId,
+      p_kiosk_secret: params.kioskSecret,
+      p_session_id: params.sessionId,
+    });
+    if (error) {
+      if (error.message?.includes("SESSION_NOT_FOUND")) {
+        return { status: "revoked" };
+      }
+      throw new Error(`Database error verifying kiosk session: ${error.message}`);
+    }
+    if (!data) return { status: "revoked" };
+    if (data.status === "abandoned") return { status: "abandoned" };
+    if (data.status === "submitted") return { status: "submitted" };
+    if (new Date(data.expires_at).getTime() < Date.now()) return { status: "expired" };
+    return { status: "active", session: data };
+  }
+
+  // Check revocation table
+  const { data: revData, error: revErr } = await supabase
+    .from("kiosk_capability_revocations")
+    .select("session_id, reason")
+    .eq("session_id", params.sessionId)
+    .maybeSingle();
+
+  if (revErr) {
+    throw new Error(`Database error querying revocations: ${revErr.message}`);
+  }
+  if (revData) return { status: "revoked", reason: revData.reason };
+
+  // Check intake_sessions table status
+  const { data: sessionData, error: sessErr } = await supabase
+    .from("intake_sessions")
+    .select("*")
+    .eq("id", params.sessionId)
+    .maybeSingle();
+
+  if (sessErr) {
+    throw new Error(`Database error querying intake_sessions: ${sessErr.message}`);
+  }
+  if (!sessionData) return { status: "revoked" };
+  if (sessionData.status === "abandoned") return { status: "abandoned" };
+  if (sessionData.status === "submitted") return { status: "submitted" };
+  if (new Date(sessionData.expires_at).getTime() < Date.now()) return { status: "expired" };
+
+  return { status: "active", session: sessionData };
+}
+
+export async function isSessionDurableRevoked(
+  sessionId: string,
+  options?: { kioskId?: string; kioskSecret?: string }
+): Promise<boolean> {
+  const state = await verifyDurableSessionState({ sessionId, ...options });
+  return state.status !== "active";
 }
 
 export async function updateSyncMutationStatus(params: {

@@ -4,7 +4,8 @@ import { getSessionSecret } from "./jwt";
 import { authenticateApiRequest } from "./api-guard";
 import { AuthUser } from "@/features/auth/types";
 import { env } from "@/config/env";
-import { revokeKioskSessionDurable, isSessionDurableRevoked } from "@/lib/db/supabase";
+import { revokeKioskSessionDurable, isSessionDurableRevoked, verifyDurableSessionState } from "@/lib/db/supabase";
+import { resolveKioskCredential } from "./kiosk-credential";
 
 export interface IntakeCapabilityPayload {
   type: "kiosk_intake";
@@ -221,9 +222,8 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Durable revocation check — ensures token remains rejected across worker restarts / memory eviction
-  const isRevoked = await isIntakeCapabilityRevokedDurable(capability.sessionId);
-  if (isRevoked) {
+  // 1. Fast in-memory revocation check
+  if (isIntakeCapabilityRevoked(capability.sessionId)) {
     return {
       authorized: false,
       errorResponse: NextResponse.json(
@@ -233,7 +233,7 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Validate session boundary
+  // 2. Validate boundary options (session, patient, scope)
   if (options?.targetSessionId && capability.sessionId !== options.targetSessionId) {
     return {
       authorized: false,
@@ -244,7 +244,6 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Validate patient boundary
   if (options?.targetPatientId && capability.patientId !== options.targetPatientId) {
     return {
       authorized: false,
@@ -255,7 +254,6 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Validate scope boundary
   if (options?.requiredScope && !capability.scope.includes(options.requiredScope)) {
     return {
       authorized: false,
@@ -266,19 +264,66 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Validate durable session in demo store if applicable
-  if (env.isDemoMode) {
-    const { getIntakeSessionById } = await import("@/lib/db/supabase");
-    const dbSession = await getIntakeSessionById(capability.sessionId);
-    if (dbSession && (dbSession.status !== "active" || new Date(dbSession.expires_at).getTime() < Date.now())) {
+  // 3. Resolve server-held kiosk device credential (Correction 1C)
+  const credential = resolveKioskCredential(request);
+  if (!env.isDemoMode && !credential) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "UNAUTHORIZED: Kiosk device credential cookie required for intake authorization" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  // 4. Durable Session State Verification via secure database logic (Correction 2A, 2B, 2C)
+  try {
+    const sessionState = await verifyDurableSessionState({
+      sessionId: capability.sessionId,
+      kioskId: credential?.kioskId,
+      kioskSecret: credential?.kioskSecret,
+    });
+
+    if (sessionState.status !== "active") {
+      revokedSessions.add(capability.sessionId);
       return {
         authorized: false,
         errorResponse: NextResponse.json(
-          { error: "UNAUTHORIZED: Kiosk intake session has expired or been terminated" },
+          { error: `UNAUTHORIZED: Kiosk intake session is ${sessionState.status}` },
           { status: 401 }
         ),
       };
     }
+
+    const dbSession = sessionState.session;
+    if (dbSession.patient_id && dbSession.patient_id !== capability.patientId) {
+      return {
+        authorized: false,
+        errorResponse: NextResponse.json(
+          { error: "FORBIDDEN: Session patient does not match capability patient" },
+          { status: 403 }
+        ),
+      };
+    }
+
+    if (capability.facilityId && dbSession.facility_id && dbSession.facility_id !== capability.facilityId) {
+      return {
+        authorized: false,
+        errorResponse: NextResponse.json(
+          { error: "FORBIDDEN: Session facility does not match capability facility" },
+          { status: 403 }
+        ),
+      };
+    }
+  } catch (err: any) {
+    // FAIL CLOSED: Inability to verify durable state strictly denies access
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: `DATABASE_UNAVAILABLE: Unable to verify session state (${err.message}). Access denied (fail-closed).` },
+        { status: 503 }
+      ),
+    };
   }
 
   return { authorized: true, capability };

@@ -174,6 +174,51 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       expect(finalRestored?.answers.chief_complaint.rawAnswer).toBe("Continuous severe throat pain for 3 days");
       expect(finalRestored?.answers.general_onset.rawAnswer).toBe("Mild dry cough with body chills");
     });
+
+    it("rehydrates cold-start session via secure kiosk RPC credentials", async () => {
+      const testPatientId = "11111111-1111-4111-8111-111111111111";
+      const session = createInterviewSession(testPatientId, "en", null, "fac-hyd-01");
+      const sessionId = session.id;
+
+      // Wipe in-memory session cache to simulate cold-start
+      const globalForSessions = globalThis as any;
+      if (globalForSessions.__medkit_active_sessions) {
+        globalForSessions.__medkit_active_sessions.delete(sessionId);
+      }
+
+      // Rehydrate passing kiosk credentials
+      const restored = await getInterviewSessionAsync(sessionId, {
+        kioskId: "00000000-0000-0000-0000-000000000001",
+        kioskSecret: "kiosk-secret-hyd-01",
+      });
+
+      expect(restored).not.toBeNull();
+      expect(restored?.id).toBe(sessionId);
+      expect(restored?.patientId).toBe(testPatientId);
+    });
+
+    it("rejects unauthenticated session rehydration in production mode (fail closed)", async () => {
+      const testPatientId = "11111111-1111-4111-8111-111111111111";
+      const session = createInterviewSession(testPatientId, "en", null, "fac-hyd-01");
+      const sessionId = session.id;
+
+      // Wipe memory
+      const globalForSessions = globalThis as any;
+      if (globalForSessions.__medkit_active_sessions) {
+        globalForSessions.__medkit_active_sessions.delete(sessionId);
+      }
+
+      // Temporarily toggle isDemoMode to false to simulate production
+      const origDemo = env.isDemoMode;
+      try {
+        (env as any).isDemoMode = false;
+        await expect(
+          getInterviewSessionAsync(sessionId) // No kiosk credentials or clinical token
+        ).rejects.toThrow(/UNAUTHORIZED: Kiosk device credentials or clinical authentication required/);
+      } finally {
+        (env as any).isDemoMode = origDemo;
+      }
+    });
   });
 
   // ===========================================================================
@@ -307,6 +352,38 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
         expect(authCheck.errorResponse.status).toBe(401);
       }
     });
+
+    it("strictly fails closed with 503 when durable session DB verification encounters an error", async () => {
+      const testPatientId = "11111111-1111-4111-8111-111111111111";
+      const token = signIntakeCapabilityToken({
+        sessionId: "ses-db-err-failclosed",
+        patientId: testPatientId,
+        facilityId: "fac-hyd-01",
+        scope: ["intake:answer"],
+      });
+
+      const supabaseLib = await import("@/lib/db/supabase");
+      const spy = vi.spyOn(supabaseLib, "verifyDurableSessionState").mockRejectedValueOnce(
+        new Error("DATABASE_UNAVAILABLE: Network partition during state check")
+      );
+
+      const req = new Request("http://localhost:3000/api/interviews/ses-db-err-failclosed/answer", {
+        method: "POST",
+        headers: { "x-intake-token": token },
+      });
+
+      const authCheck = await requireIntakeOrClinicalAuth(req, {
+        requiredScope: "intake:answer",
+        targetSessionId: "ses-db-err-failclosed",
+      });
+
+      expect(authCheck.authorized).toBe(false);
+      if (!authCheck.authorized) {
+        expect(authCheck.errorResponse.status).toBe(503);
+      }
+
+      spy.mockRestore();
+    });
   });
 
   // ===========================================================================
@@ -418,6 +495,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
         fileSize: 2048576,
         documentType: "prescription",
         processingStatus: "uploaded",
+        storage_path: "clinical-records/chest-xray-report.pdf",
         extractedData: { impressions: "Clear lung fields, no consolidation" },
       };
 
@@ -462,6 +540,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const payload = {
         patientId: "11111111-1111-4111-8111-111111111111",
         originalFilename: "ecg-trace.pdf",
+        storage_path: "clinical-records/ecg-trace.pdf",
       };
       const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 
@@ -506,6 +585,7 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
           originalFilename: "discharge-summary.pdf",
           mimeType: "application/pdf",
           fileSize: 512000,
+          storage_path: "clinical-records/discharge-summary.pdf",
         },
         timestamp: new Date().toISOString(),
         retryCount: 0,
@@ -529,6 +609,111 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
       const data = await res.json();
       expect(data.succeeded).toContain(queueItemId);
       expect(data.failed).toHaveLength(0);
+    });
+
+    it("strictly rejects document creation without storage_path (STORAGE_PATH_REQUIRED)", async () => {
+      const docKey = `doc-missing-storage-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "missing-path.pdf",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_REQUIRED/);
+    });
+
+    it("strictly rejects document creation with fake offline-sync/ path", async () => {
+      const docKey = `doc-fake-storage-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "fake-sync.pdf",
+        storage_path: "offline-sync/a849f7b1-fake-uuid",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/STORAGE_PATH_REQUIRED/);
+    });
+
+    it("strictly rejects offline document sync setting clinician-only status confirmed", async () => {
+      const docKey = `doc-forbidden-status-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "status-tamper.pdf",
+        storage_path: "clinical-records/status-tamper.pdf",
+        processing_status: "confirmed",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: docKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "create",
+          payloadHash: hash,
+          payload,
+        })
+      ).rejects.toThrow(/FORBIDDEN_DOCUMENT_STATUS_TRANSITION/);
+    });
+
+    it("strictly rejects document update tampering with immutable fields (IMMUTABLE_FIELD_TAMPERING)", async () => {
+      // First create a legitimate document
+      const docKey = `doc-immutable-base-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: "11111111-1111-4111-8111-111111111111",
+        originalFilename: "immutable-check.pdf",
+        storage_path: "clinical-records/immutable-check.pdf",
+        processing_status: "uploaded",
+      };
+      const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+
+      const created = await executeIdempotentMutation({
+        idempotencyKey: docKey,
+        userId: staffUser.id,
+        entity: "documents",
+        action: "create",
+        payloadHash: hash,
+        payload,
+      });
+
+      const docId = created.summary.documentId;
+
+      // Now attempt an update that tampers with patient_id
+      const tamperKey = `doc-tamper-key-${crypto.randomUUID()}`;
+      const tamperPayload = {
+        id: docId,
+        patientId: "99999999-9999-9999-9999-999999999999", // Tampered
+      };
+      const tamperHash = crypto.createHash("sha256").update(JSON.stringify(tamperPayload)).digest("hex");
+
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: tamperKey,
+          userId: staffUser.id,
+          entity: "documents",
+          action: "update",
+          payloadHash: tamperHash,
+          payload: tamperPayload,
+        })
+      ).rejects.toThrow(/IMMUTABLE_FIELD_TAMPERING/);
     });
   });
 });

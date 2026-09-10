@@ -156,21 +156,27 @@ export function getInterviewSession(sessionId: string): InterviewSession | null 
 
 export async function getInterviewSessionAsync(
   sessionId: string,
-  options?: { kioskId?: string; kioskSecret?: string }
+  options?: { kioskId?: string; kioskSecret?: string; actorOrToken?: any }
 ): Promise<InterviewSession | null> {
   const cached = activeSessions.get(sessionId);
   if (cached) return cached;
 
   let dbSession: any = null;
-  if (!env.isDemoMode && options?.kioskId && options?.kioskSecret) {
-    const { getKioskIntakeSession } = await import("@/lib/db/supabase");
-    dbSession = await getKioskIntakeSession({
-      kioskId: options.kioskId,
-      kioskSecret: options.kioskSecret,
-      sessionId,
-    });
-  } else {
+  if (env.isDemoMode) {
     dbSession = await getIntakeSessionById(sessionId);
+  } else {
+    if (options?.kioskId && options?.kioskSecret) {
+      const { getKioskIntakeSession } = await import("@/lib/db/supabase");
+      dbSession = await getKioskIntakeSession({
+        kioskId: options.kioskId,
+        kioskSecret: options.kioskSecret,
+        sessionId,
+      });
+    } else if (options?.actorOrToken) {
+      dbSession = await getIntakeSessionById(sessionId, options.actorOrToken);
+    } else {
+      throw new Error("UNAUTHORIZED: Kiosk device credentials or clinical authentication required to load intake session");
+    }
   }
 
   if (!dbSession) return null;
@@ -332,7 +338,10 @@ export async function compileInterviewToCase(
 ): Promise<ClinicalCase> {
   let session = activeSessions.get(sessionId);
   if (!session) {
-    session = (await getInterviewSessionAsync(sessionId)) || undefined;
+    session = (await getInterviewSessionAsync(sessionId, {
+      kioskId: options?.kioskId,
+      kioskSecret: options?.kioskSecret,
+    })) || undefined;
   }
   if (!session) throw new Error("Interview session not found");
 

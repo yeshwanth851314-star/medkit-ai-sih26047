@@ -610,6 +610,28 @@ class MockDatabaseAdapter {
     return kiosk;
   }
 
+  async getKioskIntakeSession(params: {
+    kioskId: string;
+    kioskSecret: string;
+    sessionId: string;
+  }): Promise<IntakeSessionRecord | null> {
+    const kiosk = await this.verifyKioskCredentials(params.kioskId, params.kioskSecret);
+    if (!kiosk) {
+      throw new Error("UNAUTHORIZED: Invalid kiosk identifier or secret");
+    }
+
+    const session = this.intakeSessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`SESSION_NOT_FOUND: Intake session ${params.sessionId} does not exist`);
+    }
+
+    if (session.facility_id && kiosk.facility_id && session.facility_id !== kiosk.facility_id) {
+      throw new Error("FORBIDDEN: Session facility does not match kiosk facility");
+    }
+
+    return session;
+  }
+
   async registerKioskInstance(instance: {
     id?: string;
     facility_id?: string;
@@ -865,19 +887,32 @@ class MockDatabaseAdapter {
     let mutationSummary: any = { success: true, action: params.action, entity: params.entity };
 
     if (params.entity === "documents") {
+      const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed"];
+      const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
+
       if (params.action === "create") {
+        const storagePath = params.payload?.storage_path || params.payload?.storagePath;
+        if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
+          throw new Error("STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path");
+        }
+
+        const requestedStatus = params.payload?.processing_status || params.payload?.processingStatus || "uploaded";
+        if (forbiddenStatuses.includes(requestedStatus) || !allowedStatuses.includes(requestedStatus)) {
+          throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${requestedStatus}`);
+        }
+
         const docId = params.payload?.id || crypto.randomUUID();
         const docRecord = {
           id: docId,
           patient_id: params.payload?.patientId || params.payload?.patient_id,
           case_id: params.payload?.caseId || params.payload?.case_id || null,
           uploaded_by: params.userId,
-          storage_path: params.payload?.storage_path || params.payload?.storagePath || "mock-storage/doc.pdf",
+          storage_path: storagePath.trim(),
           original_filename: params.payload?.original_filename || params.payload?.originalFilename || "document.pdf",
           mime_type: params.payload?.mime_type || params.payload?.mimeType || "application/pdf",
           file_size: params.payload?.file_size || params.payload?.fileSize || 1024,
           document_type: params.payload?.document_type || params.payload?.documentType || "prescription",
-          processing_status: params.payload?.processing_status || params.payload?.processingStatus || "uploaded",
+          processing_status: requestedStatus,
           extracted_data: params.payload?.extracted_data || params.payload?.extractedData || null,
           ocr_confidence: params.payload?.ocr_confidence || params.payload?.ocrConfidence || null,
           created_at: new Date().toISOString(),
@@ -888,15 +923,39 @@ class MockDatabaseAdapter {
       } else if (params.action === "update") {
         const docId = params.payload?.id || params.payload?.documentId || params.payload?.document_id;
         const existingDoc = this.documents.get(docId);
-        if (existingDoc) {
-          if (params.payload?.extracted_data !== undefined) existingDoc.extracted_data = params.payload.extracted_data;
-          if (params.payload?.extractedData !== undefined) existingDoc.extracted_data = params.payload.extractedData;
-          if (params.payload?.processing_status !== undefined) existingDoc.processing_status = params.payload.processing_status;
-          if (params.payload?.processingStatus !== undefined) existingDoc.processing_status = params.payload.processingStatus;
-          if (params.payload?.ocr_confidence !== undefined) existingDoc.ocr_confidence = params.payload.ocr_confidence;
-          if (params.payload?.ocrConfidence !== undefined) existingDoc.ocr_confidence = params.payload.ocrConfidence;
-          existingDoc.updated_at = new Date().toISOString();
+        if (!existingDoc) {
+          throw new Error("DOCUMENT_NOT_FOUND: Target document does not exist");
         }
+
+        const immutableFields = [
+          "patient_id", "patientId",
+          "facility_id", "facilityId",
+          "storage_path", "storagePath",
+          "uploaded_by", "uploadedBy",
+          "created_at", "createdAt",
+          "confirmed_by", "confirmedBy",
+          "confirmed_at", "confirmedAt"
+        ];
+        for (const field of immutableFields) {
+          if (params.payload && params.payload[field] !== undefined) {
+            throw new Error(`IMMUTABLE_FIELD_TAMPERING: Offline sync cannot mutate document provenance or verification fields (${field})`);
+          }
+        }
+
+        if (params.payload?.processing_status !== undefined || params.payload?.processingStatus !== undefined) {
+          const newStatus = params.payload?.processing_status || params.payload?.processingStatus;
+          if (forbiddenStatuses.includes(newStatus) || !allowedStatuses.includes(newStatus)) {
+            throw new Error(`FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status ${newStatus}`);
+          }
+          existingDoc.processing_status = newStatus;
+        }
+
+        if (params.payload?.extracted_data !== undefined) existingDoc.extracted_data = params.payload.extracted_data;
+        if (params.payload?.extractedData !== undefined) existingDoc.extracted_data = params.payload.extractedData;
+        if (params.payload?.ocr_confidence !== undefined) existingDoc.ocr_confidence = params.payload.ocr_confidence;
+        if (params.payload?.ocrConfidence !== undefined) existingDoc.ocr_confidence = params.payload.ocrConfidence;
+        existingDoc.updated_at = new Date().toISOString();
+
         mutationSummary = { success: true, documentId: docId };
       }
     }

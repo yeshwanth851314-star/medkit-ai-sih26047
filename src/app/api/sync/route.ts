@@ -48,6 +48,59 @@ export async function POST(request: Request) {
 
       const item = parseResult.data;
 
+      // Correction 3: Strict atomic document offline sync validation
+      if (item.entity === "documents") {
+        const forbiddenStatuses = ["confirmed", "accepted", "verified", "final", "clinician_confirmed"];
+        const allowedStatuses = ["uploaded", "processing", "extracted", "review", "failed"];
+
+        if (item.action === "create") {
+          const storagePath = item.payload?.storage_path || item.payload?.storagePath;
+          if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
+            failed.push({
+              id: item.id,
+              error: "STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path",
+            });
+            continue;
+          }
+
+          const status = item.payload?.processing_status || item.payload?.processingStatus || "uploaded";
+          if (forbiddenStatuses.includes(status) || !allowedStatuses.includes(status)) {
+            failed.push({
+              id: item.id,
+              error: `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status '${status}'`,
+            });
+            continue;
+          }
+        } else if (item.action === "update") {
+          const immutableFields = [
+            "patient_id", "patientId",
+            "facility_id", "facilityId",
+            "storage_path", "storagePath",
+            "uploaded_by", "uploadedBy",
+            "created_at", "createdAt",
+            "confirmed_by", "confirmedBy",
+            "confirmed_at", "confirmedAt"
+          ];
+          const hasTampering = immutableFields.some((f) => item.payload && item.payload[f] !== undefined);
+          if (hasTampering) {
+            failed.push({
+              id: item.id,
+              error: "IMMUTABLE_FIELD_TAMPERING: Offline sync cannot mutate document provenance or verification fields",
+            });
+            continue;
+          }
+
+          const status = item.payload?.processing_status || item.payload?.processingStatus;
+          if (status && (forbiddenStatuses.includes(status) || !allowedStatuses.includes(status))) {
+            failed.push({
+              id: item.id,
+              error: `FORBIDDEN_DOCUMENT_STATUS_TRANSITION: Offline sync cannot set clinician-only status '${status}'`,
+            });
+            continue;
+          }
+        }
+      }
+
       // Server-side atomic idempotency check: prevents concurrent duplicate execution
       if (item.idempotencyKey) {
         const payloadHash = crypto
@@ -217,11 +270,18 @@ export async function POST(request: Request) {
             if (!patientId) {
               throw new Error("INVALID_PAYLOAD: Document creation requires patientId.");
             }
+            const storagePath = item.payload?.storage_path || item.payload?.storagePath;
+            if (!storagePath || typeof storagePath !== "string" || storagePath.trim().length === 0 || storagePath.startsWith("offline-sync/")) {
+              throw new Error("STORAGE_PATH_REQUIRED: Document creation requires a valid, pre-existing storage path");
+            }
             const patientCheck = await requirePatientAccess(auth.user, patientId);
             if (!patientCheck.authorized) {
               throw new Error("FACILITY_ACCESS_DENIED: Cannot mutate document for patient outside assigned facility.");
             }
-            const doc = await createDocument(item.payload as any, auth.user);
+            const doc = await createDocument({
+              ...item.payload,
+              storage_path: storagePath.trim(),
+            } as any, auth.user);
             targetResourceId = doc?.id || targetResourceId;
           }
         } else if (item.entity === "transcripts") {
