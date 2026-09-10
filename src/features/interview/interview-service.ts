@@ -43,22 +43,51 @@ export function pruneExpiredSessions(): number {
 }
 
 /**
- * Durably tear down an interview session upon completion or cancellation
+ * Durably tear down an interview session upon completion or cancellation.
+ * Invariant: Database state change MUST succeed before teardown is considered complete.
  */
-export async function teardownInterviewSession(sessionId: string): Promise<void> {
+export async function teardownInterviewSession(
+  sessionId: string,
+  options?: { kioskId?: string; kioskSecret?: string; targetStatus?: "submitted" | "abandoned" }
+): Promise<void> {
+  const targetStatus = options?.targetStatus || "submitted";
   const session = activeSessions.get(sessionId);
   if (session) {
-    session.status = "submitted";
+    session.status = targetStatus;
     session.endedAt = new Date().toISOString();
   }
-  const dbPromise = updateIntakeSession(sessionId, {
-    status: "submitted",
-    completed_at: new Date().toISOString(),
-  }).catch((err) => {
-    console.error(`Failed to durably update intake session ${sessionId} to submitted:`, err);
+
+  // Update durable intake_sessions record immediately
+  const updatePromise = (async () => {
+    if (options?.kioskId && options?.kioskSecret && !env.isDemoMode) {
+      const { revokeKioskSession } = await import("@/lib/db/supabase");
+      return revokeKioskSession({
+        kioskId: options.kioskId,
+        kioskSecret: options.kioskSecret,
+        sessionId,
+        targetStatus,
+      });
+    } else {
+      const updateResult = await updateIntakeSession(sessionId, {
+        status: targetStatus,
+        completed_at: new Date().toISOString(),
+      });
+      if (!updateResult && !env.isDemoMode) {
+        throw new Error(`Failed to durably update intake session ${sessionId} to ${targetStatus}`);
+      }
+      return updateResult;
+    }
+  })();
+
+  // Durable revocation of capability token — throws if persistent write fails
+  const revokePromise = revokeIntakeCapabilityToken(sessionId, {
+    targetStatus,
+    reason: `session_teardown_${targetStatus}`,
+    kioskId: options?.kioskId,
+    kioskSecret: options?.kioskSecret,
   });
-  const revokePromise = revokeIntakeCapabilityToken(sessionId, { targetStatus: "submitted" });
-  await Promise.all([dbPromise, revokePromise]);
+
+  await Promise.all([updatePromise, revokePromise]);
 }
 
 export function createInterviewSession(
@@ -125,11 +154,25 @@ export function getInterviewSession(sessionId: string): InterviewSession | null 
   return activeSessions.get(sessionId) || null;
 }
 
-export async function getInterviewSessionAsync(sessionId: string): Promise<InterviewSession | null> {
+export async function getInterviewSessionAsync(
+  sessionId: string,
+  options?: { kioskId?: string; kioskSecret?: string }
+): Promise<InterviewSession | null> {
   const cached = activeSessions.get(sessionId);
   if (cached) return cached;
 
-  const dbSession = await getIntakeSessionById(sessionId);
+  let dbSession: any = null;
+  if (!env.isDemoMode && options?.kioskId && options?.kioskSecret) {
+    const { getKioskIntakeSession } = await import("@/lib/db/supabase");
+    dbSession = await getKioskIntakeSession({
+      kioskId: options.kioskId,
+      kioskSecret: options.kioskSecret,
+      sessionId,
+    });
+  } else {
+    dbSession = await getIntakeSessionById(sessionId);
+  }
+
   if (!dbSession) return null;
 
   const session: InterviewSession = {
@@ -157,11 +200,12 @@ export function getCurrentQuestion(session: InterviewSession): QuestionNode | nu
 export async function submitInterviewAnswerAsync(
   sessionId: string,
   answer: string,
-  inputMode: "voice" | "touch" | "text" = "touch"
+  inputMode: "voice" | "touch" | "text" = "touch",
+  options?: { kioskId?: string; kioskSecret?: string }
 ): Promise<{ session: InterviewSession; nextQuestion: QuestionNode | null; isComplete: boolean }> {
   let session = activeSessions.get(sessionId);
   if (!session) {
-    session = (await getInterviewSessionAsync(sessionId)) || undefined;
+    session = (await getInterviewSessionAsync(sessionId, options)) || undefined;
   }
   if (!session) throw new Error("Interview session not found");
 
@@ -195,16 +239,29 @@ export async function submitInterviewAnswerAsync(
     session.endedAt = new Date().toISOString();
   }
 
-  // Update durable intake_sessions record — throw if persistence fails
-  const updateResult = await updateIntakeSession(sessionId, {
-    current_question_id: nextId,
-    answers: session.answers,
-    status: session.status === "submitted" ? "submitted" : "active",
-    completed_at: session.endedAt || null,
-  });
+  // Update durable intake_sessions record — use secure kiosk RPC when kiosk credentials present
+  if (!env.isDemoMode && options?.kioskId && options?.kioskSecret) {
+    const { submitKioskAnswer } = await import("@/lib/db/supabase");
+    await submitKioskAnswer({
+      kioskId: options.kioskId,
+      kioskSecret: options.kioskSecret,
+      sessionId,
+      questionKey: currentQ.key,
+      rawAnswer: answer,
+      inputMode,
+      nextQuestionId: nextId,
+    });
+  } else {
+    const updateResult = await updateIntakeSession(sessionId, {
+      current_question_id: nextId,
+      answers: session.answers,
+      status: session.status === "submitted" ? "submitted" : "active",
+      completed_at: session.endedAt || null,
+    });
 
-  if (!updateResult) {
-    throw new Error(`Failed to persist answer to intake session ${sessionId}`);
+    if (!updateResult) {
+      throw new Error(`Failed to persist answer to intake session ${sessionId}`);
+    }
   }
 
   if (!nextId) {
@@ -322,7 +379,11 @@ export async function compileInterviewToCase(
       redFlags,
     });
     (session as any).compiledCaseId = newCase.id;
-    await teardownInterviewSession(sessionId);
+    await teardownInterviewSession(sessionId, {
+      kioskId: options.kioskId,
+      kioskSecret: options.kioskSecret,
+      targetStatus: "submitted",
+    });
     return newCase;
   }
 

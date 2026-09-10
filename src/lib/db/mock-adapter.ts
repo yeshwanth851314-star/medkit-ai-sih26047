@@ -14,7 +14,26 @@ class MockDatabaseAdapter {
   private intakeSessions: Map<string, IntakeSessionRecord> = new Map();
   private caseAmendments: Map<string, any[]> = new Map();
   private kioskInstances: Map<string, any> = new Map();
+  private capabilityRevocations: Set<string> = new Set();
   private isInitialized = false;
+
+  recordRevocation(sessionId: string, reason?: string, targetStatus: "abandoned" | "submitted" = "abandoned"): void {
+    this.capabilityRevocations.add(sessionId);
+    const session = this.intakeSessions.get(sessionId);
+    if (session) {
+      session.status = targetStatus;
+      session.completed_at = new Date().toISOString();
+    }
+  }
+
+  isSessionRevoked(sessionId: string): boolean {
+    if (this.capabilityRevocations.has(sessionId)) return true;
+    const session = this.intakeSessions.get(sessionId);
+    if (session && (session.status === "abandoned" || session.status === "submitted")) {
+      return true;
+    }
+    return false;
+  }
 
   constructor() {
     this.seedKiosks();
@@ -593,22 +612,31 @@ class MockDatabaseAdapter {
 
   async registerKioskInstance(instance: {
     id?: string;
-    facility_id: string;
+    facility_id?: string;
     name: string;
     secret?: string;
     secretHash?: string;
     status?: "active" | "disabled" | "revoked";
     expiresAt?: string | null;
+    actorOrToken?: any;
   }): Promise<any> {
+    if (instance.actorOrToken && typeof instance.actorOrToken === "object") {
+      const role = instance.actorOrToken.role;
+      if (role && role !== "admin" && role !== "staff") {
+        throw new Error(`FORBIDDEN: Role ${role} not permitted to provision kiosks`);
+      }
+    }
     const id = instance.id || crypto.randomUUID();
     const secretHash = instance.secretHash || instance.secret || "";
     const record = {
       id,
-      facility_id: instance.facility_id,
+      facility_id: instance.facility_id || instance.actorOrToken?.facilityId || "fac-hyd-01",
       name: instance.name,
       secret_hash: secretHash,
       status: instance.status || "active",
+      created_by: instance.actorOrToken?.id || null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
       expires_at: instance.expiresAt || null,
       last_active_at: null,
     };
@@ -790,7 +818,7 @@ class MockDatabaseAdapter {
     }
 
     const compositeKey = `${params.userId}:${params.idempotencyKey}`;
-    const existing = this.syncMutations.get(compositeKey) || this.syncMutations.get(params.idempotencyKey);
+    const existing = this.syncMutations.get(compositeKey);
 
     if (existing) {
       if (existing.status === "completed") {
@@ -834,6 +862,45 @@ class MockDatabaseAdapter {
     }
 
     const mutationId = crypto.randomUUID();
+    let mutationSummary: any = { success: true, action: params.action, entity: params.entity };
+
+    if (params.entity === "documents") {
+      if (params.action === "create") {
+        const docId = params.payload?.id || crypto.randomUUID();
+        const docRecord = {
+          id: docId,
+          patient_id: params.payload?.patientId || params.payload?.patient_id,
+          case_id: params.payload?.caseId || params.payload?.case_id || null,
+          uploaded_by: params.userId,
+          storage_path: params.payload?.storage_path || params.payload?.storagePath || "mock-storage/doc.pdf",
+          original_filename: params.payload?.original_filename || params.payload?.originalFilename || "document.pdf",
+          mime_type: params.payload?.mime_type || params.payload?.mimeType || "application/pdf",
+          file_size: params.payload?.file_size || params.payload?.fileSize || 1024,
+          document_type: params.payload?.document_type || params.payload?.documentType || "prescription",
+          processing_status: params.payload?.processing_status || params.payload?.processingStatus || "uploaded",
+          extracted_data: params.payload?.extracted_data || params.payload?.extractedData || null,
+          ocr_confidence: params.payload?.ocr_confidence || params.payload?.ocrConfidence || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.documents.set(docId, docRecord as any);
+        mutationSummary = { success: true, documentId: docId };
+      } else if (params.action === "update") {
+        const docId = params.payload?.id || params.payload?.documentId || params.payload?.document_id;
+        const existingDoc = this.documents.get(docId);
+        if (existingDoc) {
+          if (params.payload?.extracted_data !== undefined) existingDoc.extracted_data = params.payload.extracted_data;
+          if (params.payload?.extractedData !== undefined) existingDoc.extracted_data = params.payload.extractedData;
+          if (params.payload?.processing_status !== undefined) existingDoc.processing_status = params.payload.processing_status;
+          if (params.payload?.processingStatus !== undefined) existingDoc.processing_status = params.payload.processingStatus;
+          if (params.payload?.ocr_confidence !== undefined) existingDoc.ocr_confidence = params.payload.ocr_confidence;
+          if (params.payload?.ocrConfidence !== undefined) existingDoc.ocr_confidence = params.payload.ocrConfidence;
+          existingDoc.updated_at = new Date().toISOString();
+        }
+        mutationSummary = { success: true, documentId: docId };
+      }
+    }
+
     const record = {
       id: mutationId,
       idempotency_key: params.idempotencyKey,
@@ -844,13 +911,13 @@ class MockDatabaseAdapter {
       payload_hash: params.payloadHash,
       status: "completed",
       lease_expires_at: new Date(Date.now() + 60000).toISOString(),
-      summary: { success: true, action: params.action, entity: params.entity },
+      summary: mutationSummary,
       created_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
     };
 
+    // Strictly user-scoped key: user A and user B can use the same idempotency key independently
     this.syncMutations.set(compositeKey, record);
-    this.syncMutations.set(params.idempotencyKey, record);
 
     this.recordAudit(params.userId, "SYNC_MUTATION_EXECUTED", params.entity, params.idempotencyKey, {
       action: params.action,
@@ -863,6 +930,7 @@ class MockDatabaseAdapter {
       status: "completed",
       isReplay: false,
       mutationId,
+      summary: mutationSummary,
     };
   }
 }

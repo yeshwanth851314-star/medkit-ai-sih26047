@@ -55,7 +55,7 @@ export async function POST(request: Request) {
           .update(JSON.stringify(item.payload || {}))
           .digest("hex");
 
-        if (!env.isDemoMode && (item.entity === "cases" || item.entity === "patients")) {
+        if (!env.isDemoMode && (item.entity === "cases" || item.entity === "patients" || item.entity === "documents")) {
           try {
             const result = await executeIdempotentMutation({
               idempotencyKey: item.idempotencyKey,
@@ -175,6 +175,9 @@ export async function POST(request: Request) {
             throw new Error("Patient updates are not permitted via offline sync.");
           }
         } else if (item.entity === "documents") {
+          if (!env.isDemoMode) {
+            throw new Error("ATOMIC_SYNC_REQUIRED: In production, document mutations must use transactional executeIdempotentMutation.");
+          }
           let patientId = item.payload.patientId || item.payload.patient_id;
 
           if (item.action === "update") {

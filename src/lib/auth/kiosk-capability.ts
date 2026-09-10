@@ -4,6 +4,7 @@ import { getSessionSecret } from "./jwt";
 import { authenticateApiRequest } from "./api-guard";
 import { AuthUser } from "@/features/auth/types";
 import { env } from "@/config/env";
+import { revokeKioskSessionDurable, isSessionDurableRevoked } from "@/lib/db/supabase";
 
 export interface IntakeCapabilityPayload {
   type: "kiosk_intake";
@@ -30,17 +31,37 @@ const revokedSessions: Set<string> = globalForRevocations.__medkit_revoked_capab
 
 export async function revokeIntakeCapabilityToken(
   sessionId: string,
-  options?: { targetStatus?: "abandoned" | "submitted" }
-): Promise<void> {
-  revokedSessions.add(sessionId);
-  const status = options?.targetStatus || "abandoned";
-  // Durably mark intake session status in persistent store
-  try {
-    const { updateIntakeSession } = await import("@/lib/db/supabase");
-    await updateIntakeSession(sessionId, { status });
-  } catch (err) {
-    console.error(`Failed to durably revoke intake session ${sessionId}:`, err);
+  options?: {
+    targetStatus?: "abandoned" | "submitted";
+    reason?: string;
+    kioskId?: string;
+    kioskSecret?: string;
   }
+): Promise<void> {
+  const status = options?.targetStatus || "abandoned";
+  const reason = options?.reason || `kiosk_session_${status}`;
+
+  // Fail-closed in-memory revocation: immediately mark as revoked so subsequent synchronous or local checks fail closed
+  revokedSessions.add(sessionId);
+
+  // Invariant: Database state change MUST succeed BEFORE revocation is recorded as successful
+  // If the database write fails, an error is thrown and propagated to the caller, while token remains rejected in memory
+  await revokeKioskSessionDurable(sessionId, {
+    targetStatus: status,
+    reason,
+    kioskId: options?.kioskId,
+    kioskSecret: options?.kioskSecret,
+  });
+}
+
+export async function isIntakeCapabilityRevokedDurable(sessionId: string): Promise<boolean> {
+  if (revokedSessions.has(sessionId)) return true;
+  const isRevoked = await isSessionDurableRevoked(sessionId);
+  if (isRevoked) {
+    revokedSessions.add(sessionId);
+    return true;
+  }
+  return false;
 }
 
 export function isIntakeCapabilityRevoked(sessionId: string): boolean {
@@ -200,6 +221,18 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
+  // Durable revocation check — ensures token remains rejected across worker restarts / memory eviction
+  const isRevoked = await isIntakeCapabilityRevokedDurable(capability.sessionId);
+  if (isRevoked) {
+    return {
+      authorized: false,
+      errorResponse: NextResponse.json(
+        { error: "UNAUTHORIZED: Kiosk intake session has expired or been terminated" },
+        { status: 401 }
+      ),
+    };
+  }
+
   // Validate session boundary
   if (options?.targetSessionId && capability.sessionId !== options.targetSessionId) {
     return {
@@ -233,26 +266,19 @@ export async function requireIntakeOrClinicalAuth(
     };
   }
 
-  // Validate durable session in persistent store
-  const { getIntakeSessionById } = await import("@/lib/db/supabase");
-  const dbSession = await getIntakeSessionById(capability.sessionId);
-  if (!dbSession && !env.isDemoMode) {
-    return {
-      authorized: false,
-      errorResponse: NextResponse.json(
-        { error: "UNAUTHORIZED: Kiosk intake session does not exist" },
-        { status: 401 }
-      ),
-    };
-  }
-  if (dbSession && (dbSession.status !== "active" || new Date(dbSession.expires_at).getTime() < Date.now())) {
-    return {
-      authorized: false,
-      errorResponse: NextResponse.json(
-        { error: "UNAUTHORIZED: Kiosk intake session has expired or been terminated" },
-        { status: 401 }
-      ),
-    };
+  // Validate durable session in demo store if applicable
+  if (env.isDemoMode) {
+    const { getIntakeSessionById } = await import("@/lib/db/supabase");
+    const dbSession = await getIntakeSessionById(capability.sessionId);
+    if (dbSession && (dbSession.status !== "active" || new Date(dbSession.expires_at).getTime() < Date.now())) {
+      return {
+        authorized: false,
+        errorResponse: NextResponse.json(
+          { error: "UNAUTHORIZED: Kiosk intake session has expired or been terminated" },
+          { status: 401 }
+        ),
+      };
+    }
   }
 
   return { authorized: true, capability };

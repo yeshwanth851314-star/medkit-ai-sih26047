@@ -153,4 +153,75 @@ describe("Phase 2: Secure Patient & Kiosk Intake Capabilities", () => {
     const sessionResult = verifySessionToken(kioskToken);
     expect(sessionResult).toBeNull();
   });
+
+  it("extracts and validates kiosk credentials strictly from HttpOnly cookie via resolveKioskCredential", async () => {
+    const { resolveKioskCredential } = await import("../../src/lib/auth/kiosk-credential");
+    const secret = "f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8";
+    const kioskId = "kiosk-unit-001";
+    const cookieVal = encodeURIComponent(JSON.stringify({ kioskId, kioskSecret: secret }));
+
+    const reqWithCookie = new Request("http://localhost:3000/api/interviews/ses-test-1001/submit", {
+      headers: {
+        Cookie: `medkit_kiosk_credential=${cookieVal}`,
+      },
+    });
+
+    const cred = resolveKioskCredential(reqWithCookie);
+    expect(cred).not.toBeNull();
+    expect(cred?.kioskId).toBe(kioskId);
+    expect(cred?.kioskSecret).toBe(secret);
+    expect(cred?.source).toBe("cookie");
+
+    // Rejects tampered/malformed cookie
+    const reqTampered = new Request("http://localhost:3000/api/interviews/ses-test-1001/submit", {
+      headers: {
+        Cookie: `medkit_kiosk_credential=malformed-json-here`,
+      },
+    });
+    expect(resolveKioskCredential(reqTampered)).toBeNull();
+  });
+
+  it("fails closed when durable revocation database update fails", async () => {
+    const { revokeIntakeCapabilityToken } = await import("../../src/lib/auth/kiosk-capability");
+    const supabaseLib = await import("../../src/lib/db/supabase");
+    const vi = (await import("vitest")).vi;
+
+    // Simulate database failure during revocation
+    const spy = vi.spyOn(supabaseLib, "revokeKioskSessionDurable").mockRejectedValueOnce(
+      new Error("DB_FATAL: Connection dropped during session revocation")
+    );
+
+    await expect(
+      revokeIntakeCapabilityToken("ses-failing-db", { targetStatus: "abandoned" })
+    ).rejects.toThrow("DB_FATAL: Connection dropped during session revocation");
+
+    spy.mockRestore();
+  });
+
+  it("persists revocation status across in-memory cache eviction via isIntakeCapabilityRevokedDurable", async () => {
+    const {
+      revokeIntakeCapabilityToken,
+      isIntakeCapabilityRevokedDurable,
+      verifyIntakeCapabilityToken,
+    } = await import("../../src/lib/auth/kiosk-capability");
+
+    const testSession = "ses-durable-evict-999";
+    const testToken = signIntakeCapabilityToken({ sessionId: testSession, patientId });
+
+    // Revoke successfully
+    await revokeIntakeCapabilityToken(testSession, { targetStatus: "abandoned" });
+
+    // Wipe in-memory revocation set to simulate server restart / worker cache eviction
+    const globalForRevocations = globalThis as any;
+    if (globalForRevocations.__medkit_revoked_capability_sessions) {
+      globalForRevocations.__medkit_revoked_capability_sessions.clear();
+    }
+
+    // Durable check reloads revocation from database and rejects token
+    const isRevoked = await isIntakeCapabilityRevokedDurable(testSession);
+    expect(isRevoked).toBe(true);
+
+    // After durable check repopulates in-memory set, verification returns null
+    expect(verifyIntakeCapabilityToken(testToken)).toBeNull();
+  });
 });

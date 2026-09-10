@@ -4,9 +4,9 @@ import { requireApiAuth } from "@/lib/auth/api-guard";
 import { registerKioskInstance } from "@/lib/db/supabase";
 
 export async function POST(request: Request) {
-  // Only authenticated clinicians and admins can provision kiosks
+  // Blocker 1: Only authenticated staff and admins can provision kiosks (doctors without provisioning permission are denied)
   const auth = await requireApiAuth(request, {
-    allowedRoles: ["admin", "doctor", "clinician"],
+    allowedRoles: ["admin", "staff"],
   });
   if ("errorResponse" in auth) return auth.errorResponse;
 
@@ -20,29 +20,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine assigned facility: non-admins are strictly bound to their facility
-    let facilityId = auth.user.facilityId;
-    if (auth.user.role === "admin" && body.facilityId) {
-      facilityId = String(body.facilityId).trim();
-    }
-
-    if (!facilityId) {
-      return NextResponse.json(
-        { error: "FACILITY_REQUIRED: Facility identity is required to provision a kiosk." },
-        { status: 400 }
-      );
-    }
-
     const expiresInDays = Number(body.expiresInDays) || 365;
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
 
-    // Generate cryptographically secure 256-bit random secret
+    // Generate cryptographically secure 256-bit random secret server-side
     const rawSecret = crypto.randomBytes(32).toString("hex");
+    // Hash before database storage — store ONLY the hash, never plaintext
     const secretHash = crypto.createHash("sha256").update(rawSecret).digest("hex");
 
-    // Register kiosk instance in database
+    // Register kiosk instance via secure RPC (facility is derived strictly from caller profile in database)
     const kiosk = await registerKioskInstance({
-      facility_id: facilityId,
       name,
       secretHash,
       status: "active",
@@ -60,7 +47,7 @@ export async function POST(request: Request) {
       credentialConfigured: true,
     });
 
-    // Set HttpOnly signed device credential cookie for the kiosk browser
+    // Set HttpOnly device credential cookie for the kiosk browser
     response.cookies.set({
       name: "medkit_kiosk_credential",
       value: JSON.stringify({
@@ -79,7 +66,7 @@ export async function POST(request: Request) {
     console.error("Kiosk provisioning error:", err);
     return NextResponse.json(
       { error: `Failed to provision kiosk: ${err.message || "Internal error"}` },
-      { status: 500 }
+      { status: err.message?.includes("FORBIDDEN") ? 403 : 500 }
     );
   }
 }

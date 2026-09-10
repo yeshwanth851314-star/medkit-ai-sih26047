@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { compileInterviewToCase } from "@/features/interview/interview-service";
 import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
+import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
+import { env } from "@/config/env";
 
 export async function POST(
   request: Request,
@@ -16,11 +18,21 @@ export async function POST(
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
-    const kioskId = body.kioskId || request.headers.get("x-kiosk-id") || undefined;
-    const kioskSecret = body.kioskSecret || request.headers.get("x-kiosk-secret") || undefined;
+    // Resolve kiosk credentials server-side from HttpOnly device cookie
+    const credential = resolveKioskCredential(request);
 
-    const clinicalCase = await compileInterviewToCase(id, { kioskId, kioskSecret });
+    // In production non-demo mode, kiosk patient callers MUST have provisioned device cookie
+    if (!auth.user && !credential && !env.isDemoMode) {
+      return NextResponse.json(
+        { error: "UNAUTHORIZED: Kiosk device credential cookie required for case compilation" },
+        { status: 401 }
+      );
+    }
+
+    const clinicalCase = await compileInterviewToCase(id, {
+      kioskId: credential?.kioskId,
+      kioskSecret: credential?.kioskSecret,
+    });
 
     return NextResponse.json({
       success: true,
@@ -28,6 +40,9 @@ export async function POST(
     });
   } catch (err: any) {
     console.error("POST /api/interviews/[id]/submit error:", err);
-    return NextResponse.json({ error: err.message || "Failed to finalize interview to case" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Failed to finalize interview to case" },
+      { status: err.message?.includes("UNAUTHORIZED") ? 401 : err.message?.includes("FORBIDDEN") ? 403 : 500 }
+    );
   }
 }

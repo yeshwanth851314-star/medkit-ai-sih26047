@@ -7,6 +7,7 @@ import { requirePatientAccess } from "@/lib/auth/object-guard";
 import { getSupabaseClient, getServiceSupabaseClient } from "@/lib/db/supabase";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { env } from "@/config/env";
+import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
 
 const DEMO_PATIENT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -76,44 +77,16 @@ export async function POST(request: Request) {
         consentId = consentRecord.id;
       }
     } else {
-      // Independent kiosk intake: resolve kiosk credentials from HttpOnly cookie, headers, or body
-      let kioskId: string | null = null;
-      let kioskSecret: string | null = null;
-
-      const cookieHeader = request.headers.get("cookie");
-      if (cookieHeader) {
-        const match = cookieHeader.match(/(?:^|;\s*)medkit_kiosk_credential=([^;]*)/);
-        if (match) {
-          try {
-            const raw = decodeURIComponent(match[1]);
-            const parsed = JSON.parse(raw);
-            if (parsed.kioskId && parsed.kioskSecret) {
-              kioskId = parsed.kioskId;
-              kioskSecret = parsed.kioskSecret;
-            }
-          } catch {}
-        }
-      }
-
-      if (!kioskId) {
-        kioskId = body.kioskId || request.headers.get("x-kiosk-id") || null;
-      }
-      if (!kioskSecret) {
-        kioskSecret = body.kioskSecret || request.headers.get("x-kiosk-secret") || null;
-      }
-
-      // Fallback to demo kiosk credentials strictly in demo mode
-      if ((!kioskId || !kioskSecret) && env.isDemoMode) {
-        kioskId = "00000000-0000-0000-0000-000000000001";
-        kioskSecret = "kiosk-secret-hyd-01";
-      }
-
-      if (!kioskId || !kioskSecret) {
+      // Independent kiosk intake: resolve kiosk credentials using centralized resolver
+      const credential = resolveKioskCredential(request);
+      if (!credential) {
         return NextResponse.json(
-          { error: "UNAUTHORIZED: Kiosk authentication credentials required (provisioned cookie or kioskId and kioskSecret)" },
+          { error: "UNAUTHORIZED: Kiosk authentication credentials required (provisioned device cookie)" },
           { status: 401 }
         );
       }
+
+      const { kioskId, kioskSecret } = credential;
 
       if (!env.isDemoMode) {
         // In non-demo mode, use restricted atomic RPC rpc_kiosk_bootstrap_intake

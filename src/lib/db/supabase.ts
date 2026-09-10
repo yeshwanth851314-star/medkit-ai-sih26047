@@ -771,7 +771,7 @@ export async function executeIdempotentMutation(params: {
 
 export async function registerKioskInstance(instance: {
   id?: string;
-  facility_id: string;
+  facility_id?: string;
   name: string;
   secretHash: string;
   status?: "active" | "disabled" | "revoked";
@@ -786,6 +786,7 @@ export async function registerKioskInstance(instance: {
       secretHash: instance.secretHash,
       status: instance.status,
       expiresAt: instance.expiresAt,
+      actorOrToken: instance.actorOrToken,
     });
   }
 
@@ -794,21 +795,15 @@ export async function registerKioskInstance(instance: {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
-  const { data, error } = await supabase
-    .from("kiosk_instances")
-    .insert({
-      id: instance.id || undefined,
-      facility_id: instance.facility_id,
-      name: instance.name,
-      secret_hash: instance.secretHash,
-      status: instance.status || "active",
-      expires_at: instance.expiresAt || null,
-    })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc("rpc_provision_kiosk", {
+    p_name: instance.name,
+    p_secret_hash: instance.secretHash,
+    p_expires_at: instance.expiresAt || null,
+  });
 
   if (error) {
-    throw new Error(`Failed to register kiosk instance: ${error.message}`);
+    console.error("Supabase rpc_provision_kiosk error:", error.message);
+    throw new Error(`Failed to provision kiosk: ${error.message}`);
   }
   return data;
 }
@@ -913,24 +908,110 @@ export async function revokeKioskSession(params: {
   kioskId: string;
   kioskSecret: string;
   sessionId: string;
+  reason?: string;
+  targetStatus?: "abandoned" | "submitted";
 }): Promise<void> {
   if (env.isDemoMode) {
-    await mockDb.updateIntakeSession(params.sessionId, { status: "abandoned" });
+    await mockDb.updateIntakeSession(params.sessionId, { status: params.targetStatus || "abandoned" });
+    mockDb.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked");
     return;
   }
 
   const supabase = getSupabaseClient() || getServiceSupabaseClient();
-  if (!supabase) return;
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured.");
+  }
 
   const { error } = await supabase.rpc("rpc_revoke_kiosk_session", {
     p_kiosk_id: params.kioskId,
     p_kiosk_secret: params.kioskSecret,
     p_session_id: params.sessionId,
+    p_reason: params.reason || "abandoned_or_revoked",
+    p_target_status: params.targetStatus || "abandoned",
   });
 
   if (error) {
     console.error("Supabase rpc_revoke_kiosk_session error:", error.message);
+    throw new Error(`Database error revoking kiosk session: ${error.message}`);
   }
+}
+
+export async function revokeKioskSessionDurable(
+  sessionId: string,
+  options?: { targetStatus?: "abandoned" | "submitted"; reason?: string; kioskId?: string; kioskSecret?: string }
+): Promise<void> {
+  const targetStatus = options?.targetStatus || "abandoned";
+  if (env.isDemoMode) {
+    await mockDb.updateIntakeSession(sessionId, { status: targetStatus });
+    mockDb.recordRevocation(sessionId, options?.reason || "kiosk_session_revoked", targetStatus);
+    return;
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured to record session revocation.");
+  }
+
+  if (options?.kioskId && options?.kioskSecret) {
+    const { error } = await supabase.rpc("rpc_revoke_kiosk_session", {
+      p_kiosk_id: options.kioskId,
+      p_kiosk_secret: options.kioskSecret,
+      p_session_id: sessionId,
+      p_reason: options.reason || "abandoned_or_revoked",
+      p_target_status: options.targetStatus || "abandoned",
+    });
+    if (error) {
+      console.error("Supabase rpc_revoke_kiosk_session error:", error.message);
+      throw new Error(`Failed to durably revoke kiosk session: ${error.message}`);
+    }
+  } else {
+    // Direct durable write to kiosk_capability_revocations & intake_sessions
+    const { error: revErr } = await supabase.from("kiosk_capability_revocations").upsert({
+      session_id: sessionId,
+      revoked_at: new Date().toISOString(),
+      reason: options?.reason || "abandoned_or_revoked",
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (revErr) {
+      console.error("Failed to record kiosk_capability_revocations:", revErr.message);
+      throw new Error(`Database error recording capability revocation: ${revErr.message}`);
+    }
+    await supabase.from("intake_sessions").update({
+      status: options?.targetStatus || "abandoned",
+      completed_at: new Date().toISOString(),
+    }).eq("id", sessionId);
+  }
+}
+
+export async function isSessionDurableRevoked(sessionId: string): Promise<boolean> {
+  if (env.isDemoMode) {
+    return mockDb.isSessionRevoked(sessionId);
+  }
+
+  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  if (!supabase) return false;
+
+  // Check revocation table first
+  const { data: revData } = await supabase
+    .from("kiosk_capability_revocations")
+    .select("session_id")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (revData) return true;
+
+  // Check intake_sessions table status
+  const { data: sessionData } = await supabase
+    .from("intake_sessions")
+    .select("status, expires_at")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionData && (sessionData.status === "abandoned" || sessionData.status === "submitted" || new Date(sessionData.expires_at).getTime() < Date.now())) {
+    return true;
+  }
+
+  return false;
 }
 
 export async function updateSyncMutationStatus(params: {
