@@ -302,9 +302,13 @@ function getGitMetadata() {
     const statusOutput = execSync("git status --porcelain", { cwd: PROJECT_ROOT, stdio: ["pipe", "pipe", "ignore"] })
       .toString()
       .trim();
+    const relevantChanges = statusOutput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.includes(".packaging.lock") && !line.includes(".watcher.pid"));
     return {
       commit,
-      isDirty: statusOutput.length > 0,
+      isDirty: relevantChanges.length > 0,
     };
   } catch {
     return {

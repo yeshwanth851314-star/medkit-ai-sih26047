@@ -42,3 +42,4 @@ Thumbs.db
 *.mp3
 *.webm
 supabase/.temp/
+.packaging.lock
