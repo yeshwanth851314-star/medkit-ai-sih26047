@@ -11,6 +11,7 @@ import {
   updateDocument,
   getDocumentById,
   getCaseById,
+  getPatientById,
   reserveIdempotencyKey,
   updateSyncMutationStatus,
   recordProcessedIdempotencyKey,
@@ -105,12 +106,15 @@ export async function POST(request: Request) {
               });
               continue;
             }
-            if (auth.user.role !== "admin" && caseRecord.facility_id && auth.user.facilityId !== caseRecord.facility_id) {
-              failed.push({
-                id: item.id,
-                error: "FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.",
-              });
-              continue;
+            if (auth.user.role !== "admin") {
+              const casePatient = await getPatientById(caseRecord.patient_id, auth.user);
+              if (!casePatient?.facility_id || auth.user.facilityId !== casePatient.facility_id) {
+                failed.push({
+                  id: item.id,
+                  error: "FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.",
+                });
+                continue;
+              }
             }
           } else if (validated.caseId) {
             const caseRecord = await getCaseById(validated.caseId, auth.user);
@@ -346,13 +350,16 @@ export async function POST(request: Request) {
               if (!caseRecord || caseRecord.patient_id !== validated.patientId) {
                 throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`);
               }
-              if (auth.user.role !== "admin" && caseRecord.facility_id && auth.user.facilityId !== caseRecord.facility_id) {
-                throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.");
+              if (auth.user.role !== "admin") {
+                const casePatient = await getPatientById(caseRecord.patient_id, auth.user);
+                if (!casePatient?.facility_id || auth.user.facilityId !== casePatient.facility_id) {
+                  throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility.");
+                }
               }
             }
             const doc = await createDocument({
               ...item.payload,
-              storage_path: validated.normalizedPath,
+              storage_path: validated.canonicalPath,
             } as any, auth.user);
             targetResourceId = doc?.id || targetResourceId;
           }

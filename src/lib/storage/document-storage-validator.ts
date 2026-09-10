@@ -6,12 +6,25 @@
  */
 
 export interface ValidatedStoragePath {
+  canonicalPath: string;
+  bucketRelativePath: string;
   normalizedPath: string;
   cleanRelativePath: string;
   patientId: string;
   caseId: string | null;
+  caseSegment: string;
   docId: string | null;
   fileName: string;
+}
+
+export function toBucketRelativePath(path: string): string {
+  if (!path || typeof path !== "string") return "";
+  return path.trim().replace(/\/+/g, "/").replace(/^\/?(private\/documents\/)?/, "").replace(/^\/+/, "");
+}
+
+export function toCanonicalStoragePath(path: string): string {
+  const bucketRelative = toBucketRelativePath(path);
+  return `/private/documents/${bucketRelative}`;
 }
 
 export function validateCanonicalStoragePath(
@@ -76,7 +89,7 @@ export function validateCanonicalStoragePath(
   }
 
   let caseId: string | null = null;
-  let caseSegment: string | null = null;
+  let caseSegment = "uncategorized";
   const caseMatch = cleanRelative.match(/\/cases\/([a-zA-Z0-9_-]+)/);
   if (caseMatch) {
     caseSegment = caseMatch[1];
@@ -104,12 +117,16 @@ export function validateCanonicalStoragePath(
   const segments = cleanRelative.split("/");
   const fileName = segments[segments.length - 1];
   const docId = segments.length >= 3 ? segments[segments.length - 2] : null;
+  const canonicalPath = `/private/documents/${cleanRelative}`;
 
   return {
+    canonicalPath,
+    bucketRelativePath: cleanRelative,
     normalizedPath: normalized.startsWith("/") ? normalized : "/" + normalized,
     cleanRelativePath: cleanRelative,
     patientId: pathPatientId,
     caseId,
+    caseSegment,
     docId,
     fileName,
   };

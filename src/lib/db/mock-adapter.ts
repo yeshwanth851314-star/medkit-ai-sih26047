@@ -283,6 +283,7 @@ class MockDatabaseAdapter {
     const now = new Date().toISOString();
     const newCase: ClinicalCase = {
       ...data,
+      clinician_id: data.clinician_id || (data as any).created_by || null,
       id,
       created_at: now,
       updated_at: now,
@@ -1035,7 +1036,8 @@ class MockDatabaseAdapter {
             throw new Error(`STORAGE_PATH_CASE_MISMATCH: Referenced case '${requestedCaseId}' does not exist for patient '${validated.patientId}'`);
           }
           if (callerRole !== "admin") {
-            if (!callerFacility || !caseRecord.facility_id || callerFacility !== caseRecord.facility_id) {
+            const casePatient = this.patients.get(caseRecord.patient_id);
+            if (!callerFacility || !casePatient?.facility_id || callerFacility !== casePatient.facility_id) {
               throw new Error("FACILITY_ACCESS_DENIED: Cannot associate document with case outside assigned facility");
             }
           }
@@ -1056,7 +1058,7 @@ class MockDatabaseAdapter {
           patient_id: params.payload?.patientId || params.payload?.patient_id,
           case_id: params.payload?.caseId || params.payload?.case_id || null,
           uploaded_by: params.userId,
-          storage_path: storagePath.trim(),
+          storage_path: validated.canonicalPath,
           original_filename: params.payload?.original_filename || params.payload?.originalFilename || "document.pdf",
           mime_type: params.payload?.mime_type || params.payload?.mimeType || "application/pdf",
           file_size: params.payload?.file_size || params.payload?.fileSize || 1024,
@@ -1122,6 +1124,120 @@ class MockDatabaseAdapter {
 
         mutationSummary = { success: true, documentId: docId };
       }
+    } else if (params.entity === "patients") {
+      const callerRole = this.resolveCallerRole(params);
+      const callerFacility = this.resolveCallerFacility(params);
+
+      if (params.action === "create") {
+        const suppliedFacility = params.payload?.facilityId || params.payload?.facility_id;
+        let finalFacility = callerFacility;
+
+        if (callerRole !== "admin") {
+          if (suppliedFacility && suppliedFacility !== callerFacility) {
+            throw new Error("FACILITY_ACCESS_DENIED: Cannot create patient outside assigned facility");
+          }
+          finalFacility = callerFacility;
+        } else {
+          finalFacility = suppliedFacility || callerFacility;
+        }
+
+        const patientId = params.payload?.id || crypto.randomUUID();
+        const patientRecord = {
+          id: patientId,
+          patient_code: params.payload?.patientCode || params.payload?.patient_code || `PT-${patientId.slice(0, 8).toUpperCase()}`,
+          full_name: params.payload?.fullName || params.payload?.full_name || "Unnamed Patient",
+          date_of_birth: params.payload?.dateOfBirth || params.payload?.date_of_birth,
+          gender: params.payload?.gender,
+          phone: params.payload?.phone,
+          facility_id: finalFacility,
+          abha_id: params.payload?.abhaId || params.payload?.abha_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.patients.set(patientId, patientRecord as any);
+        mutationSummary = { success: true, patientId };
+      } else {
+        throw new Error(`UNSUPPORTED_ACTION: Action ${params.action} on patients is not supported`);
+      }
+    } else if (params.entity === "cases") {
+      const callerRole = this.resolveCallerRole(params);
+      const callerFacility = this.resolveCallerFacility(params);
+
+      if (callerRole === "staff") {
+        throw new Error("ROLE_UNAUTHORIZED: Staff members cannot create or update clinical cases");
+      }
+
+      if (params.action === "create") {
+        const targetPatientId = params.payload?.patientId || params.payload?.patient_id;
+        if (targetPatientId) {
+          const patient = this.patients.get(targetPatientId);
+          if (!patient) {
+            throw new Error("PATIENT_NOT_FOUND: Target patient does not exist");
+          }
+
+          if (callerRole !== "admin") {
+            if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
+              throw new Error("FACILITY_ACCESS_DENIED: Cannot create case outside assigned facility");
+            }
+          }
+
+          const caseId = params.payload?.id || crypto.randomUUID();
+          const caseRecord: ClinicalCase = {
+            id: caseId,
+            patient_id: targetPatientId,
+            clinician_id: params.userId,
+            consent_id: params.payload?.consentId || params.payload?.consent_id || null,
+            case_type: params.payload?.caseType || "general",
+            patient_language: params.payload?.patientLanguage || "en",
+            chief_complaint: params.payload?.chiefComplaint || params.payload?.chief_complaint || "Chief complaint pending",
+            raw_patient_complaint: params.payload?.rawPatientComplaint || null,
+            hpi: params.payload?.hpi || {},
+            past_history: params.payload?.pastHistory || null,
+            medication_history: params.payload?.medications || params.payload?.medication_history || [],
+            allergy_history: params.payload?.allergies || params.payload?.allergy_history || [],
+            red_flags: params.payload?.red_flags || params.payload?.redFlags || [],
+            status: "draft",
+            provenance: params.payload?.provenance || {},
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          this.cases.set(caseId, caseRecord);
+          mutationSummary = { success: true, caseId };
+        } else {
+          mutationSummary = { success: true, action: params.action, entity: params.entity };
+        }
+      } else if (params.action === "update" || params.action === "update_draft") {
+        const targetCaseId = params.payload?.id || params.payload?.caseId;
+        if (targetCaseId) {
+          const existingCase = this.cases.get(targetCaseId);
+          if (!existingCase) {
+            throw new Error("CASE_NOT_FOUND: Target case does not exist");
+          }
+
+          const patient = this.patients.get(existingCase.patient_id);
+          if (!patient) {
+            throw new Error("PATIENT_NOT_FOUND: Parent patient for case does not exist");
+          }
+
+          if (callerRole !== "admin") {
+            if (!callerFacility || !patient.facility_id || callerFacility !== patient.facility_id) {
+              throw new Error("FACILITY_ACCESS_DENIED: Cannot update case outside assigned facility");
+            }
+          }
+
+          if (existingCase.status === "final") {
+            throw new Error("IMMUTABLE_FINAL_CASE: Finalized cases cannot be mutated directly");
+          }
+
+          if (params.payload?.chiefComplaint) existingCase.chief_complaint = params.payload.chiefComplaint;
+          if (params.payload?.chief_complaint) existingCase.chief_complaint = params.payload.chief_complaint;
+          if (params.payload?.hpi) existingCase.hpi = params.payload.hpi;
+          existingCase.updated_at = new Date().toISOString();
+          mutationSummary = { success: true, caseId: targetCaseId };
+        } else {
+          mutationSummary = { success: true, action: params.action, entity: params.entity };
+        }
+      }
     }
 
     const record = {
@@ -1142,10 +1258,16 @@ class MockDatabaseAdapter {
     // Strictly user-scoped key: user A and user B can use the same idempotency key independently
     this.syncMutations.set(compositeKey, record);
 
+    const callerRole = this.resolveCallerRole(params);
+    const callerFacility = this.resolveCallerFacility(params);
+
     this.recordAudit(params.userId, "SYNC_MUTATION_EXECUTED", params.entity, params.idempotencyKey, {
+      idempotencyKey: params.idempotencyKey,
       action: params.action,
       mutationId,
       payloadHash: params.payloadHash,
+      facilityId: callerFacility,
+      role: callerRole,
     });
 
     return {

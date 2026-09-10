@@ -102,7 +102,7 @@ export interface AyushAssessment {
 export interface ClinicalCase {
   id: string;
   patient_id: string;
-  facility_id?: string | null;
+  clinician_id?: string | null;
   consent_id?: string | null;
   created_by?: string | null;
   status: CaseStatus;

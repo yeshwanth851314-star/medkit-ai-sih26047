@@ -1091,24 +1091,32 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
     });
 
     it("strictly rejects document CREATE when payload specifies case from another facility", async () => {
-      // Create case in Delhi facility
+      // Create patient in Delhi facility
+      const delhiPatient = await mockDb.createPatient({
+        patient_code: "PT-DEL-999",
+        full_name: "Delhi Patient",
+        date_of_birth: "1988-01-01",
+        gender: "female",
+        phone: "+919876543210",
+        facility_id: "fac-del-01",
+      });
+
+      // Create case bound to Delhi patient (derives facility strictly from parent patient)
       const delhiCase = await mockDb.createCase({
-        patient_id: "11111111-1111-4111-8111-111111111111",
-        created_by: "usr-doctor-delhi-001",
+        patient_id: delhiPatient.id,
+        clinician_id: "usr-doctor-delhi-001",
         case_type: "general",
         patient_language: "en",
         chief_complaint: "Delhi Case Complaint",
         status: "draft",
       });
-      // Override facility on case
-      (delhiCase as any).facility_id = "fac-del-01";
 
       const docKey = `doc-case-fac-mismatch-${crypto.randomUUID()}`;
-      const storagePath = `patients/11111111-1111-4111-8111-111111111111/cases/${delhiCase.id}/doc-1/file.pdf`;
+      const storagePath = `patients/${delhiPatient.id}/cases/${delhiCase.id}/doc-1/file.pdf`;
       mockDb.saveStorageFile(storagePath, Buffer.from("pdf-data"), "application/pdf");
 
       const payload = {
-        patientId: "11111111-1111-4111-8111-111111111111",
+        patientId: delhiPatient.id,
         caseId: delhiCase.id,
         originalFilename: "file.pdf",
         storage_path: storagePath,
@@ -1122,6 +1130,118 @@ describe("Final Code Closure Master Gate: 6 Production Blockers", () => {
           action: "create",
           payloadHash: "hash-case-delhi-fac",
           payload,
+          actorOrToken: doctorUser,
+        })
+      ).rejects.toThrow(/FACILITY_ACCESS_DENIED/);
+    });
+  });
+
+  describe("Blocker 9: Schema Consistency & Facility Authorization Hardening", () => {
+    it("strictly rejects patient CREATE when non-admin supplies mismatched facilityId", async () => {
+      const pKey = `patient-fac-mismatch-${crypto.randomUUID()}`;
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: pKey,
+          userId: doctorUser.id, // Hyderabad doctor (fac-hyd-01)
+          entity: "patients",
+          action: "create",
+          payloadHash: "hash-pat-delhi-fac",
+          payload: {
+            fullName: "Foreign Facility Patient",
+            facilityId: "fac-del-01", // Mismatched!
+          },
+          actorOrToken: doctorUser,
+        })
+      ).rejects.toThrow(/FACILITY_ACCESS_DENIED/);
+    });
+
+    it("forces caller facility on patient CREATE for non-admin and records transactional audit", async () => {
+      const pKey = `patient-fac-enforced-${crypto.randomUUID()}`;
+      const res = await executeIdempotentMutation({
+        idempotencyKey: pKey,
+        userId: doctorUser.id,
+        entity: "patients",
+        action: "create",
+        payloadHash: "hash-pat-hyd-fac",
+        payload: {
+          fullName: "Enforced Facility Patient",
+          phone: "+919988776655",
+        },
+        actorOrToken: doctorUser,
+      });
+
+      expect(res.status).toBe("completed");
+      const createdPatient = await mockDb.getPatientById(res.summary.patientId);
+      expect(createdPatient).not.toBeNull();
+      expect(createdPatient?.facility_id).toBe("fac-hyd-01");
+
+      // Verify transactional audit log
+      const audits = await mockDb.getAuditLogs();
+      const mutationAudit = audits.find((a) => a.metadata?.idempotencyKey === pKey);
+      expect(mutationAudit).toBeDefined();
+      expect(mutationAudit?.action).toBe("SYNC_MUTATION_EXECUTED");
+      expect(mutationAudit?.metadata?.facilityId).toBe("fac-hyd-01");
+    });
+
+    it("verifies case CREATE writes clinician_id and derives facility from parent patient", async () => {
+      // 1. Create patient in Hyderabad
+      const patient = await mockDb.createPatient({
+        patient_code: `PT-${crypto.randomUUID().slice(0, 8)}`,
+        full_name: "Case Patient",
+        date_of_birth: "1985-05-15",
+        gender: "male",
+        phone: "+919123456789",
+        facility_id: "fac-hyd-01",
+      });
+
+      // 2. Create case via executeIdempotentMutation
+      const cKey = `case-clinician-id-${crypto.randomUUID()}`;
+      const res = await executeIdempotentMutation({
+        idempotencyKey: cKey,
+        userId: doctorUser.id,
+        entity: "cases",
+        action: "create",
+        payloadHash: "hash-case-create",
+        payload: {
+          patientId: patient.id,
+          chiefComplaint: "Severe fever and body ache",
+          caseType: "general",
+        },
+        actorOrToken: doctorUser,
+      });
+
+      expect(res.status).toBe("completed");
+      const createdCase = await mockDb.getCaseById(res.summary.caseId);
+      expect(createdCase).not.toBeNull();
+      // Ensure clinician_id is set to caller ID
+      expect(createdCase?.clinician_id).toBe(doctorUser.id);
+      // Ensure cases table has NO facility_id column (facility derived through parent patient)
+      expect((createdCase as any).facility_id).toBeUndefined();
+    });
+
+    it("strictly rejects case CREATE when non-admin attempts to create case for patient outside facility", async () => {
+      // Create patient in Delhi
+      const delhiPatient = await mockDb.createPatient({
+        patient_code: `PT-DEL-${crypto.randomUUID().slice(0, 8)}`,
+        full_name: "Delhi Facility Patient",
+        date_of_birth: "1992-03-10",
+        gender: "female",
+        phone: "+919876543211",
+        facility_id: "fac-del-01",
+      });
+
+      const cKey = `case-cross-facility-${crypto.randomUUID()}`;
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: cKey,
+          userId: doctorUser.id, // Hyderabad doctor
+          entity: "cases",
+          action: "create",
+          payloadHash: "hash-case-cross-fac",
+          payload: {
+            patientId: delhiPatient.id,
+            chiefComplaint: "Cross facility attempt",
+          },
           actorOrToken: doctorUser,
         })
       ).rejects.toThrow(/FACILITY_ACCESS_DENIED/);
