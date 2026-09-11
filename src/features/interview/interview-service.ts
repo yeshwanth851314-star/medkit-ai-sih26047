@@ -1,9 +1,10 @@
-import { InterviewSession, QuestionNode } from "./types";
+import { InterviewSession, QuestionNode, InterviewAccessContext } from "./types";
 import { QUESTION_GRAPH } from "./question-graph";
 import { createCaseDraft } from "@/features/cases/case-service";
 import { ClinicalCase } from "@/types/database";
 import { verifyPatientConsent } from "@/features/consent/consent-service";
 import { evaluateClinicalRedFlags } from "@/features/red-flags/rules-engine";
+import { AuthUser } from "@/features/auth/types";
 import {
   createRedFlagEvent,
   createIntakeSession,
@@ -47,7 +48,7 @@ export function pruneExpiredSessions(): number {
  */
 export async function teardownInterviewSession(
   sessionId: string,
-  options?: { kioskId?: string; kioskSecret?: string; targetStatus?: "submitted" | "abandoned" }
+  options?: InterviewAccessContext & { targetStatus?: "submitted" | "abandoned" }
 ): Promise<void> {
   const targetStatus = options?.targetStatus || "submitted";
   const session = activeSessions.get(sessionId);
@@ -62,10 +63,14 @@ export async function teardownInterviewSession(
       // Handled atomically by revokeIntakeCapabilityToken via kiosk RPC / mockDb
       return;
     } else {
-      const updateResult = await updateIntakeSession(sessionId, {
-        status: targetStatus,
-        completed_at: new Date().toISOString(),
-      });
+      const updateResult = await updateIntakeSession(
+        sessionId,
+        {
+          status: targetStatus,
+          completed_at: new Date().toISOString(),
+        },
+        options?.actorOrToken
+      );
       if (!updateResult && !env.isDemoMode) {
         throw new Error(`Failed to durably update intake session ${sessionId} to ${targetStatus}`);
       }
@@ -79,6 +84,7 @@ export async function teardownInterviewSession(
     reason: `session_teardown_${targetStatus}`,
     kioskId: options?.kioskId,
     kioskSecret: options?.kioskSecret,
+    actorOrToken: options?.actorOrToken,
   });
 
   await Promise.all([updatePromise, revokePromise]);
@@ -89,7 +95,7 @@ export function createInterviewSession(
   language: "en" | "te" = "en",
   consentId?: string | null,
   facilityId?: string | null,
-  options?: { sessionId?: string; skipDbInsert?: boolean }
+  options?: { sessionId?: string; skipDbInsert?: boolean; actorOrToken?: AuthUser | string | null }
 ): InterviewSession {
   // Prune any expired sessions periodically
   pruneExpiredSessions();
@@ -118,17 +124,20 @@ export function createInterviewSession(
   let dbPromise: Promise<any> = Promise.resolve();
   if (!options?.skipDbInsert) {
     // Durably record intake session in database — fail closed if insert fails
-    dbPromise = createIntakeSession({
-      id: sessionId,
-      facility_id: resolvedFacilityId,
-      patient_id: patientId,
-      consent_id: consentId || null,
-      language,
-      status: "active",
-      current_question_id: "Q_CHIEF_COMPLAINT",
-      answers: {},
-      expires_at: new Date(Date.now() + MAX_SESSION_AGE_MS).toISOString(),
-    });
+    dbPromise = createIntakeSession(
+      {
+        id: sessionId,
+        facility_id: resolvedFacilityId,
+        patient_id: patientId,
+        consent_id: consentId || null,
+        language,
+        status: "active",
+        current_question_id: "Q_CHIEF_COMPLAINT",
+        answers: {},
+        expires_at: new Date(Date.now() + MAX_SESSION_AGE_MS).toISOString(),
+      },
+      options?.actorOrToken
+    );
   }
 
   const thenable = {
@@ -150,14 +159,14 @@ export function getInterviewSession(sessionId: string): InterviewSession | null 
 
 export async function getInterviewSessionAsync(
   sessionId: string,
-  options?: { kioskId?: string; kioskSecret?: string; actorOrToken?: any }
+  options?: InterviewAccessContext
 ): Promise<InterviewSession | null> {
   const cached = activeSessions.get(sessionId);
   if (cached) return cached;
 
   let dbSession: any = null;
   if (env.isDemoMode) {
-    dbSession = await getIntakeSessionById(sessionId);
+    dbSession = await getIntakeSessionById(sessionId, options?.actorOrToken);
   } else {
     if (options?.kioskId && options?.kioskSecret) {
       const { getKioskIntakeSession } = await import("@/lib/db/supabase");
@@ -227,7 +236,7 @@ export async function submitInterviewAnswerAsync(
   sessionId: string,
   answer: string,
   inputMode: "voice" | "touch" | "text" = "touch",
-  options?: { kioskId?: string; kioskSecret?: string }
+  options?: InterviewAccessContext
 ): Promise<{ session: InterviewSession; nextQuestion: QuestionNode | null; isComplete: boolean }> {
   let session = activeSessions.get(sessionId);
   if (!session) {
@@ -282,12 +291,16 @@ export async function submitInterviewAnswerAsync(
       nextQuestionId: nextId,
     });
   } else {
-    const updateResult = await updateIntakeSession(sessionId, {
-      current_question_id: nextId,
-      answers: session.answers,
-      status: session.status === "submitted" ? "submitted" : "active",
-      completed_at: session.endedAt || null,
-    });
+    const updateResult = await updateIntakeSession(
+      sessionId,
+      {
+        current_question_id: nextId,
+        answers: session.answers,
+        status: session.status === "submitted" ? "submitted" : "active",
+        completed_at: session.endedAt || null,
+      },
+      options?.actorOrToken
+    );
 
     if (!updateResult) {
       throw new Error(`Failed to persist answer to intake session ${sessionId}`);
@@ -358,14 +371,11 @@ export function submitInterviewAnswer(
 
 export async function compileInterviewToCase(
   sessionId: string,
-  options?: { kioskId?: string; kioskSecret?: string }
+  options?: InterviewAccessContext
 ): Promise<ClinicalCase> {
   let session = activeSessions.get(sessionId);
   if (!session) {
-    session = (await getInterviewSessionAsync(sessionId, {
-      kioskId: options?.kioskId,
-      kioskSecret: options?.kioskSecret,
-    })) || undefined;
+    session = (await getInterviewSessionAsync(sessionId, options)) || undefined;
   }
   if (!session) throw new Error("Interview session not found");
 
@@ -376,7 +386,7 @@ export async function compileInterviewToCase(
   // Idempotency check: repeated submissions return the already compiled case
   if ((session as any).compiledCaseId) {
     const { getCaseById } = await import("@/lib/db/supabase");
-    const existing = await getCaseById((session as any).compiledCaseId);
+    const existing = await getCaseById((session as any).compiledCaseId, options?.actorOrToken);
     if (existing) return existing;
   }
 
@@ -419,6 +429,7 @@ export async function compileInterviewToCase(
     await teardownInterviewSession(sessionId, {
       kioskId: options.kioskId,
       kioskSecret: options.kioskSecret,
+      actorOrToken: options.actorOrToken,
       targetStatus: "submitted",
     });
     return newCase;
@@ -430,7 +441,7 @@ export async function compileInterviewToCase(
   }
 
   // Verify clinical consent is active and not revoked
-  const consentCheck = await verifyPatientConsent(session.patientId);
+  const consentCheck = await verifyPatientConsent(session.patientId, undefined, options?.actorOrToken);
   if (!consentCheck.valid) {
     throw new Error(`CONSENT_REQUIRED: ${consentCheck.reason || "Patient clinical consent is required before compiling case intake"}`);
   }
@@ -462,22 +473,31 @@ export async function compileInterviewToCase(
   });
 
   // Create Case Draft with linked consent and detected red flags
-  const newCase = await createCaseDraft({
-    patientId: session.patientId,
-    consentId: session.consentId || consentCheck.consent?.id || null,
-    caseType: "general",
-    patientLanguage: session.language,
-    chiefComplaint,
-    rawPatientComplaint: answers.chief_complaint?.rawAnswer,
-    hpi,
-    pastHistory: answers.past_conditions ? { conditions: [answers.past_conditions.rawAnswer] } : null,
-    status: "draft",
-    red_flags: redFlags.length > 0 ? (redFlags as any) : null,
-    provenance: {
-      chief_complaint: answers.chief_complaint?.inputMode === "voice" ? "patient" : "patient",
-      hpi: "patient",
+  const actorId =
+    options?.actorOrToken && typeof options.actorOrToken === "object"
+      ? options.actorOrToken.id
+      : null;
+
+  const newCase = await createCaseDraft(
+    {
+      patientId: session.patientId,
+      consentId: session.consentId || consentCheck.consent?.id || null,
+      caseType: "general",
+      patientLanguage: session.language,
+      chiefComplaint,
+      rawPatientComplaint: answers.chief_complaint?.rawAnswer,
+      hpi,
+      pastHistory: answers.past_conditions ? { conditions: [answers.past_conditions.rawAnswer] } : null,
+      status: "draft",
+      red_flags: redFlags.length > 0 ? (redFlags as any) : null,
+      provenance: {
+        chief_complaint: answers.chief_complaint?.inputMode === "voice" ? "patient" : "patient",
+        hpi: "patient",
+      },
     },
-  });
+    actorId,
+    options?.actorOrToken
+  );
 
   // Persist red flag events for clinician triage tracking — fail closed on critical errors
   if (redFlags.length > 0) {
@@ -493,16 +513,21 @@ export async function compileInterviewToCase(
 
   // Store compiled case ID for idempotency in memory and database
   (session as any).compiledCaseId = newCase.id;
-  await updateIntakeSession(sessionId, {
-    compiled_case_id: newCase.id,
-    status: "submitted",
-    completed_at: new Date().toISOString(),
-  });
+  await updateIntakeSession(
+    sessionId,
+    {
+      compiled_case_id: newCase.id,
+      status: "submitted",
+      completed_at: new Date().toISOString(),
+    },
+    options?.actorOrToken
+  );
 
   // Tear down the active kiosk session and revoke capability token
   await teardownInterviewSession(sessionId, {
     kioskId: options?.kioskId,
     kioskSecret: options?.kioskSecret,
+    actorOrToken: options?.actorOrToken,
     targetStatus: "submitted",
   });
 

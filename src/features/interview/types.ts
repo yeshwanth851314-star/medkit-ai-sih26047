@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { AuthUser } from "@/features/auth/types";
+
+export interface InterviewAccessContext {
+  kioskId?: string;
+  kioskSecret?: string;
+  actorOrToken?: AuthUser | string | null;
+}
 
 export type QuestionAnswerType = "choice" | "text" | "scale";
 

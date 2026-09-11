@@ -32,6 +32,7 @@ export async function POST(
     const clinicalCase = await compileInterviewToCase(id, {
       kioskId: credential?.kioskId,
       kioskSecret: credential?.kioskSecret,
+      actorOrToken: auth.user ?? null,
     });
 
     return NextResponse.json({

@@ -143,6 +143,7 @@ export async function POST(request: Request) {
     const session = await createInterviewSession(patientId, language, consentId, resolvedFacilityId, {
       sessionId,
       skipDbInsert: Boolean(sessionId),
+      actorOrToken: clinicianUser,
     });
     const initialQuestion = getCurrentQuestion(session);
 

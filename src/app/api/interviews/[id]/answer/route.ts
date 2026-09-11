@@ -38,7 +38,11 @@ export async function POST(
       id,
       answer,
       inputMode || "touch",
-      credential ? { kioskId: credential.kioskId, kioskSecret: credential.kioskSecret } : undefined
+      {
+        kioskId: credential?.kioskId,
+        kioskSecret: credential?.kioskSecret,
+        actorOrToken: auth.user ?? null,
+      }
     );
 
     return NextResponse.json({

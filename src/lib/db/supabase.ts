@@ -937,9 +937,19 @@ export async function revokeKioskSessionDurable(
   }
 ): Promise<void> {
   const targetStatus = options?.targetStatus || "abandoned";
+  if (!["abandoned", "submitted"].includes(targetStatus)) {
+    throw new Error(`INVALID_TARGET_STATUS: Target status must be abandoned or submitted, received ${targetStatus}`);
+  }
   const reason = options?.reason || "kiosk_session_revoked";
 
   if (env.isDemoMode) {
+    const session = await mockDb.getIntakeSessionById(sessionId);
+    if (session && session.status !== targetStatus) {
+      if (session.status !== "active") {
+        throw new Error(`INVALID_STATE_TRANSITION: Cannot transition session ${sessionId} from ${session.status} to ${targetStatus}`);
+      }
+    }
+
     if (options?.kioskId && options?.kioskSecret) {
       await mockDb.revokeKioskSession({
         kioskId: options.kioskId,
@@ -952,9 +962,8 @@ export async function revokeKioskSessionDurable(
     }
     if (options?.actorOrToken) {
       const user = typeof options.actorOrToken === "object" ? options.actorOrToken : null;
-      if (user && user.role !== "admin" && user.facilityId) {
-        const session = await mockDb.getIntakeSessionById(sessionId);
-        if (session && session.facility_id && session.facility_id !== user.facilityId) {
+      if (user && user.role !== "admin" && user.facilityId && session) {
+        if (session.facility_id && session.facility_id !== user.facilityId) {
           throw new Error(`FORBIDDEN: Clinician facility ${user.facilityId} does not match session facility ${session.facility_id}`);
         }
       }
@@ -1277,8 +1286,13 @@ export async function createIntakeSession(
     return mockDb.createIntakeSession(session);
   }
 
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  const supabase = actorOrToken
+    ? getAuthorizedSupabaseClient(actorOrToken)
+    : getServiceSupabaseClient();
   if (!supabase) {
+    if (actorOrToken) {
+      throw new Error("UNAUTHORIZED: Valid clinician session token required to create intake session");
+    }
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
@@ -1304,8 +1318,13 @@ export async function getIntakeSessionById(
     return mockDb.getIntakeSessionById(id);
   }
 
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  const supabase = actorOrToken
+    ? getAuthorizedSupabaseClient(actorOrToken)
+    : getServiceSupabaseClient();
   if (!supabase) {
+    if (actorOrToken) {
+      throw new Error("UNAUTHORIZED: Valid clinician session token required to load intake session");
+    }
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
@@ -1332,8 +1351,13 @@ export async function updateIntakeSession(
     return mockDb.updateIntakeSession(id, updates);
   }
 
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  const supabase = actorOrToken
+    ? getAuthorizedSupabaseClient(actorOrToken)
+    : getServiceSupabaseClient();
   if (!supabase) {
+    if (actorOrToken) {
+      throw new Error("UNAUTHORIZED: Valid clinician session token required to update intake session");
+    }
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
