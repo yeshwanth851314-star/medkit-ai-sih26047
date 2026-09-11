@@ -85,9 +85,7 @@ class MockDatabaseAdapter {
   isSessionRevoked(sessionId: string): boolean {
     if (this.capabilityRevocations.has(sessionId)) return true;
     const session = this.intakeSessions.get(sessionId);
-    if (session && (session.status === "abandoned" || session.status === "submitted")) {
-      return true;
-    }
+    if (session && session.status === "revoked") return true;
     return false;
   }
 

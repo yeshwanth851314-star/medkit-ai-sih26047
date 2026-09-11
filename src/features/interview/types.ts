@@ -32,7 +32,7 @@ export interface InterviewSession {
   consentId?: string | null;
   facilityId?: string | null;
   language: "en" | "te";
-  status: "active" | "submitted" | "abandoned";
+  status: "active" | "submitted" | "abandoned" | "revoked";
   consentGiven: boolean;
   currentQuestionId: string | null;
   answers: Record<string, CapturedAnswer>;

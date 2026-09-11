@@ -175,13 +175,39 @@ export async function getInterviewSessionAsync(
 
   if (!dbSession) return null;
 
+  // Strict session state resolution: only explicit active + unexpired yields active
+  const isExpired = dbSession.expires_at && new Date(dbSession.expires_at).getTime() < Date.now();
+  let resolvedStatus: "active" | "submitted" | "abandoned" | "revoked";
+  if (isExpired) {
+    resolvedStatus = "abandoned";
+  } else {
+    switch (dbSession.status) {
+      case "active":
+        resolvedStatus = "active";
+        break;
+      case "submitted":
+        resolvedStatus = "submitted";
+        break;
+      case "abandoned":
+        resolvedStatus = "abandoned";
+        break;
+      case "revoked":
+        resolvedStatus = "revoked";
+        break;
+      default:
+        // Any unrecognized or unknown status strictly fails closed
+        resolvedStatus = "revoked";
+        break;
+    }
+  }
+
   const session: InterviewSession = {
     id: dbSession.id,
     patientId: dbSession.patient_id,
     consentId: dbSession.consent_id || null,
     facilityId: dbSession.facility_id || null,
     language: dbSession.language,
-    status: dbSession.status === "submitted" ? "submitted" : "active",
+    status: resolvedStatus,
     consentGiven: true,
     currentQuestionId: dbSession.current_question_id || null,
     answers: (dbSession.answers || {}) as Record<string, any>,
@@ -208,6 +234,10 @@ export async function submitInterviewAnswerAsync(
     session = (await getInterviewSessionAsync(sessionId, options)) || undefined;
   }
   if (!session) throw new Error("Interview session not found");
+
+  if (session.status !== "active") {
+    throw new Error(`SESSION_NOT_ACTIVE: Session status is ${session.status}, expected active`);
+  }
 
   if (!session.currentQuestionId) {
     return { session, nextQuestion: null, isComplete: true };
@@ -338,6 +368,10 @@ export async function compileInterviewToCase(
     })) || undefined;
   }
   if (!session) throw new Error("Interview session not found");
+
+  if (session.status === "revoked" || session.status === "abandoned") {
+    throw new Error(`UNAUTHORIZED: Cannot compile case from ${session.status} session`);
+  }
 
   // Idempotency check: repeated submissions return the already compiled case
   if ((session as any).compiledCaseId) {

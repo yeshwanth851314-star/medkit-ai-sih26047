@@ -83,9 +83,12 @@ export async function POST(
         metadata: { action: "acknowledge_red_flag", ruleId },
       });
     } else {
-      const supabase = getAuthorizedSupabaseClient(auth.user) || getServiceSupabaseClient();
+      const supabase = getAuthorizedSupabaseClient(auth.user);
       if (!supabase) {
-        throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+        return NextResponse.json(
+          { error: "UNAUTHORIZED: Active clinician session token required to acknowledge red flags" },
+          { status: 401 }
+        );
       }
       const { error } = await supabase.rpc("rpc_acknowledge_red_flag_with_audit", {
         p_case_id: id,

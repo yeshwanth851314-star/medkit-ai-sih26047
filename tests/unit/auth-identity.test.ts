@@ -78,12 +78,8 @@ describe("Phase 1: Deterministic Request-Bound Supabase Identity & Auth Architec
     expect(extractAccessToken(userWithToken)).toBe("user-session-jwt-token");
     expect(extractAccessToken(null)).toBeUndefined();
 
-    // Authorized client for unauthenticated caller must NOT use service key
+    // Authorized client for unauthenticated caller must return null (never anonymous client or service key)
     const unauthedClient = getAuthorizedSupabaseClient(null);
-    expect(unauthedClient).not.toBeNull();
-    const headers = (unauthedClient as any)?.rest?.headers;
-    if (headers) {
-      expect(headers.apikey).not.toBe("mock-service-role-key-xyz-789");
-    }
+    expect(unauthedClient).toBeNull();
   });
 });

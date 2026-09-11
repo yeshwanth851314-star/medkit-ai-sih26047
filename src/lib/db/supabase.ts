@@ -103,6 +103,9 @@ export function getAuthorizedSupabaseClient(
   configOverride?: { supabaseUrl?: string; supabaseAnonKey?: string }
 ): SupabaseClient | null {
   const token = extractAccessToken(actorOrToken);
+  if (!token || typeof token !== "string" || token.trim() === "") {
+    return null;
+  }
   return getSupabaseClient(token, configOverride);
 }
 
@@ -114,7 +117,7 @@ export function getAuthorizedSupabaseClient(
 export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthUser | null> {
   if (env.isDemoMode) return user;
 
-  const supabase = getAuthorizedSupabaseClient(user);
+  const supabase = getAuthorizedSupabaseClient(user) || getServiceSupabaseClient();
   if (!supabase) {
     throw new Error("DATABASE_UNAVAILABLE: Supabase client unavailable for active-profile verification");
   }
@@ -947,6 +950,15 @@ export async function revokeKioskSessionDurable(
       });
       return;
     }
+    if (options?.actorOrToken) {
+      const user = typeof options.actorOrToken === "object" ? options.actorOrToken : null;
+      if (user && user.role !== "admin" && user.facilityId) {
+        const session = await mockDb.getIntakeSessionById(sessionId);
+        if (session && session.facility_id && session.facility_id !== user.facilityId) {
+          throw new Error(`FORBIDDEN: Clinician facility ${user.facilityId} does not match session facility ${session.facility_id}`);
+        }
+      }
+    }
     await mockDb.updateIntakeSession(sessionId, { status: targetStatus, completed_at: new Date().toISOString() });
     mockDb.recordRevocation(sessionId, reason, targetStatus);
     return;
@@ -976,24 +988,15 @@ export async function revokeKioskSessionDurable(
     if (!supabase) {
       throw new Error("Database unavailable: Supabase client is not configured to record session revocation.");
     }
-    // Clinician-authenticated durable revocation write
-    const { error: revErr } = await supabase.from("kiosk_capability_revocations").upsert({
-      session_id: sessionId,
-      revoked_at: new Date().toISOString(),
-      reason,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    // Clinician-authenticated durable revocation via atomic facility-checked RPC
+    const { error: revErr } = await supabase.rpc("rpc_clinician_revoke_session", {
+      p_session_id: sessionId,
+      p_reason: reason,
+      p_target_status: targetStatus,
     });
     if (revErr) {
-      console.error("Failed to record kiosk_capability_revocations:", revErr.message);
+      console.error("Failed to revoke kiosk session via rpc_clinician_revoke_session:", revErr.message);
       throw new Error(`Database error recording capability revocation: ${revErr.message}`);
-    }
-    const { error: updateErr } = await supabase.from("intake_sessions").update({
-      status: targetStatus,
-      completed_at: new Date().toISOString(),
-    }).eq("id", sessionId);
-    if (updateErr) {
-      console.error("Failed to update intake_sessions status:", updateErr.message);
-      throw new Error(`Database error updating intake session status: ${updateErr.message}`);
     }
     return;
   }
@@ -1036,10 +1039,22 @@ export async function verifyDurableSessionState(params: {
         },
       };
     }
-    if (session.status === "abandoned") return { status: "abandoned" };
-    if (session.status === "submitted") return { status: "submitted" };
-    if (new Date(session.expires_at).getTime() < Date.now()) return { status: "expired" };
-    return { status: "active", session };
+    if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+      return { status: "expired" };
+    }
+    switch (session.status) {
+      case "active":
+        return { status: "active", session };
+      case "submitted":
+        return { status: "submitted" };
+      case "abandoned":
+        return { status: "abandoned" };
+      case "revoked":
+        return { status: "revoked" };
+      default:
+        // Any unrecognized or unknown status fails closed as revoked
+        return { status: "revoked" };
+    }
   }
 
   const supabase = getSupabaseClient() || getServiceSupabaseClient();
@@ -1061,10 +1076,22 @@ export async function verifyDurableSessionState(params: {
       throw new Error(`Database error verifying kiosk session: ${error.message}`);
     }
     if (!data) return { status: "revoked" };
-    if (data.status === "abandoned") return { status: "abandoned" };
-    if (data.status === "submitted") return { status: "submitted" };
-    if (new Date(data.expires_at).getTime() < Date.now()) return { status: "expired" };
-    return { status: "active", session: data };
+    if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
+      return { status: "expired" };
+    }
+    switch (data.status) {
+      case "active":
+        return { status: "active", session: data };
+      case "submitted":
+        return { status: "submitted" };
+      case "abandoned":
+        return { status: "abandoned" };
+      case "revoked":
+        return { status: "revoked" };
+      default:
+        // Fail-closed on any unrecognized status
+        return { status: "revoked" };
+    }
   }
 
   // Check revocation table
@@ -1090,11 +1117,23 @@ export async function verifyDurableSessionState(params: {
     throw new Error(`Database error querying intake_sessions: ${sessErr.message}`);
   }
   if (!sessionData) return { status: "revoked" };
-  if (sessionData.status === "abandoned") return { status: "abandoned" };
-  if (sessionData.status === "submitted") return { status: "submitted" };
-  if (new Date(sessionData.expires_at).getTime() < Date.now()) return { status: "expired" };
+  if (sessionData.expires_at && new Date(sessionData.expires_at).getTime() < Date.now()) {
+    return { status: "expired" };
+  }
 
-  return { status: "active", session: sessionData };
+  switch (sessionData.status) {
+    case "active":
+      return { status: "active", session: sessionData };
+    case "submitted":
+      return { status: "submitted" };
+    case "abandoned":
+      return { status: "abandoned" };
+    case "revoked":
+      return { status: "revoked" };
+    default:
+      // Fail-closed on any unrecognized status
+      return { status: "revoked" };
+  }
 }
 
 export async function isSessionDurableRevoked(
@@ -1170,7 +1209,9 @@ export async function createRedFlagEvent(
     });
   }
 
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  // Red flag events are clinical evidence generated by the rules engine
+  // Direct insert from authenticated/anon is locked down; trusted internal workflow uses service role
+  const supabase = getServiceSupabaseClient() || getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }

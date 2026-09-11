@@ -193,7 +193,7 @@ export interface IntakeSessionRecord {
   patient_id: string;
   consent_id?: string | null;
   language: "en" | "te";
-  status: "active" | "submitted" | "abandoned" | "expired";
+  status: "active" | "submitted" | "abandoned" | "expired" | "revoked";
   current_question_id?: string | null;
   answers: Record<string, any>;
   compiled_case_id?: string | null;
