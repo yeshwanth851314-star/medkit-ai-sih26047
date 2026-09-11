@@ -166,6 +166,7 @@ export interface FhirR4Bundle {
   resourceType: "Bundle";
   id: string;
   meta: {
+    versionId?: string;
     profile: string[];
     lastUpdated: string;
     tag?: Array<{

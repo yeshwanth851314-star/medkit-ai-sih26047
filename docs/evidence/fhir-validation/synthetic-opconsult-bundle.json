@@ -6,6 +6,7 @@
     "value": "bundle-c-001"
   },
   "meta": {
+    "versionId": "1",
     "profile": [
       "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
       "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle"

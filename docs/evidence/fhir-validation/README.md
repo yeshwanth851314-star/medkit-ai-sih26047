@@ -51,7 +51,8 @@ MedKit AI maintains a rigorous dual validation framework:
    java -jar validator_cli.jar \
      synthetic-opconsult-bundle.json \
      -version 4.0.1 \
-     -ig https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord \
+     -ig ndhm.in#7.0.0 \
+     -profile https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle \
      -output validation-summary.json
    ```
 

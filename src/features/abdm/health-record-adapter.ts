@@ -24,12 +24,24 @@ export interface PrepareHealthRecordParams {
   documents?: MedicalDocument[];
   consent: ConsentRecord;
   abdmConsentArtifact?: AbdmConsentArtifact;
+  targetHipId?: string;
+  requestedHiType?: string;
+  requestedPurpose?: string;
 }
 
 export function prepareAbdmHealthRecordPayload(
   params: PrepareHealthRecordParams
 ): HealthRecordPushRequest {
-  const { clinicalCase, patient, documents = [], consent, abdmConsentArtifact } = params;
+  const {
+    clinicalCase,
+    patient,
+    documents = [],
+    consent,
+    abdmConsentArtifact,
+    targetHipId,
+    requestedHiType,
+    requestedPurpose,
+  } = params;
 
   // Invariant 1: Only finalized records can be packaged for ABDM
   if (clinicalCase.status !== "final") {
@@ -38,8 +50,19 @@ export function prepareAbdmHealthRecordPayload(
     );
   }
 
-  // Invariant 2: Consent must permit exchange
-  const consentCheck = isHealthRecordExchangePermitted(consent, abdmConsentArtifact);
+  // Invariant 2: ABDM exchange consent requires active local consent AND valid ABDM artifact
+  if (!abdmConsentArtifact) {
+    throw new Error(
+      "ABDM_CONSENT_VIOLATION: ABDM consent artifact is required for health-information exchange."
+    );
+  }
+
+  const consentCheck = isHealthRecordExchangePermitted(consent, abdmConsentArtifact, {
+    clinicalCase,
+    targetHipId,
+    requestedHiType,
+    requestedPurpose,
+  });
   if (!consentCheck.permitted) {
     throw new Error(`ABDM_CONSENT_VIOLATION: ${consentCheck.reason}`);
   }
@@ -54,13 +77,14 @@ export function prepareAbdmHealthRecordPayload(
   const config = getAbdmConfig();
   const patientReference = patient.abha_id || patient.patient_code;
   const careContextReference = `visit-${clinicalCase.id}`;
-  const consentId = abdmConsentArtifact?.consentId || consent.id;
+  const consentId = abdmConsentArtifact.consentId;
+  const matchedHipId = targetHipId || abdmConsentArtifact.hip?.id || config.hipId || "";
 
   return {
     careContextReference,
     patientReference,
     consentId,
     fhirBundle,
-    matchedHipId: config.hipId,
+    matchedHipId,
   };
 }

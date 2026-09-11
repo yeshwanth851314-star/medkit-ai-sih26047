@@ -44,15 +44,28 @@ export function validateFhirBundle(bundle: any): FhirValidationResult {
     warnings.push("Bundle is missing recommended top-level 'timestamp'");
   }
 
-  // ABDM Meta Profile check
-  if (!bundle.meta || !Array.isArray(bundle.meta.profile) || bundle.meta.profile.length === 0) {
-    warnings.push("Bundle meta.profile is missing or empty. Expected NRCES/ABDM ClinicalArtifact profile.");
+  // ABDM Meta Profile & Version check
+  if (!bundle.meta || typeof bundle.meta !== "object") {
+    errors.push("DocumentBundle.meta is required");
   } else {
-    const hasAbdmProfile = bundle.meta.profile.some((p: string) =>
-      p.includes("nrces.in") || p.includes("ndhm") || p.includes("hl7.org/fhir")
-    );
-    if (!hasAbdmProfile) {
-      warnings.push("Bundle meta.profile does not reference a recognized NRCES/ABDM or HL7 FHIR StructureDefinition");
+    if (
+      bundle.meta.versionId === undefined ||
+      bundle.meta.versionId === null ||
+      typeof bundle.meta.versionId !== "string" ||
+      bundle.meta.versionId.trim() === ""
+    ) {
+      errors.push("DocumentBundle.meta.versionId is required and must not be empty");
+    }
+
+    if (!Array.isArray(bundle.meta.profile) || bundle.meta.profile.length === 0) {
+      errors.push("DocumentBundle.meta.profile is required and must not be empty");
+    } else {
+      const hasAbdmProfile = bundle.meta.profile.some((p: string) =>
+        p.includes("nrces.in") || p.includes("ndhm") || p.includes("hl7.org/fhir")
+      );
+      if (!hasAbdmProfile) {
+        warnings.push("Bundle meta.profile does not reference a recognized NRCES/ABDM or HL7 FHIR StructureDefinition");
+      }
     }
   }
 

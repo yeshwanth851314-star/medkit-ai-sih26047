@@ -50,6 +50,7 @@ export interface AbdmConsentPermission {
     value: number;
     repeats: number;
   };
+  hiTypes?: string[];
 }
 
 export interface AbdmConsentArtifact {
@@ -69,6 +70,7 @@ export interface AbdmConsentArtifact {
     name: string;
   };
   permission: AbdmConsentPermission;
+  hiTypes?: string[];
 }
 
 /**

@@ -38,17 +38,20 @@ PHASE 3 — FHIR / NRCeS
 FHIR R4 mapping:                PASS
 NRCeS IG version:               FHIR IG for ABDM v7.0.0 (FHIR R4.0.1)
 DocumentBundle:                 PASS (https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle)
+DocumentBundle meta.versionId:  PASS (Deterministic versioning derived from clinical lifecycle)
 OPConsultRecord:                PASS (https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord)
 Reference integrity:            PASS (0 broken internal references, RFC 4122 UUID closure)
+Internal validator:             PASS (Internal structural invariant validator)
 External validation:            BLOCKED_EXTERNAL (Host environment lacks Java runtime)
-Blocking validation errors:     0
+External validator errors:      UNKNOWN (CLI validator blocked due to missing Java runtime on host)
 FHIR evidence:                  CREATED (docs/evidence/fhir-validation/)
 
-PHASE 4 — ABDM / ABHA
-Official docs reviewed:         PASS (ABDM Gateway APIs v0.5 / M1-M2-M3 specifications)
+PHASE 4 — ABDM / ABHA READINESS
+Official docs reviewed:         PASS (ABDM Gateway V3 / M1-M2-M3 specifications)
 ABHA readiness:                 PASS (14-digit hyphenated/plain & @abdm addresses validated)
-Consent mapping:                PASS (Local clinical consent mapped to ABDM Consent Manager)
-ABDM integration boundary:      PASS (src/features/abdm/ clean module boundary)
+Consent boundary separation:    PASS (Local clinical consent separated from mandatory ABDM Consent Artifact)
+Fake HIP default removed:       PASS (No fabricated government identifiers in configuration)
+ABDM integration boundary:      PASS (src/features/abdm/ clean module boundary, Gateway V3 contract)
 FHIR reuse:                     PASS (Phase 3 OPConsultRecord reused for M3 health record push)
 Sandbox:                        BLOCKED_EXTERNAL (No ABDM sandbox credentials in host environment)
 Overall ABDM readiness:         PASS
@@ -101,13 +104,13 @@ Failure matrix (A–N):           PASS (14/14 failure scenarios verified)
 ### Phase 4: ABDM / ABHA Readiness
 - **Status:** `PASS` (Readiness) / `BLOCKED_EXTERNAL` (Sandbox live integration)
 - **Bounded Module:** `src/features/abdm/`
-  - `types.ts`: ABHA profiles, consent artifacts, M3 health-record exchange types.
-  - `config.ts`: Server-only gateway configuration with browser runtime protections.
-  - `abdm-client.ts`: Gateway v0.5 client with session token management and fail-closed timeout logic.
-  - `abha-service.ts`: Format validator for 14-digit ABHA numbers and addresses. ABHA is non-mandatory.
-  - `consent-adapter.ts`: Bridges local clinic consent to ABDM Consent Manager artifacts.
-  - `health-record-adapter.ts`: Packages finalized clinical cases into ABDM HIP push payloads using Phase 3 FHIR DocumentBundle.
-- **Verification:** 13 unit tests passed in `tests/unit/abdm.test.ts`.
+  - `types.ts`: ABHA profiles, consent artifacts, M3 health-record exchange types, permission hiTypes.
+  - `config.ts`: Server-only gateway configuration with structured readiness checks (`isGatewayConfigured`, `isHipConfigured`, `isConsentExchangeConfigured`). Removed fabricated default HIP ID.
+  - `abdm-client.ts`: Gateway V3 client targeting `/api/hiecm/gateway/v3/sessions` with `client_credentials` grant, UUID `REQUEST-ID`, `TIMESTAMP`, `X-CM-ID`, session token caching, and fail-closed timeout logic.
+  - `abha-service.ts`: Format validator for 14-digit ABHA numbers and addresses. ABHA is strictly non-mandatory for local care.
+  - `consent-adapter.ts`: Enforces strict separation between local clinical consent and mandatory ABDM Consent Artifacts. Validates status (`GRANTED`), expiry (`dataEraseAt`), clinical case date range, purpose, and HI types (`OPConsultation`).
+  - `health-record-adapter.ts`: Packages finalized clinical cases into ABDM HIP push payloads using Phase 3 FHIR DocumentBundle, strictly requiring active local consent AND valid ABDM Consent Artifact.
+- **Verification:** 24 unit tests passed in `tests/unit/abdm.test.ts`.
 
 ### Phase 5: Complete Clinical Workflow & Resilience Failure Matrix
 - **Status:** `PASS`

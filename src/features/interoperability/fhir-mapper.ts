@@ -525,6 +525,9 @@ export function mapCaseToFhirBundle(params: {
       value: `bundle-${clinicalCase.id}`,
     },
     meta: {
+      versionId: clinicalCase.amendments?.length
+        ? String(clinicalCase.amendments.length + 1)
+        : "1",
       profile: [
         "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact",
         "https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle",

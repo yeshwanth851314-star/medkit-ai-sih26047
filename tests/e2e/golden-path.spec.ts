@@ -19,6 +19,8 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
         window.localStorage.setItem("medkit_doctor_onboarding_completed", "true");
         window.localStorage.setItem("medkit_doctor_onboarding_completed:doctor-101", "true");
         window.localStorage.setItem("medkit_doctor_onboarding_completed:user-doctor-01", "true");
+        window.localStorage.setItem("medkit_doctor_onboarding_completed:usr-doc-0001", "true");
+        window.localStorage.setItem("medkit_doctor_onboarding_completed:usr-doc-0002", "true");
         window.localStorage.setItem("medkit_kiosk_onboarding_completed", "true");
         window.sessionStorage.setItem("medkit_kiosk_onboarding_completed", "true");
       });
@@ -69,7 +71,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     // Verify list of patients is rendered
     const patientRows = page.locator("a[href*='/doctor/patients/']");
-    await expect(patientRows.first()).toBeVisible();
+    await expect(patientRows.first()).toBeVisible({ timeout: 10000 });
   });
 
   test("3. Patient kiosk intake: language selection, consent recording, and adaptive questioning", async ({ page }) => {

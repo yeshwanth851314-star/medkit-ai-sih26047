@@ -88,6 +88,7 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
     expect(bundle.resourceType).toBe("Bundle");
     expect(bundle.type).toBe("document");
     expect(bundle.identifier?.system).toBe("https://medkit.ai/bundle-id");
+    expect(bundle.meta.versionId).toBe("1");
     expect(bundle.meta.profile).toContain(
       "https://nrces.in/ndhm/fhir/r4/StructureDefinition/ClinicalArtifact"
     );
@@ -287,6 +288,7 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
       "  [PASS] Observations contain LOINC codes and valid units",
       "  [PASS] Allergies contain SNOMED CT coding",
       "  [PASS] MedicationStatements contain dosage and duration",
+      "  [PASS] Root meta.versionId present and non-empty ('" + bundle.meta.versionId + "')",
       "  [PASS] Reference closure verified: 0 broken internal references",
       "================================================================================",
       "STATUS: VERIFIED CONFORMANT WITH NRCES ABDM OUTPATIENT SPECIFICATION",
@@ -297,5 +299,142 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
 
     expect(fs.existsSync(bundleJsonPath)).toBe(true);
     expect(fs.existsSync(logPath)).toBe(true);
+  });
+
+  it("fails validation when DocumentBundle meta is missing, lacks versionId, or versionId is empty", () => {
+    const validBundle = mapCaseToFhirBundle({
+      clinicalCase: mockCase,
+      patient: mockPatient,
+    });
+
+    // 1. Missing meta entirely
+    const noMeta = { ...validBundle };
+    delete (noMeta as any).meta;
+    const resNoMeta = validateFhirBundle(noMeta);
+    expect(resNoMeta.valid).toBe(false);
+    expect(resNoMeta.errors).toContain("DocumentBundle.meta is required");
+
+    // 2. Missing versionId
+    const noVersionId = {
+      ...validBundle,
+      meta: {
+        profile: validBundle.meta.profile,
+        lastUpdated: validBundle.meta.lastUpdated,
+      },
+    };
+    const resNoVer = validateFhirBundle(noVersionId);
+    expect(resNoVer.valid).toBe(false);
+    expect(resNoVer.errors).toContain(
+      "DocumentBundle.meta.versionId is required and must not be empty"
+    );
+
+    // 3. Empty string versionId
+    const emptyVer = {
+      ...validBundle,
+      meta: {
+        ...validBundle.meta,
+        versionId: "   ",
+      },
+    };
+    const resEmptyVer = validateFhirBundle(emptyVer);
+    expect(resEmptyVer.valid).toBe(false);
+    expect(resEmptyVer.errors).toContain(
+      "DocumentBundle.meta.versionId is required and must not be empty"
+    );
+
+    // 4. Missing profile
+    const noProfile = {
+      ...validBundle,
+      meta: {
+        versionId: "1",
+        profile: [],
+        lastUpdated: validBundle.meta.lastUpdated,
+      },
+    };
+    const resNoProf = validateFhirBundle(noProfile);
+    expect(resNoProf.valid).toBe(false);
+    expect(resNoProf.errors).toContain(
+      "DocumentBundle.meta.profile is required and must not be empty"
+    );
+  });
+
+  it("enforces entry[0] as Composition resource and rejects broken internal references", () => {
+    const validBundle = mapCaseToFhirBundle({
+      clinicalCase: mockCase,
+      patient: mockPatient,
+    });
+
+    // Swap entry 0 with entry 1
+    const swapped = {
+      ...validBundle,
+      entry: [validBundle.entry[1], validBundle.entry[0], ...validBundle.entry.slice(2)],
+    };
+    const swappedRes = validateFhirBundle(swapped);
+    expect(swappedRes.valid).toBe(false);
+    expect(swappedRes.errors).toContain(
+      "FHIR R4 Document specification requires entry[0] to be a 'Composition' resource"
+    );
+
+    // Broken internal reference in Composition.subject
+    const brokenRef = JSON.parse(JSON.stringify(validBundle));
+    brokenRef.entry[0].resource.subject = { reference: "urn:uuid:00000000-0000-0000-0000-000000000000" };
+    const brokenRes = validateFhirBundle(brokenRef);
+    expect(brokenRes.valid).toBe(false);
+    expect(brokenRes.errors.some((e: string) => e.includes("Unresolved reference"))).toBe(true);
+  });
+
+  it("derives deterministic versionId incremented by amendment count", () => {
+    const amendedCase: ClinicalCase = {
+      ...mockCase,
+      amendments: [
+        {
+          id: "amend-1",
+          version: 2,
+          actor_id: "doc-1",
+          actor_name: "Dr. Sharma",
+          timestamp: "2026-09-02T12:00:00Z",
+          reason: "Updated diagnosis following ECG",
+          notes: "Confirmed on repeat ECG",
+        },
+      ],
+    };
+
+    const bundle = mapCaseToFhirBundle({
+      clinicalCase: amendedCase,
+      patient: mockPatient,
+    });
+
+    expect(bundle.meta.versionId).toBe("2");
+
+    const twoAmendmentsCase: ClinicalCase = {
+      ...mockCase,
+      amendments: [
+        {
+          id: "amend-1",
+          version: 2,
+          actor_id: "doc-1",
+          actor_name: "Dr. Sharma",
+          timestamp: "2026-09-02T12:00:00Z",
+          reason: "Updated diagnosis",
+          notes: "First note",
+        },
+        {
+          id: "amend-2",
+          version: 3,
+          actor_id: "doc-1",
+          actor_name: "Dr. Sharma",
+          timestamp: "2026-09-03T14:00:00Z",
+          reason: "Adjusted dosage",
+          notes: "Second note",
+        },
+      ],
+    };
+
+    const bundleV3 = mapCaseToFhirBundle({
+      clinicalCase: twoAmendmentsCase,
+      patient: mockPatient,
+    });
+
+    expect(bundleV3.meta.versionId).toBe("3");
   });
 });

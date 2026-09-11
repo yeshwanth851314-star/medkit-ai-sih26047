@@ -1,6 +1,6 @@
 ================================================================================
 MedKit AI — Outpatient Consultation (OPConsultRecord) FHIR R4 Validation Log
-Timestamp: 2026-09-11T14:03:00.180Z
+Timestamp: 2026-09-11T14:56:15.772Z
 Target Profile: https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord
 Document Profile: https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle
 Validator: MedKit Internal Structural Invariant Validator (FHIR R4 / NRCeS)
@@ -39,6 +39,7 @@ Structural Invariant Checks:
   [PASS] Observations contain LOINC codes and valid units
   [PASS] Allergies contain SNOMED CT coding
   [PASS] MedicationStatements contain dosage and duration
+  [PASS] Root meta.versionId present and non-empty ('1')
   [PASS] Reference closure verified: 0 broken internal references
 ================================================================================
 STATUS: VERIFIED CONFORMANT WITH NRCES ABDM OUTPATIENT SPECIFICATION
