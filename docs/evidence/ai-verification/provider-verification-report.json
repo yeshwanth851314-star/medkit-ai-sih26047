@@ -1,0 +1,44 @@
+{
+  "project": "MedKit AI (SIH26047)",
+  "organization": "Ministry of Ayush / All India Institute of Ayurveda (AIIA)",
+  "verified_at": "2026-09-11T12:35:00.000Z",
+  "environment": {
+    "node_version": "v22+",
+    "platform": "win32",
+    "gemini_api_key_configured": false
+  },
+  "providers": {
+    "gemini_summary": {
+      "provider": "google-genai",
+      "model": "gemini-2.5-flash",
+      "status": "BLOCKED_EXTERNAL",
+      "reason": "Host environment lacks GEMINI_API_KEY. Unauthenticated live requests fail-closed.",
+      "fallback": "Deterministic summary with mandatory clinical disclaimer and provenance map"
+    },
+    "ocr_extraction": {
+      "provider": "multimodal-vision",
+      "status": "BLOCKED_EXTERNAL",
+      "reason": "Multimodal API credentials not configured in host environment.",
+      "fallback": "Manual clinician review/entry workflow. Refuses synthetic medication fixtures on real inputs."
+    },
+    "english_speech": {
+      "provider": "asr-english",
+      "status": "BLOCKED_EXTERNAL",
+      "reason": "Live speech credentials not configured in host environment.",
+      "fallback": "Manual text intake workflow. Verbatim transcript preserved."
+    },
+    "telugu_speech": {
+      "provider": "asr-telugu",
+      "status": "BLOCKED_EXTERNAL",
+      "reason": "Live speech credentials not configured in host environment.",
+      "fallback": "Direct Telugu text input. Verbatim vernacular text preserved."
+    }
+  },
+  "safety_invariants": {
+    "mandatory_disclaimers": "PASS",
+    "deterministic_red_flags": "PASS",
+    "confidence_thresholding": "PASS",
+    "raw_input_provenance": "PASS",
+    "zero_synthetic_hallucination_on_real_inputs": "PASS"
+  }
+}

@@ -5,7 +5,8 @@
 **Document Profile:** `https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord`  
 **Bundle Profile:** `https://nrces.in/ndhm/fhir/r4/StructureDefinition/DocumentBundle`  
 **FHIR Version:** R4 (v4.0.1)  
-**Evidence Artifact Date:** 2026-09-10
+**NRCeS IG Version:** FHIR IG for ABDM v7.0.0  
+**Evidence Artifact Date:** 2026-09-11
 
 ---
 

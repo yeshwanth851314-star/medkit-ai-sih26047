@@ -44,6 +44,13 @@ export function pruneExpiredSessions(): number {
 }
 
 /**
+ * Clear in-memory session cache (used for simulated server restarts / cold starts in tests)
+ */
+export function clearInterviewSessionCache(): void {
+  activeSessions.clear();
+}
+
+/**
  * Durably tear down an interview session upon completion or cancellation.
  * Invariant: Database state change MUST succeed before teardown is considered complete.
  */
