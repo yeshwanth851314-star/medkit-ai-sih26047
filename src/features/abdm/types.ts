@@ -3,7 +3,7 @@
  *
  * SIH Problem Statement: SIH26047 — Patient Case-Taking Software
  * Lead Organization: Ministry of Ayush / All India Institute of Ayurveda (AIIA)
- * Standards Reference: Ayushman Bharat Digital Mission (ABDM) Gateway APIs v0.5 / M1-M2-M3
+ * Standards Reference: Ayushman Bharat Digital Mission (ABDM) Gateway APIs V3 / M1-M2-M3
  */
 
 import { FhirR4Bundle } from "../interoperability/types";
@@ -82,6 +82,7 @@ export interface HealthRecordPushRequest {
   consentId: string;
   fhirBundle: FhirR4Bundle;
   matchedHipId: string;
+  matchedHiuId?: string;
 }
 
 export interface HealthRecordPushResponse {

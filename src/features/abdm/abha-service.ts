@@ -85,3 +85,24 @@ export function getPatientAbhaIdentifier(patient: Patient): { system: string; va
     value: validation.normalizedValue,
   };
 }
+
+/**
+ * Normalizes and validates an ABDM patient identifier for cross-enterprise exchange.
+ * Supports 14-digit ABHA number (standardized to hyphenated format) and ABHA address (name@abdm / name@sbx).
+ * Returns typed normalized value, or null if invalid or missing.
+ */
+export function normalizeAbdmPatientIdentity(
+  input?: string | null
+): { type: "abha_number" | "abha_address"; value: string } | null {
+  if (!input || typeof input !== "string") {
+    return null;
+  }
+  const validation = validateAbhaIdentifier(input);
+  if (!validation.valid || !validation.normalizedValue || validation.type === "invalid") {
+    return null;
+  }
+  return {
+    type: validation.type,
+    value: validation.normalizedValue,
+  };
+}

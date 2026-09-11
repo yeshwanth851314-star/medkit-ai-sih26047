@@ -15,6 +15,7 @@ import {
   isConsentExchangeConfigured,
   getAbdmReadiness,
   AbdmConsentArtifact,
+  normalizeAbdmPatientIdentity,
 } from "../../src/features/abdm";
 import { Patient, ClinicalCase } from "../../src/types/database";
 import { ConsentRecord } from "../../src/features/consent/types";
@@ -132,7 +133,7 @@ describe("Phase 4: ABDM / ABHA Interoperability & Integration Readiness", () => 
       text: "Care Management",
     },
     patient: {
-      id: "14-2345-6789-0123@abdm",
+      id: "14-2345-6789-0123",
     },
     hip: {
       id: "AIIA_DELHI_01",
@@ -323,6 +324,435 @@ describe("Phase 4: ABDM / ABHA Interoperability & Integration Readiness", () => 
           abdmConsentArtifact: mockValidAbdmArtifact,
         });
       }).toThrow("CANNOT_EXCHANGE_DRAFT");
+    });
+  });
+
+  describe("ABDM Patient & HIU Consent Binding (P4-FINAL-01 & P4-FINAL-02)", () => {
+    it("Test 1: permits exchange when MedKit patient ABDM identity matches consent artifact patient identity", () => {
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: mockValidAbdmArtifact,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+      });
+      expect(check.valid).toBe(true);
+      expect(check.reason).toBeUndefined();
+
+      const permitted = isHealthRecordExchangePermitted(mockActiveConsent, mockValidAbdmArtifact, {
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+      });
+      expect(permitted.permitted).toBe(true);
+    });
+
+    it("Test 2: denies exchange when MedKit patient ABDM identity does not match consent artifact patient identity (wrong patient)", () => {
+      const wrongPatientArtifact: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        patient: {
+          id: "99-9999-9999-9999",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: wrongPatientArtifact,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("does not match requested patient");
+
+      const permitted = isHealthRecordExchangePermitted(mockActiveConsent, wrongPatientArtifact, {
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+      });
+      expect(permitted.permitted).toBe(false);
+      expect(permitted.reason).toContain("does not match requested patient");
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: mockFinalizedCase,
+          patient: mockPatientWithAbha,
+          consent: mockActiveConsent,
+          abdmConsentArtifact: wrongPatientArtifact,
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 3: denies exchange when patient has no linked ABHA identity, while leaving local MedKit workflows unaffected", () => {
+      // 1. Local clinical consent remains valid and unaffected
+      expect(isLocalClinicalConsentActive(mockActiveConsent)).toBe(true);
+      expect(mockPatientWithoutAbha.patient_code).toBe("MED-2026-0002");
+
+      // 2. ABDM exchange must be denied for patient without ABHA
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: mockValidAbdmArtifact,
+        clinicalCase: {
+          ...mockFinalizedCase,
+          patient_id: mockPatientWithoutAbha.id,
+        },
+        patient: mockPatientWithoutAbha,
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("Patient has no linked ABHA identifier");
+
+      const consentForPatientWithoutAbha: ConsentRecord = {
+        ...mockActiveConsent,
+        patient_id: mockPatientWithoutAbha.id,
+      };
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: {
+            ...mockFinalizedCase,
+            patient_id: mockPatientWithoutAbha.id,
+          },
+          patient: mockPatientWithoutAbha,
+          consent: consentForPatientWithoutAbha,
+          abdmConsentArtifact: mockValidAbdmArtifact,
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION: Patient has no linked ABHA identifier");
+    });
+
+    it("Test 4: strictly refuses internal patient_code to substitute for missing ABHA identity", () => {
+      const patientOnlyWithCode: Patient = {
+        id: "p-code-only",
+        patient_code: "MED-2026-CODEONLY",
+        full_name: "Internal Code Patient",
+        gender: "female",
+        date_of_birth: "1992-04-10",
+        phone: "+919876543299",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const artifactMatchingCode: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        patient: {
+          id: "MED-2026-CODEONLY",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactMatchingCode,
+        clinicalCase: {
+          ...mockFinalizedCase,
+          patient_id: patientOnlyWithCode.id,
+        },
+        patient: patientOnlyWithCode,
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("Patient has no linked ABHA identifier");
+
+      const consentForPatient: ConsentRecord = {
+        ...mockActiveConsent,
+        patient_id: patientOnlyWithCode.id,
+      };
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: {
+            ...mockFinalizedCase,
+            patient_id: patientOnlyWithCode.id,
+          },
+          patient: patientOnlyWithCode,
+          consent: consentForPatient,
+          abdmConsentArtifact: artifactMatchingCode,
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 5: denies exchange when clinical case patient_id does not match the requested patient (case/patient mismatch)", () => {
+      const mismatchedCase: ClinicalCase = {
+        ...mockFinalizedCase,
+        patient_id: "p-different-patient-999",
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: mockValidAbdmArtifact,
+        clinicalCase: mismatchedCase,
+        patient: mockPatientWithAbha,
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("does not match requested patient");
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: mismatchedCase,
+          patient: mockPatientWithAbha,
+          consent: mockActiveConsent,
+          abdmConsentArtifact: mockValidAbdmArtifact,
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 6: permits exchange when target HIU matches the ABDM consent artifact HIU binding", () => {
+      const artifactWithHiu: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        hiu: {
+          id: "HIU_AIIMS_DELHI_01",
+          name: "All India Institute of Medical Sciences",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactWithHiu,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: "HIU_AIIMS_DELHI_01",
+      });
+      expect(check.valid).toBe(true);
+
+      const payload = prepareAbdmHealthRecordPayload({
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        consent: mockActiveConsent,
+        abdmConsentArtifact: artifactWithHiu,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: "HIU_AIIMS_DELHI_01",
+      });
+      expect(payload.matchedHiuId).toBe("HIU_AIIMS_DELHI_01");
+    });
+
+    it("Test 7: denies exchange when target HIU does not match the ABDM consent artifact HIU binding", () => {
+      const artifactWithHiu: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        hiu: {
+          id: "HIU_AIIMS_DELHI_01",
+          name: "All India Institute of Medical Sciences",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactWithHiu,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: "HIU_APOLLO_CHENNAI_02",
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("does not match ABDM consent artifact HIU binding");
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: mockFinalizedCase,
+          patient: mockPatientWithAbha,
+          consent: mockActiveConsent,
+          abdmConsentArtifact: artifactWithHiu,
+          targetHipId: "AIIA_DELHI_01",
+          targetHiuId: "HIU_APOLLO_CHENNAI_02",
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 8: denies exchange when ABDM consent artifact specifies an HIU binding but target HIU is missing", () => {
+      const artifactWithHiu: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        hiu: {
+          id: "HIU_AIIMS_DELHI_01",
+          name: "All India Institute of Medical Sciences",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactWithHiu,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: undefined,
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("Target HIU ID is required when ABDM consent artifact specifies an HIU binding");
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: mockFinalizedCase,
+          patient: mockPatientWithAbha,
+          consent: mockActiveConsent,
+          abdmConsentArtifact: artifactWithHiu,
+          targetHipId: "AIIA_DELHI_01",
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 9: adversarial test — denies exchange when all other criteria match (status, purpose, date, HI type, HIP, HIU) but patient identity mismatches", () => {
+      const adversarialArtifact: AbdmConsentArtifact = {
+        consentId: "abdm-consent-adversarial-01",
+        status: "GRANTED",
+        createdAt: "2026-09-01T10:00:00Z",
+        purpose: {
+          code: "CAREMGT",
+          text: "Care Management",
+        },
+        patient: {
+          id: "88-8888-8888-8888",
+        },
+        hip: {
+          id: "AIIA_DELHI_01",
+          name: "All India Institute of Ayurveda",
+        },
+        hiu: {
+          id: "HIU_AIIMS_DELHI_01",
+          name: "AIIMS New Delhi",
+        },
+        permission: {
+          accessMode: "VIEW",
+          dateRange: {
+            from: "2026-01-01T00:00:00Z",
+            to: "2026-12-31T23:59:59Z",
+          },
+          dataEraseAt: new Date(Date.now() + 86400000).toISOString(),
+          frequency: {
+            unit: "HOUR",
+            value: 1,
+            repeats: 0,
+          },
+          hiTypes: ["OPConsultation"],
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: adversarialArtifact,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: "HIU_AIIMS_DELHI_01",
+        requestedHiType: "OPConsultation",
+        requestedPurpose: "CAREMGT",
+      });
+      expect(check.valid).toBe(false);
+      expect(check.reason).toContain("does not match requested patient");
+
+      expect(() => {
+        prepareAbdmHealthRecordPayload({
+          clinicalCase: mockFinalizedCase,
+          patient: mockPatientWithAbha,
+          consent: mockActiveConsent,
+          abdmConsentArtifact: adversarialArtifact,
+          targetHipId: "AIIA_DELHI_01",
+          targetHiuId: "HIU_AIIMS_DELHI_01",
+          requestedHiType: "OPConsultation",
+          requestedPurpose: "CAREMGT",
+        });
+      }).toThrow("ABDM_CONSENT_VIOLATION");
+    });
+
+    it("Test 10: full valid exchange guarantees payload integrity — patientReference is ABDM identity and consentId is authoritative validated artifact ID", () => {
+      const fullValidArtifact: AbdmConsentArtifact = {
+        consentId: "abdm-consent-authoritative-999",
+        status: "GRANTED",
+        createdAt: "2026-09-01T10:00:00Z",
+        purpose: {
+          code: "CAREMGT",
+          text: "Care Management",
+        },
+        patient: {
+          id: "14-2345-6789-0123",
+        },
+        hip: {
+          id: "AIIA_DELHI_01",
+          name: "All India Institute of Ayurveda",
+        },
+        hiu: {
+          id: "HIU_AIIMS_DELHI_01",
+          name: "AIIMS New Delhi",
+        },
+        permission: {
+          accessMode: "VIEW",
+          dateRange: {
+            from: "2026-01-01T00:00:00Z",
+            to: "2026-12-31T23:59:59Z",
+          },
+          dataEraseAt: new Date(Date.now() + 86400000).toISOString(),
+          frequency: {
+            unit: "HOUR",
+            value: 1,
+            repeats: 0,
+          },
+          hiTypes: ["OPConsultation"],
+        },
+      };
+
+      const payload = prepareAbdmHealthRecordPayload({
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+        consent: mockActiveConsent,
+        abdmConsentArtifact: fullValidArtifact,
+        targetHipId: "AIIA_DELHI_01",
+        targetHiuId: "HIU_AIIMS_DELHI_01",
+        requestedHiType: "OPConsultation",
+        requestedPurpose: "CAREMGT",
+      });
+
+      expect(payload).toBeDefined();
+      expect(payload.patientReference).toBe("14-2345-6789-0123");
+      expect(payload.patientReference).not.toBe(mockPatientWithAbha.patient_code);
+      expect(payload.consentId).toBe("abdm-consent-authoritative-999");
+      expect(payload.matchedHipId).toBe("AIIA_DELHI_01");
+      expect(payload.matchedHiuId).toBe("HIU_AIIMS_DELHI_01");
+      expect(payload.fhirBundle.meta.versionId).toBe("1");
+    });
+
+    it("Test 11: validates and normalizes ABHA identity formats (hyphenated, unhyphenated numeric, ABHA address) and denies mismatched format types", () => {
+      // Direct normalization function tests
+      expect(normalizeAbdmPatientIdentity("14-2345-6789-0123")).toEqual({
+        type: "abha_number",
+        value: "14-2345-6789-0123",
+      });
+      expect(normalizeAbdmPatientIdentity("14234567890123")).toEqual({
+        type: "abha_number",
+        value: "14-2345-6789-0123",
+      });
+      expect(normalizeAbdmPatientIdentity("kalyan.ram@abdm")).toEqual({
+        type: "abha_address",
+        value: "kalyan.ram@abdm",
+      });
+      expect(normalizeAbdmPatientIdentity("kalyan_sbx@sbx")).toEqual({
+        type: "abha_address",
+        value: "kalyan_sbx@sbx",
+      });
+      expect(normalizeAbdmPatientIdentity("")).toBeNull();
+      expect(normalizeAbdmPatientIdentity(null)).toBeNull();
+      expect(normalizeAbdmPatientIdentity(undefined)).toBeNull();
+      expect(normalizeAbdmPatientIdentity("invalid-abha-value")).toBeNull();
+
+      // Exchange with ABHA address patient
+      const patientWithAddress: Patient = {
+        ...mockPatientWithAbha,
+        id: "p-address-001",
+        abha_id: "kalyan.ram@abdm",
+      };
+      const caseWithAddress: ClinicalCase = {
+        ...mockFinalizedCase,
+        patient_id: "p-address-001",
+      };
+      const consentWithAddress: ConsentRecord = {
+        ...mockActiveConsent,
+        patient_id: "p-address-001",
+      };
+      const artifactWithAddress: AbdmConsentArtifact = {
+        ...mockValidAbdmArtifact,
+        patient: {
+          id: "kalyan.ram@abdm",
+        },
+      };
+
+      const check = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactWithAddress,
+        clinicalCase: caseWithAddress,
+        patient: patientWithAddress,
+      });
+      expect(check.valid).toBe(true);
+
+      // Mismatch between ABHA number and ABHA address
+      const checkMismatch = isAbdmExchangeConsentValid({
+        abdmConsentArtifact: artifactWithAddress,
+        clinicalCase: mockFinalizedCase,
+        patient: mockPatientWithAbha,
+      });
+      expect(checkMismatch.valid).toBe(false);
+      expect(checkMismatch.reason).toContain("does not match requested patient");
     });
   });
 

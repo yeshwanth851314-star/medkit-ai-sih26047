@@ -1,6 +1,7 @@
 import { ConsentRecord } from "../consent/types";
 import { AbdmConsentArtifact } from "./types";
-import { ClinicalCase } from "../../types/database";
+import { ClinicalCase, Patient } from "../../types/database";
+import { normalizeAbdmPatientIdentity } from "./abha-service";
 
 /**
  * MedKit AI — ABDM Consent Adapter (M2 Milestone Readiness)
@@ -13,6 +14,7 @@ import { ClinicalCase } from "../../types/database";
  * - ABDM Consent Artifact: Authorizes cross-enterprise longitudinal record sharing across ABDM ecosystem.
  * - Under no circumstances does ABDM consent override or bypass local clinic clinical consent.
  * - Under no circumstances does local clinical consent substitute for a mandatory ABDM Consent Artifact.
+ * - ABDM Consent Artifact is strictly bound to the specific patient identity, HIP, and HIU destination.
  */
 
 export function isLocalClinicalConsentActive(localConsent: ConsentRecord): boolean {
@@ -28,7 +30,9 @@ export function isLocalClinicalConsentActive(localConsent: ConsentRecord): boole
 export interface AbdmExchangeValidationParams {
   abdmConsentArtifact?: AbdmConsentArtifact;
   clinicalCase?: ClinicalCase;
+  patient?: Patient;
   targetHipId?: string;
+  targetHiuId?: string;
   requestedHiType?: string;
   requestedPurpose?: string;
 }
@@ -39,12 +43,14 @@ export function isAbdmExchangeConsentValid(
   const {
     abdmConsentArtifact,
     clinicalCase,
+    patient,
     targetHipId,
+    targetHiuId,
     requestedHiType = "OPConsultation",
     requestedPurpose,
   } = params;
 
-  // Step 2: ABDM artifact is mandatory for cross-enterprise exchange
+  // Step 1: ABDM artifact is mandatory for cross-enterprise exchange
   if (!abdmConsentArtifact) {
     return {
       valid: false,
@@ -52,7 +58,7 @@ export function isAbdmExchangeConsentValid(
     };
   }
 
-  // Step 3: Status must be GRANTED
+  // Step 2: Status must be GRANTED
   if (abdmConsentArtifact.status !== "GRANTED") {
     return {
       valid: false,
@@ -60,7 +66,7 @@ export function isAbdmExchangeConsentValid(
     };
   }
 
-  // Step 4: Validate expiry (dataEraseAt and permission validity)
+  // Step 3: Validate expiry (dataEraseAt and permission validity)
   const now = Date.now();
   if (abdmConsentArtifact.permission?.dataEraseAt) {
     const eraseAt = new Date(abdmConsentArtifact.permission.dataEraseAt).getTime();
@@ -72,7 +78,60 @@ export function isAbdmExchangeConsentValid(
     }
   }
 
-  // Step 5: Validate Purpose
+  // Step 4: Validate Case ↔ Patient Binding
+  if (clinicalCase && patient && clinicalCase.patient_id !== patient.id) {
+    return {
+      valid: false,
+      reason: `Clinical case patient '${clinicalCase.patient_id}' does not match requested patient '${patient.id}'.`,
+    };
+  }
+
+  // Step 5: Validate Patient ABDM Identity and Consent Artifact Patient Binding
+  if (patient) {
+    const rawAbha = patient.abha_id?.trim();
+    if (!rawAbha) {
+      return {
+        valid: false,
+        reason: "Patient has no linked ABHA identifier. ABDM health-information exchange requires an ABDM-linked patient identity.",
+      };
+    }
+
+    const patientIdentity = normalizeAbdmPatientIdentity(rawAbha);
+    if (!patientIdentity) {
+      return {
+        valid: false,
+        reason: `Patient ABHA identifier '${patient.abha_id}' is invalid. ABDM health-information exchange requires a valid ABHA identity.`,
+      };
+    }
+
+    const artifactPatientId = abdmConsentArtifact.patient?.id?.trim();
+    if (!artifactPatientId) {
+      return {
+        valid: false,
+        reason: "ABDM consent artifact is missing patient identifier.",
+      };
+    }
+
+    const artifactIdentity = normalizeAbdmPatientIdentity(artifactPatientId);
+    if (!artifactIdentity) {
+      return {
+        valid: false,
+        reason: `ABDM consent artifact contains invalid patient identifier '${artifactPatientId}'.`,
+      };
+    }
+
+    if (
+      patientIdentity.type !== artifactIdentity.type ||
+      patientIdentity.value !== artifactIdentity.value
+    ) {
+      return {
+        valid: false,
+        reason: `ABDM consent artifact patient (${artifactIdentity.value}) does not match requested patient (${patientIdentity.value}).`,
+      };
+    }
+  }
+
+  // Step 6: Validate Purpose
   if (requestedPurpose && abdmConsentArtifact.purpose?.code) {
     if (abdmConsentArtifact.purpose.code !== requestedPurpose) {
       return {
@@ -82,7 +141,7 @@ export function isAbdmExchangeConsentValid(
     }
   }
 
-  // Step 6: Validate Date Range against Clinical Case
+  // Step 7: Validate Date Range against Clinical Case
   if (clinicalCase && abdmConsentArtifact.permission?.dateRange) {
     const { from, to } = abdmConsentArtifact.permission.dateRange;
     const caseDateStr = clinicalCase.finalized_at || clinicalCase.created_at;
@@ -110,7 +169,7 @@ export function isAbdmExchangeConsentValid(
     }
   }
 
-  // Step 7: Validate Health Information Type
+  // Step 8: Validate Health Information Type
   const permittedHiTypes =
     abdmConsentArtifact.permission?.hiTypes || abdmConsentArtifact.hiTypes;
   if (Array.isArray(permittedHiTypes) && permittedHiTypes.length > 0) {
@@ -122,13 +181,32 @@ export function isAbdmExchangeConsentValid(
     }
   }
 
-  // Step 8: Validate HIP Binding
+  // Step 9: Validate HIP Binding
   if (targetHipId && abdmConsentArtifact.hip?.id) {
-    if (targetHipId !== abdmConsentArtifact.hip.id) {
+    if (targetHipId.trim() !== abdmConsentArtifact.hip.id.trim()) {
       return {
         valid: false,
-        reason: `Target HIP ID '${targetHipId}' does not match ABDM consent artifact HIP binding '${abdmConsentArtifact.hip.id}'.`,
+        reason: `Target HIP ID '${targetHipId.trim()}' does not match ABDM consent artifact HIP binding '${abdmConsentArtifact.hip.id.trim()}'.`,
       };
+    }
+  }
+
+  // Step 10: Validate HIU Destination Binding
+  if (abdmConsentArtifact.hiu?.id) {
+    const artifactHiuId = abdmConsentArtifact.hiu.id.trim();
+    if (artifactHiuId) {
+      if (!targetHiuId || !targetHiuId.trim()) {
+        return {
+          valid: false,
+          reason: `Target HIU ID is required when ABDM consent artifact specifies an HIU binding ('${artifactHiuId}').`,
+        };
+      }
+      if (targetHiuId.trim() !== artifactHiuId) {
+        return {
+          valid: false,
+          reason: `Target HIU ID '${targetHiuId.trim()}' does not match ABDM consent artifact HIU binding '${artifactHiuId}'.`,
+        };
+      }
     }
   }
 
@@ -144,7 +222,9 @@ export function isHealthRecordExchangePermitted(
   abdmConsentArtifact?: AbdmConsentArtifact,
   options?: {
     clinicalCase?: ClinicalCase;
+    patient?: Patient;
     targetHipId?: string;
+    targetHiuId?: string;
     requestedHiType?: string;
     requestedPurpose?: string;
   }
@@ -156,10 +236,19 @@ export function isHealthRecordExchangePermitted(
     };
   }
 
+  if (options?.patient && localConsent.patient_id && localConsent.patient_id !== options.patient.id) {
+    return {
+      permitted: false,
+      reason: `Local clinical consent belongs to patient '${localConsent.patient_id}', which does not match requested patient '${options.patient.id}'.`,
+    };
+  }
+
   const abdmCheck = isAbdmExchangeConsentValid({
     abdmConsentArtifact,
     clinicalCase: options?.clinicalCase,
+    patient: options?.patient,
     targetHipId: options?.targetHipId,
+    targetHiuId: options?.targetHiuId,
     requestedHiType: options?.requestedHiType,
     requestedPurpose: options?.requestedPurpose,
   });

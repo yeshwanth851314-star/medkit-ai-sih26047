@@ -48,8 +48,9 @@ FHIR evidence:                  CREATED (docs/evidence/fhir-validation/)
 
 PHASE 4 — ABDM / ABHA READINESS
 Official docs reviewed:         PASS (ABDM Gateway V3 / M1-M2-M3 specifications)
-ABHA readiness:                 PASS (14-digit hyphenated/plain & @abdm addresses validated)
+ABHA readiness:                 PASS (14-digit hyphenated/plain & @abdm addresses validated; optional for local care)
 Consent boundary separation:    PASS (Local clinical consent separated from mandatory ABDM Consent Artifact)
+Patient & HIU consent binding:  PASS (ABDM artifact strictly bound to patient identity, case ownership, HIP, and HIU)
 Fake HIP default removed:       PASS (No fabricated government identifiers in configuration)
 ABDM integration boundary:      PASS (src/features/abdm/ clean module boundary, Gateway V3 contract)
 FHIR reuse:                     PASS (Phase 3 OPConsultRecord reused for M3 health record push)
@@ -107,10 +108,10 @@ Failure matrix (A–N):           PASS (14/14 failure scenarios verified)
   - `types.ts`: ABHA profiles, consent artifacts, M3 health-record exchange types, permission hiTypes.
   - `config.ts`: Server-only gateway configuration with structured readiness checks (`isGatewayConfigured`, `isHipConfigured`, `isConsentExchangeConfigured`). Removed fabricated default HIP ID.
   - `abdm-client.ts`: Gateway V3 client targeting `/api/hiecm/gateway/v3/sessions` with `client_credentials` grant, UUID `REQUEST-ID`, `TIMESTAMP`, `X-CM-ID`, session token caching, and fail-closed timeout logic.
-  - `abha-service.ts`: Format validator for 14-digit ABHA numbers and addresses. ABHA is strictly non-mandatory for local care.
-  - `consent-adapter.ts`: Enforces strict separation between local clinical consent and mandatory ABDM Consent Artifacts. Validates status (`GRANTED`), expiry (`dataEraseAt`), clinical case date range, purpose, and HI types (`OPConsultation`).
-  - `health-record-adapter.ts`: Packages finalized clinical cases into ABDM HIP push payloads using Phase 3 FHIR DocumentBundle, strictly requiring active local consent AND valid ABDM Consent Artifact.
-- **Verification:** 24 unit tests passed in `tests/unit/abdm.test.ts`.
+  - `abha-service.ts`: Format validator for 14-digit ABHA numbers and addresses, and identity normalizer (`normalizeAbdmPatientIdentity`). ABHA is strictly optional for local MedKit care workflows and required only for ABDM exchange operations.
+  - `consent-adapter.ts`: Enforces strict separation between local clinical consent and mandatory ABDM Consent Artifacts. ABDM consent validation is strictly bound to patient identity (matching ABHA number/address), case ownership (`case.patient_id === patient.id`), HIP, HIU destination where applicable, purpose, date range, HI type, and consent status/expiry (`GRANTED`, unexpired).
+  - `health-record-adapter.ts`: Packages finalized clinical cases into ABDM HIP push payloads using Phase 3 FHIR DocumentBundle, strictly requiring active local consent AND valid ABDM Consent Artifact. Patient reference strictly uses normalized ABDM identity (no `patient_code` fallback), and `consentId` is derived authoritatively from the validated artifact.
+- **Verification:** 35 unit tests passed in `tests/unit/abdm.test.ts`.
 
 ### Phase 5: Complete Clinical Workflow & Resilience Failure Matrix
 - **Status:** `PASS`
@@ -138,7 +139,7 @@ Failure matrix (A–N):           PASS (14/14 failure scenarios verified)
 | :--- | :--- | :--- | :--- |
 | **Typecheck** | `npm run typecheck` | **PASS** | `tsc --noEmit` exited with code 0 (zero errors) |
 | **Lint** | `npm run lint` | **PASS** | ESLint exited with code 0 (zero warnings, zero errors) |
-| **Unit Tests** | `npm run test:unit` | **PASS** | 41 test files passed, 406 tests passed (100%) |
+| **Unit Tests** | `npm run test:unit` | **PASS** | 41 test files passed, 431 tests passed (100%) |
 | **Standard E2E** | `npm run test:e2e` | **PASS** | 11/11 Playwright clinical golden path scenarios passed |
 | **Production Build** | `npm run build` | **PASS** | Next.js compiled 22 static pages & dynamic API routes |
 | **Package Audit** | `npm run package:audit` | **PENDING** | Executed prior to final completion |
