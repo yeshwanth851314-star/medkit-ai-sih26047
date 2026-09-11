@@ -250,6 +250,7 @@ export async function submitInterviewAnswerAsync(
     sessionId,
     kioskId: options?.kioskId,
     kioskSecret: options?.kioskSecret,
+    actorOrToken: options?.actorOrToken,
   });
 
   if (durableState.status !== "active") {
@@ -410,6 +411,7 @@ export async function compileInterviewToCase(
     sessionId,
     kioskId: options?.kioskId,
     kioskSecret: options?.kioskSecret,
+    actorOrToken: options?.actorOrToken,
   });
 
   if (

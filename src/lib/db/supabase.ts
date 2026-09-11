@@ -1023,8 +1023,105 @@ export async function verifyDurableSessionState(params: {
   sessionId: string;
   kioskId?: string;
   kioskSecret?: string;
+  actorOrToken?: AuthUser | string | null;
+  clientOverride?: SupabaseClient | null;
 }): Promise<DurableSessionState> {
   if (env.isDemoMode) {
+    if (params.kioskId && params.kioskSecret) {
+      const kiosk = await mockDb.verifyKioskCredentials(params.kioskId, params.kioskSecret);
+      if (!kiosk) {
+        throw new Error("UNAUTHORIZED: Active kiosk instance required");
+      }
+      if (mockDb.isSessionRevoked(params.sessionId)) {
+        return { status: "revoked" };
+      }
+      const session = await mockDb.getIntakeSessionById(params.sessionId);
+      if (!session) {
+        return {
+          status: "active",
+          session: {
+            id: params.sessionId,
+            patient_id: "",
+            facility_id: kiosk.facility_id || "fac-hyd-01",
+            status: "active",
+            language: "en",
+            current_question_id: "Q_CHIEF_COMPLAINT",
+            answers: {},
+            expires_at: new Date(Date.now() + 3600000).toISOString(),
+            started_at: new Date().toISOString(),
+          },
+        };
+      }
+      if (session.facility_id && kiosk.facility_id && session.facility_id !== kiosk.facility_id) {
+        throw new Error(`FORBIDDEN: Session facility ${session.facility_id} does not match kiosk facility ${kiosk.facility_id}`);
+      }
+      if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+        return { status: "expired" };
+      }
+      switch (session.status) {
+        case "active":
+          return { status: "active", session };
+        case "submitted":
+          return { status: "submitted" };
+        case "abandoned":
+          return { status: "abandoned" };
+        case "revoked":
+          return { status: "revoked" };
+        default:
+          return { status: "revoked" };
+      }
+    }
+
+    if (params.actorOrToken) {
+      const role = typeof params.actorOrToken === "object" ? (params.actorOrToken as any).role : "doctor";
+      const actorFacility = typeof params.actorOrToken === "object" ? (params.actorOrToken as any).facilityId : undefined;
+      if (mockDb.isSessionRevoked(params.sessionId)) {
+        return { status: "revoked" };
+      }
+      const session = await mockDb.getIntakeSessionById(params.sessionId);
+      if (!session) {
+        return {
+          status: "active",
+          session: {
+            id: params.sessionId,
+            patient_id: "",
+            facility_id: actorFacility || "fac-hyd-01",
+            status: "active",
+            language: "en",
+            current_question_id: "Q_CHIEF_COMPLAINT",
+            answers: {},
+            expires_at: new Date(Date.now() + 3600000).toISOString(),
+            started_at: new Date().toISOString(),
+          },
+        };
+      }
+
+      // Facility boundary check in demo mode (mirroring Supabase RLS)
+      if (role !== "admin" && actorFacility && session.facility_id && actorFacility !== session.facility_id) {
+        return { status: "revoked" }; // Cross-facility denied fail-closed under clinician RLS
+      }
+
+      if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+        return { status: "expired" };
+      }
+      switch (session.status) {
+        case "active":
+          return { status: "active", session };
+        case "submitted":
+          return { status: "submitted" };
+        case "abandoned":
+          return { status: "abandoned" };
+        case "revoked":
+          return { status: "revoked" };
+        default:
+          return { status: "revoked" };
+      }
+    }
+
+    if (params.actorOrToken === null && !params.kioskId) {
+      throw new Error("UNAUTHORIZED: Kiosk credentials or clinician authorization required for durable session verification");
+    }
+
     if (mockDb.isSessionRevoked(params.sessionId)) {
       return { status: "revoked" };
     }
@@ -1064,13 +1161,14 @@ export async function verifyDurableSessionState(params: {
     }
   }
 
-  const supabase = getSupabaseClient() || getServiceSupabaseClient();
-  if (!supabase) {
-    throw new Error("DATABASE_UNAVAILABLE: Supabase client is not configured to verify session state (fail-closed).");
-  }
-
-  // If kiosk credentials provided, use the secure RPC as the authoritative session lookup
+  // Production Mode: Strict 3-Way Authorization Boundary
   if (params.kioskId && params.kioskSecret) {
+    // MODE A: Kiosk credentials via hardened RPC
+    const supabase = params.clientOverride || getSupabaseClient() || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("DATABASE_UNAVAILABLE: Supabase client is not configured to verify session state (fail-closed).");
+    }
+
     const { data, error } = await supabase.rpc("rpc_get_kiosk_intake_session", {
       p_kiosk_id: params.kioskId,
       p_kiosk_secret: params.kioskSecret,
@@ -1099,53 +1197,66 @@ export async function verifyDurableSessionState(params: {
         // Fail-closed on any unrecognized status
         return { status: "revoked" };
     }
-  }
+  } else if (params.actorOrToken) {
+    // MODE B: Clinician authenticated client under caller JWT (RLS enforced)
+    const token = extractAccessToken(params.actorOrToken);
+    if (!token || typeof token !== "string" || token.trim() === "") {
+      throw new Error("UNAUTHORIZED: Clinician session or valid token required to verify intake session");
+    }
 
-  // Check revocation table
-  const { data: revData, error: revErr } = await supabase
-    .from("kiosk_capability_revocations")
-    .select("session_id, reason")
-    .eq("session_id", params.sessionId)
-    .maybeSingle();
+    const supabase = params.clientOverride || getAuthorizedSupabaseClient(params.actorOrToken);
+    if (!supabase) {
+      throw new Error("UNAUTHORIZED: Clinician session or valid token required to verify intake session");
+    }
 
-  if (revErr) {
-    throw new Error(`Database error querying revocations: ${revErr.message}`);
-  }
-  if (revData) return { status: "revoked", reason: revData.reason };
+    // 1. Check revocation table under clinician JWT
+    const { data: revData, error: revErr } = await supabase
+      .from("kiosk_capability_revocations")
+      .select("session_id, reason")
+      .eq("session_id", params.sessionId)
+      .maybeSingle();
 
-  // Check intake_sessions table status
-  const { data: sessionData, error: sessErr } = await supabase
-    .from("intake_sessions")
-    .select("*")
-    .eq("id", params.sessionId)
-    .maybeSingle();
+    if (revErr) {
+      throw new Error(`Database error querying revocations: ${revErr.message}`);
+    }
+    if (revData) return { status: "revoked", reason: revData.reason };
 
-  if (sessErr) {
-    throw new Error(`Database error querying intake_sessions: ${sessErr.message}`);
-  }
-  if (!sessionData) return { status: "revoked" };
-  if (sessionData.expires_at && new Date(sessionData.expires_at).getTime() < Date.now()) {
-    return { status: "expired" };
-  }
+    // 2. Check intake_sessions table under clinician JWT
+    const { data: sessionData, error: sessErr } = await supabase
+      .from("intake_sessions")
+      .select("*")
+      .eq("id", params.sessionId)
+      .maybeSingle();
 
-  switch (sessionData.status) {
-    case "active":
-      return { status: "active", session: sessionData };
-    case "submitted":
-      return { status: "submitted" };
-    case "abandoned":
-      return { status: "abandoned" };
-    case "revoked":
-      return { status: "revoked" };
-    default:
-      // Fail-closed on any unrecognized status
-      return { status: "revoked" };
+    if (sessErr) {
+      throw new Error(`Database error querying intake_sessions: ${sessErr.message}`);
+    }
+    if (!sessionData) return { status: "revoked" };
+    if (sessionData.expires_at && new Date(sessionData.expires_at).getTime() < Date.now()) {
+      return { status: "expired" };
+    }
+
+    switch (sessionData.status) {
+      case "active":
+        return { status: "active", session: sessionData };
+      case "submitted":
+        return { status: "submitted" };
+      case "abandoned":
+        return { status: "abandoned" };
+      case "revoked":
+        return { status: "revoked" };
+      default:
+        return { status: "revoked" };
+    }
+  } else {
+    // MODE C: No Authorization -> Strictly Fail Closed
+    throw new Error("UNAUTHORIZED: Kiosk credentials or clinician authorization required for durable session verification");
   }
 }
 
 export async function isSessionDurableRevoked(
   sessionId: string,
-  options?: { kioskId?: string; kioskSecret?: string }
+  options?: { kioskId?: string; kioskSecret?: string; actorOrToken?: AuthUser | string | null }
 ): Promise<boolean> {
   const state = await verifyDurableSessionState({ sessionId, ...options });
   return state.status !== "active";

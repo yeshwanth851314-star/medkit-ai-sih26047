@@ -9,8 +9,15 @@ import {
   getInterviewSession,
 } from "@/features/interview/interview-service";
 import { AuthUser, toPublicAuthUser } from "@/features/auth/types";
+import { recordPatientConsent } from "@/features/consent/consent-service";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { GET as meRoute } from "@/app/api/auth/me/route";
+import { env } from "@/config/env";
+import {
+  verifyDurableSessionState,
+  isSessionDurableRevoked,
+} from "@/lib/db/supabase";
+import * as supabaseLib from "@/lib/db/supabase";
 
 describe("MedKit AI — Scope-Frozen Final Security Closure", () => {
   const validPatientId = "00000000-0000-0000-0000-000000000001";
@@ -299,6 +306,261 @@ describe("MedKit AI — Scope-Frozen Final Security Closure", () => {
       expect(json.user.tokenExpiresAt).toBeUndefined();
 
       authSpy.mockRestore();
+    });
+  });
+
+  describe("FINAL-CLOSURE: Durable Session Clinician Authorization & 3-Mode Boundary", () => {
+    const clinicianHyd: AuthUser = {
+      id: "usr-doc-hyd-01",
+      email: "dr.ayush@aiia.gov.in",
+      fullName: "Dr. Ayush Sharma",
+      role: "doctor",
+      facilityId: "fac-hyd-01",
+      supabaseToken: "token-clinician-hyd",
+    };
+
+    const clinicianDel: AuthUser = {
+      id: "usr-doc-del-01",
+      email: "dr.delhi@aiia.gov.in",
+      fullName: "Dr. Delhi Doctor",
+      role: "doctor",
+      facilityId: "fac-del-01",
+      supabaseToken: "token-clinician-del",
+    };
+
+    it("Test A: Clinician active session passes and returns active", async () => {
+      await recordPatientConsent({
+        patientId: validPatientId,
+        language: "en",
+        consentMethod: "touch_acknowledgement",
+        scope: ["voice_recording", "document_extraction", "ai_summary"],
+      });
+
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01", {
+        actorOrToken: clinicianHyd,
+      });
+
+      const state = await verifyDurableSessionState({
+        sessionId: session.id,
+        actorOrToken: clinicianHyd,
+      });
+      expect(state.status).toBe("active");
+      if (state.status === "active") {
+        expect(state.session.id).toBe(session.id);
+      }
+
+      // Submitting answer and compiling case succeed with clinician authorization
+      await expect(
+        submitInterviewAnswerAsync(session.id, "Mild fever since morning", "touch", {
+          actorOrToken: clinicianHyd,
+        })
+      ).resolves.toBeDefined();
+
+      await expect(
+        compileInterviewToCase(session.id, { actorOrToken: clinicianHyd })
+      ).resolves.toBeDefined();
+    });
+
+    it("Test B: Clinician revoked session returns revoked, answer and compile denied", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01", {
+        actorOrToken: clinicianHyd,
+      });
+
+      mockDb.recordRevocation(session.id, "clinician_cancelled", "abandoned");
+
+      const state = await verifyDurableSessionState({
+        sessionId: session.id,
+        actorOrToken: clinicianHyd,
+      });
+      expect(state.status).toBe("revoked");
+
+      await expect(
+        submitInterviewAnswerAsync(session.id, "Persistent cough", "touch", {
+          actorOrToken: clinicianHyd,
+        })
+      ).rejects.toThrow(/SESSION_REVOKED/);
+
+      await expect(
+        compileInterviewToCase(session.id, { actorOrToken: clinicianHyd })
+      ).rejects.toThrow(/UNAUTHORIZED/);
+    });
+
+    it("Test C: Cross-facility clinician denied fail-closed under clinician RLS boundary", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01", {
+        actorOrToken: clinicianHyd,
+      });
+
+      // Cross-facility clinician attempts verification on session in fac-hyd-01
+      const state = await verifyDurableSessionState({
+        sessionId: session.id,
+        actorOrToken: clinicianDel,
+      });
+      expect(state.status).toBe("revoked");
+
+      await expect(
+        submitInterviewAnswerAsync(session.id, "Cross facility attempt", "touch", {
+          actorOrToken: clinicianDel,
+        })
+      ).rejects.toThrow(/SESSION_REVOKED/);
+
+      await expect(
+        compileInterviewToCase(session.id, { actorOrToken: clinicianDel })
+      ).rejects.toThrow(/UNAUTHORIZED/);
+    });
+
+    it("Test D: No authorization (actorOrToken: null, kioskId: undefined) throws UNAUTHORIZED", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01");
+
+      await expect(
+        verifyDurableSessionState({
+          sessionId: session.id,
+          actorOrToken: null,
+          kioskId: undefined,
+        })
+      ).rejects.toThrow(/UNAUTHORIZED/);
+    });
+
+    it("Test E: Kiosk credentials work as expected", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01");
+
+      const state = await verifyDurableSessionState({
+        sessionId: session.id,
+        kioskId: validKioskId,
+        kioskSecret: validKioskSecret,
+      });
+      expect(state.status).toBe("active");
+      if (state.status === "active") {
+        expect(state.session.id).toBe(session.id);
+      }
+    });
+
+    it("Test F: Invalid kiosk credentials denied", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01");
+
+      await expect(
+        verifyDurableSessionState({
+          sessionId: session.id,
+          kioskId: validKioskId,
+          kioskSecret: "wrong-secret-value",
+        })
+      ).rejects.toThrow(/UNAUTHORIZED/);
+    });
+
+    it("Test G: Stale cache + revoked DB fails closed, evicts cache on submit", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01", {
+        actorOrToken: clinicianHyd,
+      });
+      expect(getInterviewSession(session.id)).toBeDefined();
+
+      mockDb.recordRevocation(session.id, "emergency_override", "abandoned");
+
+      await expect(
+        submitInterviewAnswerAsync(session.id, "Chest pain", "touch", {
+          actorOrToken: clinicianHyd,
+        })
+      ).rejects.toThrow(/SESSION_REVOKED/);
+
+      // Cache evicted
+      expect(getInterviewSession(session.id)).toBeNull();
+    });
+
+    it("Test H: Stale cache + abandoned DB compile fails closed, evicts cache", async () => {
+      const session = await createInterviewSession(validPatientId, "en", null, "fac-hyd-01", {
+        actorOrToken: clinicianHyd,
+      });
+      expect(getInterviewSession(session.id)).toBeDefined();
+
+      const dbSession = await mockDb.getIntakeSessionById(session.id);
+      if (dbSession) {
+        dbSession.status = "abandoned";
+      }
+
+      await expect(
+        compileInterviewToCase(session.id, { actorOrToken: clinicianHyd })
+      ).rejects.toThrow(/UNAUTHORIZED: Cannot compile case from abandoned session/);
+
+      expect(getInterviewSession(session.id)).toBeNull();
+    });
+
+    it("Test I: Production branch selection (non-demo mode) enforces getAuthorizedSupabaseClient with caller JWT and avoids anon/service fallback", async () => {
+      const origDemo = env.isDemoMode;
+      (env as any).isDemoMode = false;
+
+      try {
+        const mockSupabase = {
+          from: vi.fn().mockImplementation((table: string) => {
+            if (table === "kiosk_capability_revocations") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                  }),
+                }),
+              };
+            }
+            if (table === "intake_sessions") {
+              return {
+                select: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: {
+                        id: "prod-session-001",
+                        status: "active",
+                        facility_id: "fac-hyd-01",
+                        expires_at: new Date(Date.now() + 3600000).toISOString(),
+                      },
+                      error: null,
+                    }),
+                  }),
+                }),
+              };
+            }
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                }),
+              }),
+            };
+          }),
+        } as any;
+
+        const anonClientSpy = vi.spyOn(supabaseLib, "getSupabaseClient");
+        const serviceClientSpy = vi.spyOn(supabaseLib, "getServiceSupabaseClient");
+
+        // 1. Clinician call in production uses caller JWT client and verifies session
+        const state = await verifyDurableSessionState({
+          sessionId: "prod-session-001",
+          actorOrToken: clinicianHyd,
+          clientOverride: mockSupabase,
+        });
+
+        expect(state.status).toBe("active");
+        // Anon and service client should NOT have been invoked during Mode B verification
+        expect(anonClientSpy).not.toHaveBeenCalled();
+        expect(serviceClientSpy).not.toHaveBeenCalled();
+
+        // 2. Clinician without valid token throws UNAUTHORIZED fail-closed
+        await expect(
+          verifyDurableSessionState({
+            sessionId: "prod-session-001",
+            actorOrToken: { ...clinicianHyd, supabaseToken: undefined },
+            clientOverride: mockSupabase,
+          })
+        ).rejects.toThrow(/UNAUTHORIZED: Clinician session or valid token required/);
+
+        // 3. Mode C: No auth in production throws UNAUTHORIZED without calling any client
+        await expect(
+          verifyDurableSessionState({
+            sessionId: "prod-session-001",
+          })
+        ).rejects.toThrow(/UNAUTHORIZED: Kiosk credentials or clinician authorization required/);
+
+        anonClientSpy.mockRestore();
+        serviceClientSpy.mockRestore();
+      } finally {
+        (env as any).isDemoMode = origDemo;
+      }
     });
   });
 });
