@@ -4,9 +4,14 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ClinicalCase, Patient, MedicalDocument } from "@/types/database";
+import dynamic from "next/dynamic";
 import { mapCaseToFhirBundle } from "@/features/interoperability/fhir-mapper";
-import { FhirPreviewDrawer } from "@/components/interoperability/fhir-preview-drawer";
 import { ContextualHelp } from "@/components/help/contextual-help";
+
+const FhirPreviewDrawer = dynamic(
+  () => import("@/components/interoperability/fhir-preview-drawer").then((m) => m.FhirPreviewDrawer),
+  { ssr: false }
+);
 import {
   FileCode,
   Printer,

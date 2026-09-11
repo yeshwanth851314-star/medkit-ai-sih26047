@@ -3,11 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DocumentUploader } from "./document-uploader";
-import { DocumentExtractionViewer } from "./document-extraction-viewer";
+import dynamic from "next/dynamic";
 import { DocumentExtractionResult } from "@/features/documents/types";
 import { MedicalDocument } from "@/types/database";
 import { Upload, Plus, FileText, ChevronRight } from "lucide-react";
+
+const DocumentUploader = dynamic(
+  () => import("./document-uploader").then((m) => m.DocumentUploader),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-6 text-sm text-slate-500 animate-pulse">
+        <span>Loading uploader...</span>
+      </div>
+    ),
+  }
+);
+
+const DocumentExtractionViewer = dynamic(
+  () => import("./document-extraction-viewer").then((m) => m.DocumentExtractionViewer),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-12 text-sm text-slate-500 animate-pulse">
+        <span>Loading document viewer...</span>
+      </div>
+    ),
+  }
+);
 
 interface PatientDocumentsHubProps {
   patientId: string;

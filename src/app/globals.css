@@ -10,6 +10,10 @@
   --border: #e2e8f0;
 }
 
+html {
+  scroll-padding-top: 5rem;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
@@ -17,10 +21,33 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Accessible focus styling */
+/* WCAG 2.2 AA Focus Visibility and Sticky Header Clearance */
+*:target,
+[tabindex="-1"]:focus,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  scroll-margin-top: 5rem;
+}
+
 :focus-visible {
   outline: 2px solid #0284c7;
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15);
+}
+
+/* Accessible reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Print styling for clinical case sheets */

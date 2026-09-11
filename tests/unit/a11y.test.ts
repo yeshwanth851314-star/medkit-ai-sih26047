@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 
-// WCAG 2.1 relative luminance and contrast calculation helper
+// WCAG 2.2 AA relative luminance and contrast calculation helper
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
   const num = parseInt(clean, 16);
@@ -27,8 +27,8 @@ function getContrastRatio(hex1: string, hex2: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-describe("Phase 15: Accessibility (WCAG 2.1 AA) & Clinical Ergonomics Tests", () => {
-  it("verifies WCAG 2.1 AA contrast ratio (>= 4.5:1) for text colors on white background", () => {
+describe("Phase 6B: Accessibility (WCAG 2.2 AA) & Clinical Ergonomics Tests", () => {
+  it("verifies WCAG 2.2 AA contrast ratio (>= 4.5:1) for text colors on white background", () => {
     const white = "#ffffff";
 
     // Clinical Blue primary (#0369a1)
@@ -65,15 +65,17 @@ describe("Phase 15: Accessibility (WCAG 2.1 AA) & Clinical Ergonomics Tests", ()
     expect(layoutContent).toContain('id="main-content"');
   });
 
-  it("verifies accessible focus indicators in globals.css", () => {
+  it("verifies accessible focus indicators & sticky clearance (WCAG 2.2 SC 2.4.11 / 2.4.12) in globals.css", () => {
     const cssPath = path.resolve(__dirname, "../../src/app/globals.css");
     const cssContent = fs.readFileSync(cssPath, "utf-8");
 
     expect(cssContent).toContain(":focus-visible");
     expect(cssContent).toContain("outline:");
+    expect(cssContent).toContain("scroll-margin-top: 5rem");
+    expect(cssContent).toContain("prefers-reduced-motion");
   });
 
-  it("verifies screen reader live regions in RedFlagBanner", () => {
+  it("verifies screen reader live regions and touch target minimums in RedFlagBanner", () => {
     const bannerPath = path.resolve(
       __dirname,
       "../../src/components/red-flags/red-flag-banner.tsx"
@@ -82,6 +84,38 @@ describe("Phase 15: Accessibility (WCAG 2.1 AA) & Clinical Ergonomics Tests", ()
 
     expect(bannerContent).toContain('role="alert"');
     expect(bannerContent).toContain('aria-live="assertive"');
-    expect(bannerContent).toContain("min-h-[44px]"); // Touch target requirement
+    expect(bannerContent).toContain("min-h-[44px]"); // Touch target requirement (WCAG 2.2 SC 2.5.8)
+  });
+
+  it("verifies responsive mobile navigation drawer with ARIA attributes in Header", () => {
+    const headerPath = path.resolve(__dirname, "../../src/components/shared/header.tsx");
+    const headerContent = fs.readFileSync(headerPath, "utf-8");
+
+    expect(headerContent).toContain('aria-expanded');
+    expect(headerContent).toContain('aria-controls="mobile-navigation-drawer"');
+    expect(headerContent).toContain('role="dialog"');
+    expect(headerContent).toContain("min-h-[44px]");
+  });
+
+  it("verifies accessible dialog attributes and search labeling in patient directory", () => {
+    const patientsPath = path.resolve(__dirname, "../../src/app/doctor/patients/page.tsx");
+    const content = fs.readFileSync(patientsPath, "utf-8");
+
+    expect(content).toContain('role="dialog"');
+    expect(content).toContain('aria-modal="true"');
+    expect(content).toContain('aria-labelledby="register-patient-title"');
+    expect(content).toContain('htmlFor="patient-search-input"');
+    expect(content).toContain('id="patient-search-input"');
+    expect(content).toContain("min-h-[44px]");
+  });
+
+  it("verifies tablist roles and programmatic labeling in new case form sections", () => {
+    const casePagePath = path.resolve(__dirname, "../../src/app/doctor/cases/new/page.tsx");
+    const content = fs.readFileSync(casePagePath, "utf-8");
+
+    expect(content).toContain('role="tablist"');
+    expect(content).toContain('role="tab"');
+    expect(content).toContain('role="tabpanel"');
+    expect(content).toContain('role="alert"');
   });
 });

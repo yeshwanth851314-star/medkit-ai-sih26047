@@ -353,19 +353,21 @@ export function DocumentExtractionViewer({
                               setEditingItemType("med");
                               setEditValue(m.dosage || "");
                             }}
-                            className="rounded-lg border border-surface-200 p-1.5 text-slate-500 hover:bg-surface-100 hover:text-slate-800"
+                            className="rounded-lg border border-surface-200 p-2 text-slate-500 hover:bg-surface-100 hover:text-slate-800 min-h-[36px] min-w-[36px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-clinical-500"
                             title="Edit dosage"
+                            aria-label={`Edit dosage for ${m.name}`}
                           >
-                            <Edit2 className="h-3 w-3" />
+                            <Edit2 className="h-3.5 w-3.5" />
                           </button>
                           <button
                             type="button"
                             disabled={rejectingItem === (m.id || m.name)}
                             onClick={() => handleRejectCandidate("med", m.id || m.name, m.name)}
-                            className="rounded-lg border border-surface-200 p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+                            className="rounded-lg border border-surface-200 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 min-h-[36px] min-w-[36px] flex items-center justify-center disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-rose-500"
                             title="Reject candidate"
+                            aria-label={`Reject candidate medication ${m.name}`}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </>
                       )}
@@ -443,8 +445,9 @@ export function DocumentExtractionViewer({
                               type="button"
                               disabled={verifyingItem === (t.id || t.name)}
                               onClick={() => handleAcceptCandidate("test", t.id || t.name, t.name)}
-                              className="inline-flex items-center gap-0.5 rounded bg-clinical-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-clinical-700 disabled:opacity-40"
+                              className="inline-flex items-center gap-0.5 rounded bg-clinical-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-clinical-700 disabled:opacity-40 min-h-[32px] focus:outline-none focus:ring-2 focus:ring-clinical-500"
                               title="Accept and verify test"
+                              aria-label={`Accept and verify lab test ${t.name}`}
                             >
                               <Check className="h-3 w-3" />
                               {verifyingItem === (t.id || t.name) ? "..." : "Accept"}
@@ -456,17 +459,19 @@ export function DocumentExtractionViewer({
                                 setEditingItemType("test");
                                 setEditValue(t.value || "");
                               }}
-                              className="text-slate-400 hover:text-slate-600 p-0.5"
+                              className="text-slate-400 hover:text-slate-600 p-1.5 min-h-[32px] min-w-[32px] flex items-center justify-center rounded focus:outline-none focus:ring-2 focus:ring-clinical-500"
                               title="Edit test value"
+                              aria-label={`Edit test value for ${t.name}`}
                             >
-                              <Edit2 className="h-3 w-3" />
+                              <Edit2 className="h-3.5 w-3.5" />
                             </button>
                             <button
                               type="button"
                               disabled={rejectingItem === (t.id || t.name)}
                               onClick={() => handleRejectCandidate("test", t.id || t.name, t.name)}
-                              className="text-slate-400 hover:text-rose-600 ml-1 p-0.5 disabled:opacity-40"
+                              className="text-slate-400 hover:text-rose-600 ml-1 p-1.5 min-h-[32px] min-w-[32px] flex items-center justify-center rounded disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-rose-500"
                               title="Reject candidate"
+                              aria-label={`Reject candidate lab test ${t.name}`}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>

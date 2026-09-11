@@ -1,15 +1,51 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Activity, Stethoscope, Users, FileText, ShieldAlert, Sparkles } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Activity, Stethoscope, Users, Sparkles, Menu, X } from "lucide-react";
 import { ProviderBadge } from "./provider-badge";
-import { DoctorHelpMenu } from "@/components/help/doctor-help-menu";
+
+const DoctorHelpMenu = dynamic(
+  () => import("@/components/help/doctor-help-menu").then((m) => m.DoctorHelpMenu),
+  { ssr: false }
+);
 
 export function Header() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Close mobile drawer on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileMenuOpen]);
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-surface-200 bg-white/95 backdrop-blur shadow-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
+          {/* Mobile hamburger button */}
+          <button
+            ref={menuButtonRef}
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-surface-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-clinical-500 md:hidden"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation-drawer"
+            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
+          </button>
+
           <Link href="/" className="flex items-center gap-2 text-clinical-900 font-bold text-lg tracking-tight">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-clinical-600 text-white shadow">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-clinical-600 text-white shadow" aria-hidden="true">
               <Activity className="h-5 w-5" />
             </div>
             <span>MedKit AI</span>
@@ -18,43 +54,90 @@ export function Header() {
             </span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1 text-sm font-medium text-slate-600">
+          {/* Desktop Navigation Links */}
+          <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1 text-sm font-medium text-slate-600">
             <Link
               href="/doctor/dashboard"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors"
+              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
             >
-              <Stethoscope className="h-4 w-4 text-clinical-600" />
+              <Stethoscope className="h-4 w-4 text-clinical-600" aria-hidden="true" />
               <span>Doctor Copilot</span>
             </Link>
             <Link
               href="/doctor/patients"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors"
+              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
             >
-              <Users className="h-4 w-4 text-slate-500" />
+              <Users className="h-4 w-4 text-slate-500" aria-hidden="true" />
               <span>Patients</span>
             </Link>
             <Link
               href="/intake/new"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors"
+              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
             >
-              <Sparkles className="h-4 w-4 text-amber-500" />
+              <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
               <span>Patient Kiosk</span>
             </Link>
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <DoctorHelpMenu />
           <ProviderBadge />
 
           <Link
             href="/intake/new"
-            className="inline-flex items-center justify-center rounded-md bg-clinical-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clinical-600"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-lg bg-clinical-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500 focus:ring-offset-2"
           >
             New Intake
           </Link>
         </div>
       </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div
+          id="mobile-navigation-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile Navigation"
+          className="fixed inset-x-0 top-16 z-50 border-b border-surface-200 bg-white p-4 shadow-lg md:hidden animate-in slide-in-from-top-2 duration-150"
+        >
+          <nav className="flex flex-col gap-2">
+            <Link
+              href="/doctor/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900"
+            >
+              <Stethoscope className="h-5 w-5 text-clinical-600" aria-hidden="true" />
+              <span>Doctor Copilot Dashboard</span>
+            </Link>
+            <Link
+              href="/doctor/patients"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900"
+            >
+              <Users className="h-5 w-5 text-slate-500" aria-hidden="true" />
+              <span>Patient Directory &amp; Records</span>
+            </Link>
+            <Link
+              href="/intake/new"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900"
+            >
+              <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              <span>Patient Self-Intake Kiosk</span>
+            </Link>
+            <Link
+              href="/doctor/cases/new"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg bg-clinical-50 px-4 py-2.5 text-sm font-semibold text-clinical-700 hover:bg-clinical-100"
+            >
+              <Activity className="h-5 w-5 text-clinical-600" aria-hidden="true" />
+              <span>Start New Clinical Case</span>
+            </Link>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
