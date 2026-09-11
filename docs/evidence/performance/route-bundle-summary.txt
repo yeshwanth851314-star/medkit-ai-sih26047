@@ -1,0 +1,51 @@
+MEDKIT AI — PRODUCTION ROUTE BUNDLE & CLIENT ASSET SUMMARY
+Generated from Production Build (Next.js 15.5.25)
+Commit: Current Phase 6 Closure Baseline
+
+================================================================================
+SHARED CLIENT RUNTIME CHUNKS (Loaded once and cached across all pages)
+================================================================================
+Total First Load JS Shared: 103 kB
+  - chunks/1255-7316b50163a428e6.js:      46.4 kB  (Framework & React runtimes)
+  - chunks/4bd1b696-f785427dddbba9fb.js:  54.2 kB  (App layout & base utility runtimes)
+  - other shared chunks:                   2.1 kB
+
+Middleware: 35.2 kB (Edge/Node authentication, facility boundaries, and rate limits)
+
+================================================================================
+PRODUCTION ROUTE FIRST LOAD JS & ROUTE SIZES
+================================================================================
+Route (App Router)                                Size        First Load JS
+--------------------------------------------------------------------------------
+/ (Landing Page)                                  171 B       106 kB
+/_not-found                                       204 B       103 kB
+/login (Clinician Authentication)                2.94 kB      106 kB
+/intake/new (Patient Kiosk Multi-modal Intake)    9.38 kB      115 kB
+/doctor/dashboard (Auto-redirect)                 204 B       103 kB
+/doctor/patients (Patient Directory with paging)  5.59 kB      112 kB
+/doctor/patients/[id] (Patient Overview)          171 B       106 kB
+/doctor/patients/[id]/documents (Document Hub)    2.97 kB      109 kB
+/doctor/patients/[id]/timeline (Timeline Hub)     3.35 kB      109 kB
+/doctor/cases/new (Modular Case Taking Form)     10.5 kB      131 kB
+/doctor/cases/[id] (Clinical Consultation Record) 142 kB       248 kB
+/doctor/cases/[id]/print (Printable Case Sheet)  1.06 kB      107 kB
+
+================================================================================
+COMPARISON WITH PRE-PHASE-6 MONOLITHIC BASELINE (f803189c73b4b5bbf80492afb95612e23626fe26)
+================================================================================
+1. New Case Form (/doctor/cases/new):
+   - Pre-Phase 6: 1,027-line monolith with AYUSH Dashavidha Pariksha, all icons,
+     and all state bundled directly into initial bundle.
+   - Phase 6 Closure: Route size reduced to 10.5 kB (First Load JS: 131 kB).
+     Heavy AYUSH Dashavidha Pariksha module (AyushSection) is dynamically loaded
+     via next/dynamic only when requested.
+2. Patient Directory (/doctor/patients):
+   - Pre-Phase 6: Full-dataset in-memory fetch with client-side DOM array slicing.
+   - Phase 6 Closure: Real bounded server-side and database pagination (getPatientsPage)
+     capped at max 100 (default 25) with facility boundary scoping. Route size: 5.59 kB
+     (First Load JS: 112 kB).
+3. Case Detail Record (/doctor/cases/[id]):
+   - FHIR preview syntax highlighter, visit comparison, and helper modules are
+     modularized and lazy-loaded on drawer open.
+4. Field INP Status:
+   - Field INP: NOT YET AVAILABLE (Pre-deployment; requires production field RUM).

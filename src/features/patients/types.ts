@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Patient } from "@/types/database";
 
 export const patientRegistrationSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters").max(100),
@@ -22,4 +23,18 @@ export interface DuplicatePatientWarning {
   matchedPatientCode?: string;
   matchedName?: string;
   reason?: "matching_phone" | "matching_name_and_dob";
+}
+
+export interface PatientPageResult {
+  patients: Patient[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PatientPageQuery {
+  searchQuery?: string;
+  page?: number;
+  pageSize?: number;
 }

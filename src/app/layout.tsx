@@ -32,7 +32,7 @@ export default function RootLayout({
             <div>
               <strong>MedKit AI (SIH26047)</strong> — Clinical Intake & Documentation Assistant. Not an autonomous diagnostic system.
             </div>
-            <div className="text-slate-400">
+            <div className="text-slate-600">
               Ministry of Ayush / AIIA • Provenance-stamped records
             </div>
           </div>

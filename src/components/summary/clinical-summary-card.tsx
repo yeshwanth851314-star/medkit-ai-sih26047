@@ -132,7 +132,7 @@ export function ClinicalSummaryCard({
               type="button"
               onClick={handleConfirm}
               disabled={isConfirming}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
             >
               <CheckCircle2 className={`h-3.5 w-3.5 ${isConfirming ? "animate-spin" : ""}`} />
               {isConfirming ? "Confirming..." : "Confirm Synopsis"}
@@ -199,7 +199,7 @@ export function ClinicalSummaryCard({
                 type="button"
                 onClick={handleConfirm}
                 disabled={isConfirming}
-                className="inline-flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-semibold shadow-sm disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg font-semibold shadow-sm disabled:opacity-50"
               >
                 <CheckCircle2 className={`h-3.5 w-3.5 ${isConfirming ? "animate-spin" : ""}`} /> {isConfirming ? "Saving..." : "Save & Confirm Synopsis"}
               </button>

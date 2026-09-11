@@ -135,7 +135,7 @@ export function MedicationAllergySection({
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-slate-400 italic">No current medications added.</p>
+          <p className="text-xs text-slate-600 italic">No current medications added.</p>
         )}
       </div>
 
@@ -216,7 +216,7 @@ export function MedicationAllergySection({
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-slate-400 italic">No known drug or food allergies documented.</p>
+          <p className="text-xs text-slate-600 italic">No known drug or food allergies documented.</p>
         )}
       </div>
     </section>

@@ -108,7 +108,7 @@ export default async function CaseDetailsPage({
               <span className="rounded-md bg-clinical-50 border border-clinical-200 px-2 py-0.5 text-xs font-semibold text-clinical-700 uppercase font-mono">
                 {c.case_type} Stream
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-600">
                 Language: {c.patient_language.toUpperCase()}
               </span>
             </div>
@@ -191,7 +191,7 @@ export default async function CaseDetailsPage({
               <span className="font-semibold text-slate-800">No rule-based red flags detected</span>
               <ContextualHelp topic="red_flags" />
             </div>
-            <span className="text-[11px] text-slate-400 hidden sm:inline">Deterministic safety check evaluated</span>
+            <span className="text-[11px] text-slate-600 hidden sm:inline">Deterministic safety check evaluated</span>
           </div>
         );
       })()}
@@ -284,7 +284,7 @@ export default async function CaseDetailsPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-slate-400 italic">No medications on record.</p>
+              <p className="text-xs text-slate-600 italic">No medications on record.</p>
             )}
           </div>
 
@@ -301,7 +301,7 @@ export default async function CaseDetailsPage({
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-slate-400 italic">No known allergies on record.</p>
+              <p className="text-xs text-slate-600 italic">No known allergies on record.</p>
             )}
           </div>
         </div>
@@ -400,7 +400,7 @@ export default async function CaseDetailsPage({
                   <p className="text-slate-700 leading-relaxed whitespace-pre-line">
                     {amend.notes}
                   </p>
-                  <div className="text-[11px] text-slate-400 font-medium pt-1">
+                  <div className="text-[11px] text-slate-600 font-medium pt-1">
                     Signed by: {amend.actor_name} • Permanent audit record
                   </div>
                 </div>

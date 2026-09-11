@@ -210,6 +210,58 @@ class MockDatabaseAdapter {
     );
   }
 
+  async getPatientsPage(params: {
+    searchQuery?: string;
+    page?: number;
+    pageSize?: number;
+    actorOrToken?: any;
+  }): Promise<{ patients: Patient[]; page: number; pageSize: number; total: number; totalPages: number }> {
+    const callerRole = this.resolveCallerRole({ actorOrToken: params.actorOrToken });
+    const callerFacility = this.resolveCallerFacility({ actorOrToken: params.actorOrToken });
+
+    let list = Array.from(this.patients.values());
+
+    // Facility isolation: non-admin clinicians can only query patients from their own facility
+    if (callerRole !== "admin" && callerFacility) {
+      list = list.filter((p) => p.facility_id === callerFacility);
+    }
+
+    // Search filter applied before pagination
+    if (params.searchQuery && params.searchQuery.trim()) {
+      const q = params.searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          p.patient_code.toLowerCase().includes(q) ||
+          p.full_name.toLowerCase().includes(q) ||
+          (p.phone && p.phone.includes(q))
+      );
+    }
+
+    // Sort descending by created_at
+    list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    const total = list.length;
+    const rawPage = params.page ?? 1;
+    const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+
+    const rawPageSize = params.pageSize ?? 25;
+    const pageSize = Number.isInteger(rawPageSize) && rawPageSize >= 1
+      ? Math.min(rawPageSize, 100)
+      : 25;
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const offset = (page - 1) * pageSize;
+    const patients = list.slice(offset, offset + pageSize);
+
+    return {
+      patients,
+      page,
+      pageSize,
+      total,
+      totalPages,
+    };
+  }
+
   async getPatientById(id: string): Promise<Patient | null> {
     return this.patients.get(id) || null;
   }

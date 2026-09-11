@@ -87,17 +87,22 @@ describe("Phase 6B: Accessibility (WCAG 2.2 AA) & Clinical Ergonomics Tests", ()
     expect(bannerContent).toContain("min-h-[44px]"); // Touch target requirement (WCAG 2.2 SC 2.5.8)
   });
 
-  it("verifies responsive mobile navigation drawer with ARIA attributes in Header", () => {
+  it("verifies responsive mobile navigation disclosure with ARIA attributes and focus return in Header", () => {
     const headerPath = path.resolve(__dirname, "../../src/components/shared/header.tsx");
     const headerContent = fs.readFileSync(headerPath, "utf-8");
 
     expect(headerContent).toContain('aria-expanded');
-    expect(headerContent).toContain('aria-controls="mobile-navigation-drawer"');
-    expect(headerContent).toContain('role="dialog"');
+    expect(headerContent).toContain('aria-controls="mobile-navigation"');
+    expect(headerContent).toContain('aria-label="Mobile navigation"');
+    expect(headerContent).toContain('firstNavLinkRef');
+    expect(headerContent).toContain('menuButtonRef');
     expect(headerContent).toContain("min-h-[44px]");
+    // Ensure mobile disclosure is NOT claiming modal semantics without being a modal
+    expect(headerContent).not.toContain('aria-controls="mobile-navigation-drawer"');
+    expect(headerContent).not.toContain('role="dialog"');
   });
 
-  it("verifies accessible dialog attributes and search labeling in patient directory", () => {
+  it("verifies accessible dialog attributes, keyboard focus trap, and return focus in patient directory", () => {
     const patientsPath = path.resolve(__dirname, "../../src/app/doctor/patients/page.tsx");
     const content = fs.readFileSync(patientsPath, "utf-8");
 
@@ -107,6 +112,11 @@ describe("Phase 6B: Accessibility (WCAG 2.2 AA) & Clinical Ergonomics Tests", ()
     expect(content).toContain('htmlFor="patient-search-input"');
     expect(content).toContain('id="patient-search-input"');
     expect(content).toContain("min-h-[44px]");
+    // Keyboard focus containment & focus stealing prevention
+    expect(content).toContain("wasDialogOpenRef");
+    expect(content).toContain("dialogRef");
+    expect(content).toContain("registerButtonRef");
+    expect(content).toContain("e.shiftKey");
   });
 
   it("verifies tablist roles and programmatic labeling in new case form sections", () => {

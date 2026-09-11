@@ -150,7 +150,7 @@ export default function PatientKioskIntakePage() {
             <p className="mt-2 text-sm text-slate-600">
               Please choose your preferred language to begin your clinical history intake
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 mt-1">
               దయచేసి మీ ప్రాధాన్యత గల భాషను ఎంచుకోండి
             </p>
           </div>

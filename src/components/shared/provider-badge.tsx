@@ -52,8 +52,8 @@ export function ProviderBadge() {
 
   if (!status) {
     return (
-      <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-surface-100 px-2.5 py-1.5 rounded-full border border-surface-200">
-        <span className="h-2 w-2 rounded-full bg-slate-300 animate-ping" />
+      <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-surface-100 px-2.5 py-1.5 rounded-full border border-surface-200">
+        <span className="h-2 w-2 rounded-full bg-slate-400 animate-ping" />
         <span>Initializing...</span>
       </div>
     );

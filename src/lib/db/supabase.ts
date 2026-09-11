@@ -170,6 +170,64 @@ export async function getPatients(
   return (data || []) as Patient[];
 }
 
+export async function getPatientsPage(
+  params: {
+    searchQuery?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<{ patients: Patient[]; page: number; pageSize: number; total: number; totalPages: number }> {
+  if (env.isDemoMode) {
+    return mockDb.getPatientsPage({ ...params, actorOrToken });
+  }
+
+  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const rawPage = params.page ?? 1;
+  const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+
+  const rawPageSize = params.pageSize ?? 25;
+  const pageSize = Number.isInteger(rawPageSize) && rawPageSize >= 1
+    ? Math.min(rawPageSize, 100)
+    : 25;
+
+  const offset = (page - 1) * pageSize;
+  const end = offset + pageSize - 1;
+
+  let query = supabase
+    .from("patients")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (params.searchQuery && params.searchQuery.trim()) {
+    const q = params.searchQuery.trim();
+    query = query.or(`full_name.ilike.%${q}%,patient_code.ilike.%${q}%,phone.ilike.%${q}%`);
+  }
+
+  query = query.range(offset, end);
+
+  const { data, count, error } = await query;
+  if (error) {
+    console.error("Supabase getPatientsPage error:", error);
+    throw new Error(`Database error fetching patients page: ${error.message}`);
+  }
+
+  const total = count ?? (data ? data.length : 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return {
+    patients: (data || []) as Patient[],
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
 export async function getPatientById(
   id: string,
   actorOrToken?: AuthUser | string | null

@@ -1,0 +1,88 @@
+{
+  "measuredAt": "2026-09-11T19:26:10.203Z",
+  "environment": "production-local-build (next start)",
+  "targets": {
+    "lcpMaxSeconds": 2.5,
+    "clsMax": 0.1,
+    "fieldInpStatus": "NOT YET AVAILABLE (Pre-deployment; requires production field RUM)"
+  },
+  "summary": {
+    "totalRoutesMeasured": 6,
+    "allLcpPass": true,
+    "allClsPass": true
+  },
+  "routes": [
+    {
+      "route": "/",
+      "name": "Landing Page",
+      "protected": false,
+      "lcpSeconds": 0.836,
+      "cls": 0.0014,
+      "domContentLoadedMs": 515,
+      "loadEventMs": 515,
+      "domNodeCount": 149,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    },
+    {
+      "route": "/login",
+      "name": "Clinician Login",
+      "protected": false,
+      "lcpSeconds": 0.236,
+      "cls": 0.0094,
+      "domContentLoadedMs": 75,
+      "loadEventMs": 78,
+      "domNodeCount": 137,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    },
+    {
+      "route": "/intake/new",
+      "name": "Patient Kiosk Intake",
+      "protected": false,
+      "lcpSeconds": 0.192,
+      "cls": 0.0295,
+      "domContentLoadedMs": 73,
+      "loadEventMs": 76,
+      "domNodeCount": 161,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    },
+    {
+      "route": "/doctor/patients",
+      "name": "Doctor Patient Directory",
+      "protected": true,
+      "lcpSeconds": 0.432,
+      "cls": 0.0259,
+      "domContentLoadedMs": 126,
+      "loadEventMs": 126,
+      "domNodeCount": 230,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    },
+    {
+      "route": "/doctor/cases/new?patientId=11111111-1111-4111-8111-111111111111",
+      "name": "New Clinical Case Form",
+      "protected": true,
+      "lcpSeconds": 0.34,
+      "cls": 0.007,
+      "domContentLoadedMs": 112,
+      "loadEventMs": 170,
+      "domNodeCount": 186,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    },
+    {
+      "route": "/doctor/cases/c1111111-1111-4111-8111-111111111111",
+      "name": "Representative Case Detail",
+      "protected": true,
+      "lcpSeconds": 0.208,
+      "cls": 0.0079,
+      "domContentLoadedMs": 189,
+      "loadEventMs": 259,
+      "domNodeCount": 302,
+      "lcpTargetPassed": true,
+      "clsTargetPassed": true
+    }
+  ]
+}

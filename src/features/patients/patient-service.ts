@@ -1,6 +1,6 @@
-import { getPatients, getPatientById, createPatient } from "@/lib/db/supabase";
+import { getPatients, getPatientsPage as dbGetPatientsPage, getPatientById, createPatient } from "@/lib/db/supabase";
 import { Patient } from "@/types/database";
-import { PatientRegistrationInput, DuplicatePatientWarning } from "./types";
+import { PatientRegistrationInput, DuplicatePatientWarning, PatientPageResult } from "./types";
 import { genderToDb } from "@/lib/utils/gender";
 
 export function generatePatientCode(): string {
@@ -61,6 +61,17 @@ export async function searchPatients(
   actorOrToken?: import("@/features/auth/types").AuthUser | string | null
 ): Promise<Patient[]> {
   return getPatients(query, actorOrToken);
+}
+
+export async function getPatientsPage(
+  params: {
+    searchQuery?: string;
+    page?: number;
+    pageSize?: number;
+  },
+  actorOrToken?: import("@/features/auth/types").AuthUser | string | null
+): Promise<PatientPageResult> {
+  return dbGetPatientsPage(params, actorOrToken);
 }
 
 export async function getPatientDetails(

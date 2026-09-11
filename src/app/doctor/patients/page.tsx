@@ -21,9 +21,11 @@ const PAGE_SIZE = 25;
 export default function PatientsHubPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   // Form State
@@ -37,30 +39,43 @@ export default function PatientsHubPage() {
   const [duplicateWarning, setDuplicateWarning] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Refs for accessibility & request cancellation
+  // Refs for accessibility, keyboard focus trap & request cancellation
   const abortControllerRef = useRef<AbortController | null>(null);
   const registerButtonRef = useRef<HTMLButtonElement | null>(null);
   const modalFirstInputRef = useRef<HTMLInputElement | null>(null);
-  const modalContainerRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const wasDialogOpenRef = useRef(false);
 
-  // Load patients with AbortController to cancel previous in-flight requests
-  const fetchPatients = useCallback(async (query = "") => {
+  // Load patients from server with bounded pagination and AbortController
+  const fetchPatients = useCallback(async (query = "", pageToFetch = 1) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // If we already have patients, keep them and show subtle searching indicator
+    // Retain previous results while showing subtle searching indicator
     setIsSearching(true);
 
     try {
-      const url = query ? `/api/patients?search=${encodeURIComponent(query)}` : "/api/patients";
-      const res = await fetch(url, { signal: controller.signal });
+      const params = new URLSearchParams();
+      if (query && query.trim()) {
+        params.set("search", query.trim());
+      }
+      params.set("page", String(pageToFetch));
+      params.set("pageSize", String(PAGE_SIZE));
+
+      const res = await fetch(`/api/patients?${params.toString()}`, {
+        signal: controller.signal,
+      });
+
       if (!res.ok) throw new Error("Failed to fetch patients");
       const data = await res.json();
+
       setPatients(data.patients || []);
-      setCurrentPage(1); // Reset to page 1 on new query
+      setCurrentPage(data.page || pageToFetch);
+      setTotalPages(data.totalPages || 1);
+      setTotalCount(data.total ?? (data.patients?.length || 0));
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Failed to load patients", err);
@@ -71,32 +86,62 @@ export default function PatientsHubPage() {
     }
   }, []);
 
+  // Debounced search query triggers new page 1 request
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchPatients(searchQuery);
+      fetchPatients(searchQuery, 1);
     }, 250);
     return () => clearTimeout(timer);
   }, [searchQuery, fetchPatients]);
 
-  // Modal accessibility: focus management & Escape key handling
+  // Modal keyboard focus trap and lifecycle focus management
   useEffect(() => {
     if (isRegisterOpen) {
+      wasDialogOpenRef.current = true;
       setTimeout(() => {
         modalFirstInputRef.current?.focus();
       }, 50);
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          setIsRegisterOpen(false);
-          registerButtonRef.current?.focus();
-        }
-      };
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
-    } else {
+    } else if (wasDialogOpenRef.current) {
+      // Return focus to trigger only if dialog had previously been opened
       registerButtonRef.current?.focus();
     }
   }, [isRegisterOpen]);
+
+  const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (!isSubmitting) {
+        setIsRegisterOpen(false);
+      }
+      return;
+    }
+
+    if (e.key === "Tab") {
+      const container = dialogRef.current;
+      if (!container) return;
+
+      const focusableElements = container.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement || document.activeElement === container) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  };
 
   const handleRegisterSubmit = async (e?: React.FormEvent, force = false) => {
     if (e) e.preventDefault();
@@ -141,7 +186,7 @@ export default function PatientsHubPage() {
       setDateOfBirth("");
       setPhone("");
       setAddress("");
-      fetchPatients(searchQuery);
+      fetchPatients(searchQuery, 1);
     } catch {
       setFormError("Network error submitting patient registration");
     } finally {
@@ -149,11 +194,7 @@ export default function PatientsHubPage() {
     }
   };
 
-  // Pagination slicing
-  const totalCount = patients.length;
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
   const startIndex = (currentPage - 1) * PAGE_SIZE;
-  const paginatedPatients = patients.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -208,13 +249,13 @@ export default function PatientsHubPage() {
         </div>
       </div>
 
-      {/* Search Status & Record Counts */}
+      {/* Search Status & Server Record Counts */}
       <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
         <div>
           {totalCount > 0 ? (
             <span>
               Showing <span className="font-semibold text-slate-900">{startIndex + 1}</span>–
-              <span className="font-semibold text-slate-900">{Math.min(startIndex + PAGE_SIZE, totalCount)}</span> of{" "}
+              <span className="font-semibold text-slate-900">{Math.min(startIndex + patients.length, totalCount)}</span> of{" "}
               <span className="font-semibold text-slate-900">{totalCount}</span> registered patients
             </span>
           ) : !isLoading ? (
@@ -223,7 +264,7 @@ export default function PatientsHubPage() {
         </div>
         {isSearching && (
           <div className="flex items-center gap-1.5 text-clinical-600 font-medium" role="status">
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             <span>Updating results...</span>
           </div>
         )}
@@ -232,9 +273,9 @@ export default function PatientsHubPage() {
       {/* Patients Table / List */}
       <div className="mt-3">
         {isLoading && patients.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-400" role="status">
+          <div className="flex flex-col items-center justify-center py-16 text-slate-600" role="status">
             <Loader2 className="h-8 w-8 animate-spin text-clinical-600 mb-2" />
-            <span className="text-xs">Loading patient registry...</span>
+            <span className="text-xs font-medium">Loading patient registry...</span>
           </div>
         ) : patients.length === 0 ? (
           <div className="rounded-xl border border-surface-200 bg-white p-12 text-center shadow-sm">
@@ -260,7 +301,7 @@ export default function PatientsHubPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-200 bg-white text-sm">
-                  {paginatedPatients.map((patient) => (
+                  {patients.map((patient) => (
                     <tr key={patient.id} className="hover:bg-surface-50/70 transition-colors">
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 sm:pl-6 font-mono text-xs font-semibold text-clinical-700">
                         {patient.patient_code}
@@ -280,7 +321,7 @@ export default function PatientsHubPage() {
                             {patient.blood_group}
                           </span>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-slate-600">—</span>
                         )}
                       </td>
                       <td className="whitespace-nowrap py-4 pl-3 pr-4 sm:pr-6 text-right text-xs font-medium">
@@ -298,7 +339,7 @@ export default function PatientsHubPage() {
               </table>
             </div>
 
-            {/* Pagination Controls */}
+            {/* Server-Side Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-surface-200 px-4 py-3 sm:px-6 bg-surface-50/50">
                 <div className="text-xs text-slate-600">
@@ -307,8 +348,8 @@ export default function PatientsHubPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => fetchPatients(searchQuery, Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1 || isSearching}
                     className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-surface-50 focus:outline-none focus:ring-2 focus:ring-clinical-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -316,8 +357,8 @@ export default function PatientsHubPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages}
+                    onClick={() => fetchPatients(searchQuery, Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage >= totalPages || isSearching}
                     className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-surface-50 focus:outline-none focus:ring-2 focus:ring-clinical-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span>Next</span>
@@ -330,7 +371,7 @@ export default function PatientsHubPage() {
         )}
       </div>
 
-      {/* Accessible Registration Modal Dialog */}
+      {/* Accessible Registration Modal Dialog with Focus Containment */}
       {isRegisterOpen && (
         <div
           role="dialog"
@@ -340,7 +381,9 @@ export default function PatientsHubPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
         >
           <div
-            ref={modalContainerRef}
+            ref={dialogRef}
+            onKeyDown={handleModalKeyDown}
+            tabIndex={-1}
             className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto focus:outline-none"
           >
             <div className="flex items-start justify-between">
@@ -355,7 +398,7 @@ export default function PatientsHubPage() {
               <button
                 type="button"
                 onClick={() => setIsRegisterOpen(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                className="rounded-lg p-2 text-slate-600 hover:text-slate-800 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-slate-500 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Close dialog"
               >
                 <X className="h-5 w-5" />
@@ -383,14 +426,14 @@ export default function PatientsHubPage() {
                 <div className="flex items-center gap-2 pt-2">
                   <Link
                     href={`/doctor/patients/${duplicateWarning.matchedPatientId}`}
-                    className="rounded-md bg-white border border-amber-300 px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100"
+                    className="rounded-md bg-white border border-amber-300 px-3 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 min-h-[36px] inline-flex items-center"
                   >
                     View Existing Patient
                   </Link>
                   <button
                     type="button"
                     onClick={() => handleRegisterSubmit(undefined, true)}
-                    className="rounded-md bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700"
+                    className="rounded-md bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700 min-h-[36px] inline-flex items-center"
                   >
                     Register as Distinct Patient
                   </button>

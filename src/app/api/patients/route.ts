@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { searchPatients, registerPatient } from "@/features/patients/patient-service";
+import { searchPatients, getPatientsPage, registerPatient } from "@/features/patients/patient-service";
 import { patientRegistrationSchema } from "@/features/patients/types";
 import { requireApiAuth } from "@/lib/auth/api-guard";
 import { logAuditEvent } from "@/features/security/audit-service";
@@ -21,12 +21,39 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("search") || undefined;
-    const allPatients = await searchPatients(q, auth.user);
-    // Enforce strict facility boundary scoping
-    const patients = auth.user.role === "admin"
-      ? allPatients
-      : allPatients.filter((p) => p.facility_id === auth.user.facilityId);
-    return NextResponse.json({ patients });
+
+    const pageParam = searchParams.get("page");
+    const pageSizeParam = searchParams.get("pageSize");
+
+    const parsedPage = pageParam ? parseInt(pageParam, 10) : 1;
+    const page = Number.isInteger(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
+
+    const parsedPageSize = pageSizeParam ? parseInt(pageSizeParam, 10) : 25;
+    const pageSize = Number.isInteger(parsedPageSize) && parsedPageSize >= 1
+      ? Math.min(parsedPageSize, 100)
+      : 25;
+
+    const pageResult = await getPatientsPage(
+      {
+        searchQuery: q,
+        page,
+        pageSize,
+      },
+      auth.user
+    );
+
+    let patients = pageResult.patients;
+    if (auth.user.role !== "admin" && auth.user.facilityId) {
+      patients = patients.filter((p) => p.facility_id === auth.user.facilityId);
+    }
+
+    return NextResponse.json({
+      patients,
+      page: pageResult.page,
+      pageSize: pageResult.pageSize,
+      total: pageResult.total,
+      totalPages: pageResult.totalPages,
+    });
   } catch (err) {
     console.error("GET /api/patients error:", err);
     return NextResponse.json({ error: "Failed to retrieve patients" }, { status: 500 });
