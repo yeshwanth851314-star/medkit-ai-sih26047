@@ -10,6 +10,7 @@ import {
   createIntakeSession,
   getIntakeSessionById,
   updateIntakeSession,
+  verifyDurableSessionState,
 } from "@/lib/db/supabase";
 import { revokeIntakeCapabilityToken } from "@/lib/auth/kiosk-capability";
 import { env } from "@/config/env";
@@ -244,6 +245,24 @@ export async function submitInterviewAnswerAsync(
   }
   if (!session) throw new Error("Interview session not found");
 
+  // Re-verify durable session state to prevent stale in-memory cache from overriding DB state (P0-02)
+  const durableState = await verifyDurableSessionState({
+    sessionId,
+    kioskId: options?.kioskId,
+    kioskSecret: options?.kioskSecret,
+  });
+
+  if (durableState.status !== "active") {
+    activeSessions.delete(sessionId);
+    if (durableState.status === "revoked") {
+      throw new Error(`SESSION_REVOKED: Intake session ${sessionId} has been revoked`);
+    }
+    if (durableState.status === "expired") {
+      throw new Error("SESSION_EXPIRED: Intake session has expired");
+    }
+    throw new Error(`SESSION_NOT_ACTIVE: Session status is ${durableState.status}, expected active`);
+  }
+
   if (session.status !== "active") {
     throw new Error(`SESSION_NOT_ACTIVE: Session status is ${session.status}, expected active`);
   }
@@ -379,15 +398,37 @@ export async function compileInterviewToCase(
   }
   if (!session) throw new Error("Interview session not found");
 
-  if (session.status === "revoked" || session.status === "abandoned") {
-    throw new Error(`UNAUTHORIZED: Cannot compile case from ${session.status} session`);
-  }
-
   // Idempotency check: repeated submissions return the already compiled case
   if ((session as any).compiledCaseId) {
     const { getCaseById } = await import("@/lib/db/supabase");
     const existing = await getCaseById((session as any).compiledCaseId, options?.actorOrToken);
     if (existing) return existing;
+  }
+
+  // Re-verify durable session state to prevent stale in-memory cache from overriding DB state (P0-02)
+  const durableState = await verifyDurableSessionState({
+    sessionId,
+    kioskId: options?.kioskId,
+    kioskSecret: options?.kioskSecret,
+  });
+
+  if (
+    durableState.status === "revoked" ||
+    durableState.status === "abandoned" ||
+    durableState.status === "expired"
+  ) {
+    activeSessions.delete(sessionId);
+    throw new Error(`UNAUTHORIZED: Cannot compile case from ${durableState.status} session`);
+  }
+
+  if (durableState.status === "active" && durableState.session.compiled_case_id) {
+    const { getCaseById } = await import("@/lib/db/supabase");
+    const existing = await getCaseById(durableState.session.compiled_case_id, options?.actorOrToken);
+    if (existing) return existing;
+  }
+
+  if (session.status === "revoked" || session.status === "abandoned") {
+    throw new Error(`UNAUTHORIZED: Cannot compile case from ${session.status} session`);
   }
 
   // If in production mode with kiosk credentials, use the dedicated transactional RPC

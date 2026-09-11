@@ -363,6 +363,20 @@ class MockDatabaseAdapter {
   async updateIntakeSession(id: string, updates: Partial<IntakeSessionRecord>): Promise<IntakeSessionRecord | null> {
     const existing = this.intakeSessions.get(id);
     if (!existing) return null;
+
+    if (
+      updates.status === "active" &&
+      ["submitted", "abandoned", "expired", "revoked"].includes(existing.status)
+    ) {
+      throw new Error(
+        `INVALID_STATE_TRANSITION: Cannot reopen terminated intake session ${id} from ${existing.status} to active`
+      );
+    }
+
+    if (updates.status === "active" && this.isSessionRevoked(id)) {
+      throw new Error(`SESSION_REVOKED: Cannot activate revoked intake session ${id}`);
+    }
+
     const updated: IntakeSessionRecord = {
       ...existing,
       ...updates,
@@ -724,9 +738,14 @@ class MockDatabaseAdapter {
       throw new Error("UNAUTHORIZED: Active kiosk instance required");
     }
 
+    const targetStatus = params.targetStatus || "abandoned";
+    if (targetStatus !== "abandoned" && targetStatus !== "submitted") {
+      throw new Error(`INVALID_TARGET_STATUS: Target status must be abandoned or submitted, received ${targetStatus}`);
+    }
+
     const session = this.intakeSessions.get(params.sessionId);
     if (!session) {
-      this.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked", params.targetStatus || "abandoned");
+      this.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked", targetStatus);
       return;
     }
 
@@ -734,7 +753,16 @@ class MockDatabaseAdapter {
       throw new Error("FORBIDDEN: Session facility does not match kiosk facility");
     }
 
-    const targetStatus = params.targetStatus || "abandoned";
+    if (session.status === targetStatus) {
+      // Idempotent replay: already at target status
+    } else if (session.status === "active") {
+      // Valid transition from active to terminal status
+    } else {
+      throw new Error(
+        `INVALID_STATE_TRANSITION: Cannot transition session ${params.sessionId} from ${session.status} to ${targetStatus}`
+      );
+    }
+
     session.status = targetStatus;
     session.completed_at = new Date().toISOString();
     this.recordRevocation(params.sessionId, params.reason || "kiosk_session_revoked", targetStatus);
@@ -743,6 +771,65 @@ class MockDatabaseAdapter {
       targetStatus,
       facilityId: kiosk.facility_id,
     });
+  }
+
+  async submitKioskAnswer(params: {
+    kioskId: string;
+    kioskSecret: string;
+    sessionId: string;
+    questionKey: string;
+    rawAnswer: string;
+    inputMode?: string;
+    nextQuestionId?: string | null;
+  }): Promise<IntakeSessionRecord> {
+    const kiosk = await this.verifyKioskCredentials(params.kioskId, params.kioskSecret);
+    if (!kiosk) {
+      throw new Error("UNAUTHORIZED: Active kiosk instance required");
+    }
+
+    if (this.isSessionRevoked(params.sessionId)) {
+      throw new Error(`SESSION_REVOKED: Intake session ${params.sessionId} has been revoked`);
+    }
+
+    const session = this.intakeSessions.get(params.sessionId);
+    if (!session) {
+      throw new Error(`SESSION_NOT_FOUND: Intake session ${params.sessionId} does not exist`);
+    }
+
+    if (session.status !== "active") {
+      throw new Error(`SESSION_NOT_ACTIVE: Session status is ${session.status}, expected active`);
+    }
+
+    if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
+      throw new Error("SESSION_EXPIRED: Intake session has expired");
+    }
+
+    if (session.facility_id && kiosk.facility_id && session.facility_id !== kiosk.facility_id) {
+      throw new Error("FORBIDDEN: Session facility does not match kiosk facility");
+    }
+
+    const answerObj = {
+      questionKey: params.questionKey,
+      rawAnswer: params.rawAnswer,
+      inputMode: params.inputMode || "touch",
+      timestamp: new Date().toISOString(),
+    };
+
+    session.answers = {
+      ...(session.answers || {}),
+      [params.questionKey]: answerObj,
+    };
+
+    if (params.nextQuestionId === null || params.nextQuestionId === undefined || params.nextQuestionId === "") {
+      session.status = "submitted";
+      session.completed_at = new Date().toISOString();
+      session.current_question_id = null;
+    } else {
+      session.status = "active";
+      session.current_question_id = params.nextQuestionId;
+    }
+
+    return session;
   }
 
   async registerKioskInstance(instance: {
@@ -866,6 +953,10 @@ class MockDatabaseAdapter {
     const session = this.intakeSessions.get(params.sessionId);
     if (!session) {
       throw new Error(`SESSION_NOT_FOUND: Intake session ${params.sessionId} does not exist`);
+    }
+
+    if (this.isSessionRevoked(params.sessionId)) {
+      throw new Error(`SESSION_REVOKED: Intake session ${params.sessionId} has been revoked`);
     }
 
     if (session.status !== "active") {

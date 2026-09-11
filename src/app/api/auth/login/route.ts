@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loginSchema } from "@/features/auth/types";
+import { loginSchema, toPublicAuthUser } from "@/features/auth/types";
 import { authenticateClinician } from "@/features/auth/auth-service";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({
       success: true,
-      user: authResult.user,
+      user: toPublicAuthUser(authResult.user),
     });
 
     // Set secure HTTP-only cookie

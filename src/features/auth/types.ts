@@ -19,6 +19,24 @@ export interface AuthUser {
   tokenExpiresAt?: number;
 }
 
+export interface PublicAuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  facilityId: string | null;
+}
+
+export function toPublicAuthUser(user: AuthUser): PublicAuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    fullName: user.fullName,
+    role: user.role,
+    facilityId: user.facilityId ?? null,
+  };
+}
+
 export interface AuthSession {
   user: AuthUser;
   token: string;

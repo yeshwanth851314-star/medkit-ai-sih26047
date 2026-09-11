@@ -809,7 +809,7 @@ export async function submitIntakeToCase(params: {
     return mockDb.submitIntakeToCase(params);
   }
 
-  const supabase = getSupabaseClient() || getServiceSupabaseClient();
+  const supabase = getServiceSupabaseClient() || getSupabaseClient();
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -867,9 +867,7 @@ export async function submitKioskAnswer(params: {
   nextQuestionId?: string | null;
 }): Promise<IntakeSessionRecord> {
   if (env.isDemoMode) {
-    return mockDb.updateIntakeSession(params.sessionId, {
-      current_question_id: params.nextQuestionId || undefined,
-    }) as any;
+    return mockDb.submitKioskAnswer(params) as any;
   }
 
   const supabase = getSupabaseClient() || getServiceSupabaseClient();
