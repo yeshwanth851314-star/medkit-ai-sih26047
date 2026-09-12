@@ -13,13 +13,18 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || "http://localhost:3000",
     trace: "on-first-retry",
     headless: true,
+    extraHTTPHeaders: process.env.VERCEL_PROTECTION_BYPASS
+      ? { "x-vercel-protection-bypass": process.env.VERCEL_PROTECTION_BYPASS }
+      : undefined,
   },
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 120000,
-  },
+  webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://localhost:3000",
+        reuseExistingServer: true,
+        timeout: 120000,
+      },
   projects: [
     {
       name: "chromium",

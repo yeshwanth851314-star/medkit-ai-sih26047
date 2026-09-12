@@ -1,0 +1,20 @@
+﻿# Tests and Test Artifacts
+tests/
+test-results/
+playwright-report/
+coverage/
+
+# Documentation and Specifications
+docs/
+*.md
+
+# Database Local Config and Migrations
+supabase/
+
+# Local Scripts
+scripts/
+.github/
+
+# Configuration and IDE
+.idea/
+.vscode/
