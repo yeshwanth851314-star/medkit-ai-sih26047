@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     if (caseId) {
-      const caseMatch = await requireCaseBelongsToPatient(caseId, patientId);
+      const caseMatch = await requireCaseBelongsToPatient(caseId, patientId, auth.user);
       if (!caseMatch.authorized) {
         return caseMatch.errorResponse;
       }

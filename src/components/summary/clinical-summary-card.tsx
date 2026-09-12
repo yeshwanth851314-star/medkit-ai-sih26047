@@ -240,7 +240,7 @@ export function ClinicalSummaryCard({
               ))}
             </ul>
           ) : (
-            <span className="text-slate-400 italic">None reported</span>
+            <span className="text-slate-600 italic">None reported</span>
           )}
         </div>
 
@@ -258,7 +258,7 @@ export function ClinicalSummaryCard({
               ))}
             </ul>
           ) : (
-            <span className="text-slate-400 italic">None specifically documented</span>
+            <span className="text-slate-600 italic">None specifically documented</span>
           )}
         </div>
       </div>

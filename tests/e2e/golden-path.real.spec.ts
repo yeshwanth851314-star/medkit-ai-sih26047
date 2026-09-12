@@ -51,7 +51,7 @@ test.describe("MedKit AI: Non-Demo Real Infrastructure E2E Suite", () => {
     try {
       const probe = await fetch(`${supabaseUrl}/rest/v1/`, {
         headers: { apikey: serviceKey },
-        signal: AbortSignal.timeout(2000),
+        signal: AbortSignal.timeout(10000),
       });
       isRealInfraAvailable = probe.status < 500;
     } catch {

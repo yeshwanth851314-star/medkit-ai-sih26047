@@ -22,7 +22,7 @@ export async function GET(
     const targetCaseId = searchParams.get("caseId") || undefined;
 
     if (targetCaseId) {
-      const matchCheck = await requireCaseBelongsToPatient(targetCaseId, patientId);
+      const matchCheck = await requireCaseBelongsToPatient(targetCaseId, patientId, auth.user);
       if (!matchCheck.authorized) {
         return matchCheck.errorResponse;
       }

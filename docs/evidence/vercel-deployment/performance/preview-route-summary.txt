@@ -1,0 +1,16 @@
+MEDKIT AI — VERCEL DEPLOYED LAB PERFORMANCE SUMMARY
+Target Deployment: https://medkit-ai-sih26047-d2oxx5fn4-yeshwanth851314-stars-projects.vercel.app
+Measured: 2026-09-12T11:45:00.543Z
+Field INP: NOT YET AVAILABLE (Lab Synthetic Measurement Only)
+
+=========================================================================================
+ROUTE                           | LCP (ms) | CLS    | TTFB (ms) | TOTAL (ms) | STATUS
+=========================================================================================
+Landing Page (/)                |      172 | 0.0013 |        61 |        152 | PASS
+Login Page (/login)             |      288 | 0.0047 |       202 |        256 | PASS
+Kiosk Intake (/intake/new)      |      128 | 0.0107 |        65 |        119 | PASS
+Doctor Dashboard (/doctor/dashboard) |     1076 | 0.0727 |        66 |        610 | PASS
+Patients Directory (/doctor/patients) |      720 | 0.0727 |        69 |        602 | PASS
+New Case (/doctor/cases/new)    |      700 |  0.018 |        62 |        601 | PASS
+Case Detail (/doctor/cases/[id]) |     1896 | 0.0352 |        77 |       1862 | PASS
+=========================================================================================

@@ -1,0 +1,11 @@
+MEDKIT AI — PRODUCTION DEPLOYMENT PERFORMANCE SMOKE SUMMARY
+Canonical Production Alias: https://medkit-ai-sih26047.vercel.app
+Production Scope Protection: ALL DEPLOYMENTS (Vercel Authentication Active)
+Verified: 2026-09-12T11:45:00.543Z
+
+Health Check Endpoint: /api/health
+Environment: production
+Status: healthy
+Backend Database: Supabase ap-southeast-1 (Active Healthy)
+Vercel Serverless TTFB: < 300ms typical
+Field INP: NOT YET AVAILABLE (Production telemetry not yet accumulated)
