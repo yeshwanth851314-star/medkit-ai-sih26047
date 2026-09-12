@@ -3,7 +3,7 @@
 **SIH Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Lead Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
 **Verification Date:** September 12, 2026  
-**Final Release Tag:** `sih-final-demo`  
+**Final Release Tag:** `sih-final-demo` (commit: `7fdd194`)  
 **Overall Acceptance Status:** ✅ **FINAL HACKATHON BUILD VERIFIED WITHIN EXECUTED TEST SCOPE**
 
 ---
@@ -54,7 +54,7 @@ QUALITY & REPOSITORY GATES:
 |---|---|---|
 | **Canonical Production URL** | `https://medkit-ai-sih26047.vercel.app` | ✅ HTTP 200 OK (Public) |
 | **Vercel Project** | `medkit-ai-sih26047` (`prj_NnVWnxqPNvTdpM6F6NH4LXOiGUD2`) | ✅ Active & Linked |
-| **Active Deployment ID** | `dpl_B1cypVa3bAMicWVkQvc1iH4RTYvk` | ✅ Aliased to Canonical |
+| **Active Deployment ID** | `dpl_6pHqqdKGP4CkqWMqF5HaYCuaLyKb` | ✅ Aliased to Canonical |
 | **Vercel SSO Protection** | `ssoProtection: { deploymentType: 'preview' }` | ✅ Previews protected; production alias public |
 | **Supabase Remote Project** | `MED-KIT-AI` (`aqxwmlqfvnlwabpxqchr`, Region: `ap-southeast-1`) | ✅ Live & Reconciled |
 | **Supabase Migrations** | 21 canonical migrations applied | ✅ 21 / 21 in `schema_migrations` |
