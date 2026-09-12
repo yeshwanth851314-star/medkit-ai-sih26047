@@ -40,7 +40,7 @@
      - Displays badge: *"FHIR-compatible representation / ABDM integration-ready architecture"*.
 
 ### The Conclusion (2:00 – 3:00)
-> *"MedKit AI solves the root bottleneck of Indian healthcare: doctor burnout and incomplete patient histories. Built with Next.js App Router, Supabase with RLS, and Google Gemini 2.5 Flash, backed by 105+ automated unit and Playwright E2E tests, and 100% demo-resilient. Thank you."*
+> *"MedKit AI solves the root bottleneck of Indian healthcare: doctor burnout and incomplete patient histories. Built with Next.js App Router, Supabase with RLS, and Google Gemini 2.5 Flash, backed by 440 automated unit & integration tests, 17 Playwright E2E tests, 30/30 deployed golden path steps, and demo-resilient fallback architecture. Thank you."*
 
 ---
 

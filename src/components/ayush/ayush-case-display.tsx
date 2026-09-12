@@ -104,7 +104,7 @@ export function AyushCaseDisplay({ assessment }: AyushCaseDisplayProps) {
 
         <div className="flex items-center gap-2 text-[11px] text-slate-500">
           <ShieldCheck className="h-3.5 w-3.5 text-ayush-600" />
-          <span>Compliant with National Commission for Indian System of Medicine (NCISM) standards</span>
+          <span>Aligned with National Commission for Indian System of Medicine (NCISM) standards</span>
         </div>
       </div>
     </div>

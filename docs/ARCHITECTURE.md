@@ -11,7 +11,7 @@ MedKit AI transforms patient voice recordings, adaptive multilingual questionnai
 1. **Clinical Safety First**: Non-autonomous copilot; every AI output is treated as a clinical candidate subject to attending physician review.
 2. **Resilient Decoupled Intelligence**: Live cloud intelligence (Google Gemini 2.5 Flash, Multimodal Audio ASR, and Vision OCR) with instant zero-downtime deterministic fallbacks.
 3. **Defense-in-Depth Security**: Cryptographic HMAC-SHA256 session tokens, server-side API authorization guards, and PostgreSQL Row-Level Security (RLS).
-4. **ABDM & FHIR Native**: Strict data provenance, consent persistence, and FHIR Release 4 compliant resources.
+4. **ABDM & FHIR Interoperability**: Strict data provenance, consent persistence, and FHIR Release 4 compatible representation.
 
 ---
 

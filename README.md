@@ -6,11 +6,11 @@
 [![Deployed Golden Path](https://img.shields.io/badge/Deployed%20Golden%20Path-30%2F30%20Steps-success)](https://medkit-ai-sih26047.vercel.app)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20Passed-blue)](https://github.com/your-org/medkit-ai/actions)
 [![WCAG](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA--Oriented-purple)](https://github.com/your-org/medkit-ai/actions)
-[![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20V3%20Ready-teal)](https://github.com/your-org/medkit-ai/actions)
+[![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20Mapped-teal)](https://github.com/your-org/medkit-ai/actions)
 
 **SIH Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Lead Ministry / Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
-**Architecture:** Next.js 15 App Router Modular Monolith • Supabase (RLS & Private Storage) • Google GenAI • Provenance Tracking • 100% Offline/Demo Reliable  
+**Architecture:** Next.js 15 App Router Modular Monolith • Supabase (RLS & Private Storage) • Google GenAI • Provenance Tracking • Offline Resilience & Demo Reliability Architecture  
 
 ---
 
@@ -22,7 +22,7 @@ MedKit AI is deployed to production on Vercel with real remote Supabase executio
 * **Judge Evaluation Access:** Publicly accessible in any standard or incognito browser. No Vercel login, invitation, or password required.
 * **Patient Kiosk Flow:** [https://medkit-ai-sih26047.vercel.app/intake/new](https://medkit-ai-sih26047.vercel.app/intake/new) (Direct patient self-intake; voice & touch adaptive questioning).
 * **Clinician Portal Login:** [https://medkit-ai-sih26047.vercel.app/login](https://medkit-ai-sih26047.vercel.app/login) (Doctor review, triage, longitudinal timeline, and finalization).
-* **Real-User Performance Instrumentation:** Active via `@vercel/speed-insights` (Project ID: `R5m4rDqBVBHM8xjOaPdIjb0C5Gc`).
+* **Real-User Performance Instrumentation:** Active via `@vercel/speed-insights` (Project ID: `R5m4rDqBVBHM8xjOaPdIjb0C5Gc`; Speed Insights production instrumentation active; field INP p75 not yet established).
 
 ---
 
@@ -39,7 +39,7 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
   - Red flags: *"Potential red flag detected — immediate clinical assessment recommended."*
   - Summaries: *"AI-assisted summary — clinician review required."*
   - Documents: *"Extracted from uploaded document — verify before use."*
-  - Interoperability: *"FHIR R4-compatible representation / ABDM integration-ready architecture."*
+  - Interoperability: *"FHIR R4 representation with ABDM/NRCeS-oriented mapping; full profile conformance not yet independently established."*
 
 ---
 
@@ -55,7 +55,7 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
 | **AYUSH Specialized Mode** | Authentic Dashavidha Pariksha (10-fold examination) & Ahara-Vihara | Full Prakriti, Vikriti, Sara, Sattva, and lifestyle profiling with Vaidya verification stamp. |
 | **Deterministic Summaries** | Zero-hallucination structured compiler + optional Gemini GenAI synthesis | Mandatory disclaimers; pertinent positives and pertinent negatives highlighted; persistent provenance logging. |
 | **Printable Case Sheets** | Dedicated print stylesheet (`@media print`) and clean typography | Standardized hospital header, patient barcode/code, vitals table, and signature block. |
-| **FHIR R4 / ABDM Ready** | Full HL7 FHIR R4 Bundle mapping with `Composition` as `entry[0]` | NRCES Clinical Artifact profile compliance; LOINC codes for vitals; ABHA identifier support. |
+| **FHIR R4 / ABDM Ready** | Full HL7 FHIR R4 Bundle mapping with `Composition` as `entry[0]` | FHIR R4 representation with ABDM/NRCeS-oriented mapping (OPConsultRecord); full profile conformance not yet independently established; LOINC codes for vitals; ABHA identifier support. |
 | **Offline Idempotency & Queue** | Client-side queue manager with server-side persistent idempotency table (`sync_mutations`) | Safe intake and draft capture in low-connectivity rural health camps with duplicate replay protection. |
 | **Zero-Friction Onboarding** | Scoped clinician guided tour (keyed by doctor ID) & session-scoped kiosk intro | Lightweight, accessible, keyboard-trappable, respects `prefers-reduced-motion`, and replayable at any time. |
 | **WCAG 2.2 AA Accessibility** | Verified contrast (>= 4.5:1), visible focus indicators, screen reader live alerts, skip-link | 0 critical / 0 serious violations verified via automated axe-core audits. |

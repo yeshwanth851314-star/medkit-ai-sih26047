@@ -4,13 +4,13 @@
 **Lead Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
 **Verification Date:** September 12, 2026  
 **Final Release Tag:** `sih-final-demo`  
-**Overall Acceptance Status:** ✅ **PASSED (Production Certified for Hackathon Evaluation)**
+**Overall Acceptance Status:** ✅ **FINAL HACKATHON BUILD VERIFIED WITHIN EXECUTED TEST SCOPE**
 
 ---
 
 ## 1. Executive Summary & Verification Scope
 
-This document provides definitive, end-to-end evidence that **MedKit AI** is fully deployed, public for hackathon evaluation without platform-level authentication friction, robustly defended by application-level clinical security, and verified across all required quality, clinical, and architectural gates.
+This document provides definitive, end-to-end evidence that **MedKit AI** is fully deployed, public for hackathon evaluation without platform-level authentication friction, robustly defended by application-level clinical security, and verified across all required quality, clinical, and architectural gates within the executed test scope.
 
 ```text
 ================================================================================
@@ -23,16 +23,16 @@ DEPLOYMENT & JUDGE ACCESS:
 PERFORMANCE & OBSERVABILITY:
   Speed Insights Instrumentation: @vercel/speed-insights v2.0.0        [INSTALLED & DEPLOYED]
   Speed Insights Project ID:      R5m4rDqBVBHM8xjOaPdIjb0C5Gc          [ACTIVE]
-  Real-User INP Status:           PASS WITH LIMITATION (Accumulating)  [HONEST STANDARD]
-  Laboratory LCP / CLS / FID:     1.12s / 0.000 / 12ms                 [VERIFIED]
+  Real-User INP Status:           NOT YET ESTABLISHED (Speed Insights) [HONEST STANDARD]
+  Laboratory LCP / CLS / TBT:     1.12s / 0.000 / 0ms                  [VERIFIED]
 
 CLINICAL & TENANT INTEGRITY:
   Full Clinical Golden Path:      30 / 30 Steps Passed on Deployed URL [VERIFIED]
-  Cross-Facility Tenant Isolation: 100% Strict Denial (Doctor B -> A)  [VERIFIED]
+  Cross-Facility Tenant Isolation: Cross-facility isolation passed all executed production authorization tests [VERIFIED]
   Storage Bucket Privacy:         clinical-documents (public: false)   [VERIFIED]
   Signed URL Ephemeral Download:  Authorized Only (Denied Cross-Tenant)[VERIFIED]
   Finalized Case Immutability:    CANNOT_MUTATE_FINAL (403 Forbidden)  [VERIFIED]
-  FHIR R4 Document Bundle:        Full Valid Composition & Entries     [VERIFIED]
+  FHIR R4 Document Bundle:        FHIR R4 representation with ABDM/NRCeS-oriented mapping; full profile conformance not yet independently established [VERIFIED]
 
 QUALITY & REPOSITORY GATES:
   Supabase Production Migrations: 21 / 21 Remote Applied               [VERIFIED]
@@ -86,8 +86,8 @@ MedKit AI adheres to the strict SIH verification standard: **never confuse labor
 
 * **Largest Contentful Paint (LCP):** `1.12s` (Target: <= 2.5s) — **PASS**
 * **Cumulative Layout Shift (CLS):** `0.000` (Target: <= 0.10) — **PASS**
-* **First Input Delay (FID) / Local Input Response:** `12ms` (Target: <= 100ms) — **PASS**
 * **Total Blocking Time (TBT):** `0ms` (Target: <= 200ms) — **PASS**
+* **Synthetic Local Input Responsiveness:** `< 16ms` in automated E2E validation (Laboratory benchmark only; not a field CWV metric)
 * **Shared First Load JS Bundle:** `103 kB` (All routes load lightweight, code-split chunks)
 
 ### Real-User Telemetry Instrumentation (Field Data)
@@ -97,8 +97,8 @@ MedKit AI adheres to the strict SIH verification standard: **never confuse labor
 * **Vercel Project Observability ID:** `R5m4rDqBVBHM8xjOaPdIjb0C5Gc`
 * **Real-User Telemetry Injection:** Client-side script `/250c615942e11a5d/script.js` loaded and active in the DOM (`window.si: function`)
 * **Real Interactions Executed:** Automated multi-viewport interaction suite (`scratch/generate_real_interactions.cjs`) simulated desktop (1280x800) and mobile (375x667) scrolls, touch taps, keyboard tab sequences, and form input delays.
-* **Field INP Assessment:** **PASS WITH LIMITATION**  
-  *Limitation Rationale:* Speed Insights is fully deployed and actively streaming interaction telemetry to Vercel. However, because production deployment was recently completed, the p75 field sample size is actively accumulating. Automated interaction latency was measured at < 16ms (sub-50ms) in runtime instrumentation.
+* **Field INP Assessment:** **NOT YET ESTABLISHED**  
+  *Assessment Rationale:* Speed Insights is fully deployed and actively streaming interaction telemetry to Vercel. However, because production deployment was recently completed, a statistically valid p75 field sample size is actively accumulating and cannot be claimed as an established field metric. Automated synthetic interaction latency was measured at < 16ms in runtime instrumentation, but synthetic tests do not substitute for genuine field Core Web Vitals.
 
 ---
 
@@ -281,9 +281,9 @@ Exit code: 0
 ---
 
 ## 9. Genuine Post-Verification Limitations
-
-*No known hackathon-blocking issues found in the executed verification scope.*
-
-The following operational characteristics reflect genuine system boundaries:
-1. **Speed Insights Sample Accumulation:** Speed Insights is active and verified sending telemetry, but because production deployment was recently completed, the real-user INP p75 metric is accumulating.
-2. **Ayush & ABDM Sandbox Integrations:** MedKit AI generates complete, NRCeS-compliant FHIR R4 document bundles and ABHA-compatible structures. Full bi-directional exchange with the live government ABDM Sandbox requires external sandbox credentials and whitelist approval from NHA.
+ 
+ *No known hackathon-blocking issues found in the executed verification scope.*
+ 
+ The following operational characteristics reflect genuine system boundaries:
+ 1. **Speed Insights Sample Accumulation:** Speed Insights is active and verified sending telemetry, but because production deployment was recently completed, the real-user INP p75 metric is not yet established and is actively accumulating field traffic.
+ 2. **FHIR & ABDM Specification Alignment:** MedKit AI generates FHIR R4 document bundles mapped to NRCeS/ABDM OPConsultRecord specifications (StructureDefinition: `https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord`, IG: `ndhm.in#7.0.0`). Status: *FHIR R4 representation with ABDM/NRCeS-oriented mapping; full profile conformance not yet independently established.* Full bi-directional exchange with the live government ABDM Sandbox requires external sandbox credentials and whitelist approval from NHA.

@@ -12,7 +12,7 @@
 
 ## 1. Specification Mapping Summary
 
-MedKit AI transforms patient intake cases, clinical notes, prescriptions, and AYUSH assessments into HL7 FHIR R4 Document Bundles fully conforming to the National Resource Centre for EHR Standards (NRCeS) ABDM specifications.
+MedKit AI transforms patient intake cases, clinical notes, prescriptions, and AYUSH assessments into HL7 FHIR R4 Document Bundles mapped to the National Resource Centre for EHR Standards (NRCeS) ABDM specifications.
 
 | Bundle Element / Resource | Profile / Target | Invariant / Structural Rule | Conformance Status |
 | :--- | :--- | :--- | :--- |
@@ -60,5 +60,5 @@ MedKit AI maintains a rigorous dual validation framework:
 
 ## 3. Included Evidence Files
 
-1. `synthetic-opconsult-bundle.json`: Fully compliant synthetic outpatient consultation bundle generated from clinical case fixtures.
+1. `synthetic-opconsult-bundle.json`: FHIR R4 representation with ABDM/NRCeS-oriented mapping generated from clinical case fixtures.
 2. `validation-log.txt`: Complete audit report from MedKit's internal structural validator verifying all 28 structural invariants.

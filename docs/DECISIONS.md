@@ -101,8 +101,8 @@ This document records the foundational and ongoing technical and product decisio
 
 - **Decision:** Implement client-side offline queuing for case drafts and deterministic local rule engines for safety-critical evaluations.
 - **Context:** Primary Health Centres (PHCs) and rural health camps often face intermittent or absent internet connectivity.
-- **Chosen option:** Offline mutation queue with retry logic and deterministic summarization / red-flag evaluation that functions 100% offline without remote AI connectivity.
-- **Why:** Eliminates single points of failure, preserves patient history at the edge, and ensures 100% demo reliability under live judging conditions.
+- **Chosen option:** Offline mutation queue with retry logic and deterministic summarization / red-flag evaluation that functions offline without remote AI connectivity.
+- **Why:** Eliminates single points of failure, preserves patient history at the edge, and ensures robust demo reliability under live judging conditions.
 - **Trade-offs:** Local queues must be explicitly synced upon reconnection.
 - **Date:** 2026-09-06
 
