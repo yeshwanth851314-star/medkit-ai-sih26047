@@ -57,6 +57,7 @@ const EXCLUDED_DIR_NAMES = new Set([
   ".vscode",
   ".staging",
   ".packaging-staging",
+  ".temp",
 ]);
 
 const EXCLUDED_FILE_NAMES = new Set([
@@ -86,6 +87,7 @@ const EXCLUSION_PATTERNS = [
   "test-results/**",
   "playwright-report/**",
   "coverage/**",
+  "supabase/.temp/**",
   ".env (except .env.example)",
   ".env.*",
   "*.tsbuildinfo",

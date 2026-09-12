@@ -279,3 +279,20 @@ Exit code: 0
  The following operational characteristics reflect genuine system boundaries:
  1. **Speed Insights Sample Accumulation:** Speed Insights is active and verified sending telemetry, but because production deployment was recently completed, the real-user INP p75 metric is not yet established and is actively accumulating field traffic.
  2. **FHIR & ABDM Specification Alignment:** MedKit AI generates FHIR R4 document bundles mapped to NRCeS/ABDM OPConsultRecord specifications (StructureDefinition: `https://nrces.in/ndhm/fhir/r4/StructureDefinition/OPConsultRecord`, IG: `ndhm.in#7.0.0`). Status: *FHIR R4 representation with ABDM/NRCeS-oriented mapping; full profile conformance not yet independently established.* Full bi-directional exchange with the live government ABDM Sandbox requires external sandbox credentials and whitelist approval from NHA.
+
+---
+
+## 10. Repository Hygiene & Production Demo Credential Audit
+
+### Repository & Package Hygiene
+* **`supabase/.temp` tracked files in Git:** 0
+* **`supabase/.temp` packaged files in distribution archives:** 0
+* **Machine-specific OAuth token paths in executable code:** 0
+* **Live tests use explicit environment configuration only:** YES (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`)
+* **Live tests skip cleanly when credentials absent:** YES (Vitest `describe.skipIf`, Playwright `test.skip`)
+
+### Production Demo Credential Verification
+* **Doctor demo login (`doctor@medkit.ai` / `doctor123`):** REJECTED (HTTP 401 Unauthorized, no cookie)
+* **AYUSH demo login (`ayush@medkit.ai` / `doctor123`):** REJECTED (HTTP 401 Unauthorized, no cookie)
+* **Staff demo login (`staff@medkit.ai` / `staff123`):** REJECTED (HTTP 401 Unauthorized, no cookie)
+* **Production demo-mode fallback observed:** NO

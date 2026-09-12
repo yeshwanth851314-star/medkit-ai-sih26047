@@ -1,49 +1,34 @@
 import { test, expect } from "@playwright/test";
-import fs from "fs";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+const isPlaceholder = (val: string) =>
+  !val ||
+  val === "" ||
+  val.includes("your-project.supabase.co") ||
+  val.includes("placeholder") ||
+  val.includes("ey... (placeholder)");
+
+const isLiveConfigured =
+  Boolean(supabaseUrl && serviceKey) &&
+  !isPlaceholder(supabaseUrl) &&
+  !isPlaceholder(serviceKey) &&
+  !isDemo;
 
 test.describe("MedKit AI: Non-Demo Real Infrastructure E2E Suite", () => {
-  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  let isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  test.skip(!isLiveConfigured, "Live Supabase test credentials are not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY through the secure test environment to execute this suite.");
 
   let isRealInfraAvailable = false;
 
   test.beforeAll(async () => {
-    if (!supabaseUrl || !serviceKey || supabaseUrl.includes("placeholder")) {
-      const tokenPath = "C:/Users/yeshw/.gemini/antigravity/mcp_oauth_tokens.json";
-      if (fs.existsSync(tokenPath)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
-          const entry =
-            data[
-              "https://mcp.supabase.com/mcp?project_ref=aqxwmlqfvnlwabpxqchr&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
-            ];
-          if (entry?.token?.access_token) {
-            const res = await fetch("https://api.supabase.com/v1/projects/aqxwmlqfvnlwabpxqchr/api-keys", {
-              headers: { Authorization: "Bearer " + entry.token.access_token },
-            });
-            if (res.ok) {
-              const keys = await res.json();
-              serviceKey = keys.find((k: any) => k.name === "service_role")?.api_key || "";
-              supabaseUrl = "https://aqxwmlqfvnlwabpxqchr.supabase.co";
-              process.env.NEXT_PUBLIC_SUPABASE_URL = supabaseUrl;
-              process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey;
-              process.env.NEXT_PUBLIC_DEMO_MODE = "false";
-              isDemo = false;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-
     console.log("=== NON-DEMO PLAYWRIGHT E2E SUITE INITIALIZATION ===");
-    console.log(`Supabase URL configured: ${Boolean(supabaseUrl && !supabaseUrl.includes("placeholder"))}`);
-    console.log(`Service Role Key configured: ${Boolean(serviceKey && !serviceKey.includes("placeholder"))}`);
+    console.log(`Supabase URL configured: ${Boolean(supabaseUrl && !isPlaceholder(supabaseUrl))}`);
+    console.log(`Service Role Key configured: ${Boolean(serviceKey && !isPlaceholder(serviceKey))}`);
     console.log(`NEXT_PUBLIC_DEMO_MODE: ${process.env.NEXT_PUBLIC_DEMO_MODE || "undefined"}`);
 
-    if (!supabaseUrl || supabaseUrl.includes("placeholder") || isDemo) {
+    if (!isLiveConfigured) {
       isRealInfraAvailable = false;
       return;
     }

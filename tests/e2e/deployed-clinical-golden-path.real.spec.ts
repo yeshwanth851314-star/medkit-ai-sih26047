@@ -1,11 +1,28 @@
 import { test, expect } from "@playwright/test";
 import crypto from "crypto";
-import fs from "fs";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+
+const isPlaceholder = (val: string) =>
+  !val ||
+  val === "" ||
+  val.includes("your-project.supabase.co") ||
+  val.includes("placeholder") ||
+  val.includes("ey... (placeholder)");
+
+const isLiveConfigured =
+  Boolean(supabaseUrl && serviceKey) &&
+  !isPlaceholder(supabaseUrl) &&
+  !isPlaceholder(serviceKey);
+
 test.describe("MedKit AI: Full Deployed Clinical Golden Path E2E Suite", () => {
-  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aqxwmlqfvnlwabpxqchr.supabase.co";
-  let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  test.skip(
+    !isLiveConfigured,
+    "Live Supabase test credentials are not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY through the secure test environment to execute this suite."
+  );
+
   let supabase: SupabaseClient;
 
   const testDoctorEmail = "synthetic.dr.a@example.com";
@@ -17,33 +34,8 @@ test.describe("MedKit AI: Full Deployed Clinical Golden Path E2E Suite", () => {
   let createdCaseId = "";
 
   test.beforeAll(async () => {
-    // Resolve Supabase service key if needed
-    if (!serviceKey || serviceKey.includes("placeholder")) {
-      const tokenPath = "C:/Users/yeshw/.gemini/antigravity/mcp_oauth_tokens.json";
-      if (fs.existsSync(tokenPath)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
-          const entry =
-            data[
-              "https://mcp.supabase.com/mcp?project_ref=aqxwmlqfvnlwabpxqchr&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
-            ];
-          if (entry?.token?.access_token) {
-            const res = await fetch("https://api.supabase.com/v1/projects/aqxwmlqfvnlwabpxqchr/api-keys", {
-              headers: { Authorization: "Bearer " + entry.token.access_token },
-            });
-            if (res.ok) {
-              const keys = await res.json();
-              serviceKey = keys.find((k: any) => k.name === "service_role")?.api_key || "";
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-
-    if (!serviceKey) {
-      throw new Error("Supabase service key could not be resolved for test doctor provisioning");
+    if (!isLiveConfigured) {
+      return;
     }
 
     supabase = createClient(supabaseUrl, serviceKey, {

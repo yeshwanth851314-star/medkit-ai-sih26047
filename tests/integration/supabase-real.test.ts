@@ -1,49 +1,32 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import fs from "fs";
 
-describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
-  let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  let serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  let anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || "";
 
-  // Attempt to resolve real credentials from host OAuth tokens if not pre-set in process.env
-  beforeAll(async () => {
-    if (!supabaseUrl || !serviceKey || supabaseUrl.includes("your-project.supabase.co")) {
-      const tokenPath = "C:/Users/yeshw/.gemini/antigravity/mcp_oauth_tokens.json";
-      if (fs.existsSync(tokenPath)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(tokenPath, "utf8"));
-          const entry =
-            data[
-              "https://mcp.supabase.com/mcp?project_ref=aqxwmlqfvnlwabpxqchr&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
-            ];
-          if (entry?.token?.access_token) {
-            const res = await fetch("https://api.supabase.com/v1/projects/aqxwmlqfvnlwabpxqchr/api-keys", {
-              headers: { Authorization: "Bearer " + entry.token.access_token },
-            });
-            if (res.ok) {
-              const keys = await res.json();
-              anonKey = keys.find((k: any) => k.name === "anon")?.api_key || "";
-              serviceKey = keys.find((k: any) => k.name === "service_role")?.api_key || "";
-              supabaseUrl = "https://aqxwmlqfvnlwabpxqchr.supabase.co";
+const isPlaceholder = (val: string) =>
+  !val ||
+  val === "" ||
+  val.includes("your-project.supabase.co") ||
+  val.includes("placeholder") ||
+  val.includes("ey... (placeholder)");
 
-              process.env.NEXT_PUBLIC_SUPABASE_URL = supabaseUrl;
-              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = anonKey;
-              process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey;
-              process.env.NEXT_PUBLIC_DEMO_MODE = "false";
-            }
-          }
-        } catch (e) {
-          // Keep existing values
-        }
-      }
-    }
-  });
+const isLiveConfigured =
+  Boolean(supabaseUrl && serviceKey) &&
+  !isPlaceholder(supabaseUrl) &&
+  !isPlaceholder(serviceKey);
 
-  const isConfigured = () =>
-    Boolean(supabaseUrl && serviceKey && !supabaseUrl.includes("your-project.supabase.co"));
+describe.skipIf(!isLiveConfigured)(
+  "Integration: Real Supabase Infrastructure & Security Suite",
+  () => {
+    beforeAll(() => {
+      console.log("=== REAL SUPABASE INFRASTRUCTURE SUITE INITIALIZATION ===");
+      console.log(`Supabase URL configured: ${Boolean(supabaseUrl && !isPlaceholder(supabaseUrl))}`);
+      console.log(`Anon key configured: ${Boolean(anonKey && !isPlaceholder(anonKey))}`);
+      console.log(`Service-role key configured: ${Boolean(serviceKey && !isPlaceholder(serviceKey))}`);
+    });
 
   // Shared test context
   let serviceClient: SupabaseClient;
@@ -70,7 +53,7 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
         for (const u of usersData?.users || []) {
           if (u.email === emailA || u.email === emailB) {
             await serviceClient.auth.admin.updateUserById(u.id, {
-              password: crypto.randomBytes(32).toString("hex") + "-Locked99!",
+              password: `Revoked-${crypto.randomUUID()}!Zz9`,
             });
           }
         }
@@ -81,12 +64,6 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
   });
 
   it("Step 22: verifies real database availability and connection", async () => {
-    if (!isConfigured()) {
-      throw new Error(
-        "[BLOCKED EXTERNAL] Real Supabase database integration cannot execute: target URL/keys are unconfigured."
-      );
-    }
-
     serviceClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     anonClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
 
