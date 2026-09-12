@@ -17,6 +17,7 @@ import {
   Activity,
   HeartPulse,
   Send,
+  AlertTriangle,
 } from "lucide-react";
 import { KioskIntro } from "@/components/onboarding/kiosk-intro";
 import { hasCompletedKioskOnboarding, resetKioskOnboarding } from "@/lib/onboarding/onboarding-state";
@@ -45,11 +46,13 @@ export default function PatientKioskIntakePage() {
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
+  const [intakeErrorCode, setIntakeErrorCode] = useState<string | null>(null);
 
   // Stage 1: Select Language
   const handleSelectLanguage = (lang: "en" | "te") => {
     setLanguage(lang);
     setIntakeError(null);
+    setIntakeErrorCode(null);
     setStage("consent");
   };
 
@@ -58,6 +61,7 @@ export default function PatientKioskIntakePage() {
     if (!consentAcknowledged) return;
     setIsSubmitting(true);
     setIntakeError(null);
+    setIntakeErrorCode(null);
 
     try {
       const res = await fetch("/api/interviews", {
@@ -72,7 +76,8 @@ export default function PatientKioskIntakePage() {
         setCurrentQuestion(data.currentQuestion);
         setStage("interview");
       } else {
-        setIntakeError(data.error || "Failed to initialize kiosk session. Please try again.");
+        setIntakeErrorCode(data.error || null);
+        setIntakeError(data.message || data.error || "Failed to initialize kiosk session. Please try again.");
       }
     } catch (err: any) {
       console.error("Failed to start session:", err);
@@ -199,14 +204,29 @@ export default function PatientKioskIntakePage() {
                   {language === "te" ? "గోప్యత మరియు డేటా ప్రాసెసింగ్" : "Purpose, scope, and AI safety boundary"}
                 </span>
               </div>
-              <div className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>SIH Kiosk (AIIA Delhi)</span>
+              <div className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200">
+                <span className="h-2 w-2 rounded-full bg-clinical-600" />
+                <span>Hospital Intake Terminal</span>
               </div>
             </div>
           </div>
 
-          {intakeError && (
+          {intakeErrorCode === "KIOSK_NOT_PROVISIONED" ? (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-amber-900 shadow-sm" role="alert">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-bold text-amber-900">Hospital Terminal Not Activated</h3>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    This terminal has not been activated or authorized by hospital administration for patient intake.
+                  </p>
+                  <p className="text-xs font-semibold text-amber-950 pt-1">
+                    Please proceed to the hospital reception or registration desk for assistance.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : intakeError && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800" role="alert">
               <p className="font-bold">Initialization Warning</p>
               <p className="mt-1">{intakeError}</p>

@@ -252,7 +252,7 @@ describe("MedKit AI — Scope-Frozen Final Security Closure", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: "doctor@medkit.ai",
-          password: "doctor123",
+          password: "MedKit#Doctor!2026$SecP9",
         }),
       });
 

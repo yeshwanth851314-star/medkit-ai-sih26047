@@ -5,7 +5,7 @@ describe("Phase 2: Authentication & Authorization Tests", () => {
   it("authenticates valid doctor credentials successfully", async () => {
     const result = await authenticateClinician({
       email: "doctor@medkit.ai",
-      password: "doctor123",
+      password: "MedKit#Doctor!2026$SecP9",
     });
 
     expect(result).not.toBeNull();
@@ -18,12 +18,26 @@ describe("Phase 2: Authentication & Authorization Tests", () => {
   it("authenticates valid AYUSH clinician credentials successfully", async () => {
     const result = await authenticateClinician({
       email: "ayush@medkit.ai",
-      password: "doctor123",
+      password: "MedKit#Ayush!2026$Vaidya7",
     });
 
     expect(result).not.toBeNull();
     expect(result?.user.role).toBe("doctor");
     expect(result?.user.fullName).toContain("Vaidya Rajesh Sharma");
+  });
+
+  it("rejects revoked legacy credentials safely", async () => {
+    const doctorResult = await authenticateClinician({
+      email: "doctor@medkit.ai",
+      password: "doctor123",
+    });
+    expect(doctorResult).toBeNull();
+
+    const staffResult = await authenticateClinician({
+      email: "staff@medkit.ai",
+      password: "staff123",
+    });
+    expect(staffResult).toBeNull();
   });
 
   it("rejects invalid passwords safely", async () => {
@@ -47,7 +61,7 @@ describe("Phase 2: Authentication & Authorization Tests", () => {
   it("parses valid session token and restores user context", async () => {
     const loginResult = await authenticateClinician({
       email: "staff@medkit.ai",
-      password: "staff123",
+      password: "MedKit#Staff!2026$Triage3",
     });
     expect(loginResult).toBeDefined();
 

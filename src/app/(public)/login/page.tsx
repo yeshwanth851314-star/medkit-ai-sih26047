@@ -41,12 +41,6 @@ export default function LoginPage() {
     }
   };
 
-  const handlePresetFill = (presetEmail: string, presetPass: string) => {
-    setEmail(presetEmail);
-    setPassword(presetPass);
-    setError(null);
-  };
-
   return (
     <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8 rounded-2xl border border-surface-200 bg-white p-8 shadow-sm">
@@ -127,37 +121,23 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Demo Fast-Fill Section */}
-        <div className="rounded-xl border border-surface-200 bg-surface-50 p-4">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mb-2">
-            <Shield className="h-3.5 w-3.5 text-clinical-600" />
-            <span>SIH Evaluation Demo Credentials</span>
+        {/* Institutional Support & Security Notice */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span className="text-slate-500">Forgot credentials?</span>
+            <span className="font-medium text-clinical-600 hover:text-clinical-700 cursor-pointer">
+              Contact Hospital IT Desk
+            </span>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => handlePresetFill("doctor@medkit.ai", "doctor123")}
-              className="rounded-md border border-surface-200 bg-white p-2 text-left hover:border-clinical-500 hover:bg-clinical-50 transition-colors"
-            >
-              <div className="text-[11px] font-bold text-slate-800">Allopathic MD</div>
-              <div className="text-[10px] text-slate-500">doctor@medkit.ai</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePresetFill("ayush@medkit.ai", "doctor123")}
-              className="rounded-md border border-surface-200 bg-white p-2 text-left hover:border-ayush-600 hover:bg-ayush-50 transition-colors"
-            >
-              <div className="text-[11px] font-bold text-slate-800">AYUSH Vaidya</div>
-              <div className="text-[10px] text-slate-500">ayush@medkit.ai</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePresetFill("staff@medkit.ai", "staff123")}
-              className="rounded-md border border-surface-200 bg-white p-2 text-left hover:border-amber-500 hover:bg-amber-50 transition-colors"
-            >
-              <div className="text-[11px] font-bold text-slate-800">Triage Staff</div>
-              <div className="text-[10px] text-slate-500">staff@medkit.ai</div>
-            </button>
+
+          <div className="rounded-xl border border-surface-200 bg-surface-50 p-4">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 mb-1.5">
+              <Shield className="h-3.5 w-3.5 text-clinical-600" />
+              <span>Institutional Healthcare Access</span>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Authorized clinical personnel only. Access is monitored and protected by facility-isolated Row Level Security. For new physician or staff onboarding, contact your facility administrator.
+            </p>
           </div>
         </div>
       </div>

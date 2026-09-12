@@ -273,6 +273,41 @@ function scanForSecrets(stagedFiles) {
       continue;
     }
 
+    // Project-specific credential checks
+    // 1. In source code (src/), hardcoded legacy credentials or kiosk bypasses are strictly forbidden
+    if (file.relativePath.startsWith("src/")) {
+      if (content.includes("doctor123") || content.includes("staff123")) {
+        violations.push({
+          file: file.relativePath,
+          reason: "Revoked legacy password ('doctor123' / 'staff123') found in application source code.",
+        });
+      }
+      if (content.includes("sih-demo-kiosk-secret") || content.includes("DEFAULT_EVALUATION_KIOSK")) {
+        violations.push({
+          file: file.relativePath,
+          reason: "Revoked legacy kiosk secret or fallback found in application source code.",
+        });
+      }
+      if (content.includes("a11a0000-0000-4000-8000-000000000001")) {
+        violations.push({
+          file: file.relativePath,
+          reason: "Revoked kiosk UUID ('a11a0000-0000-4000-8000-000000000001') found in application source code.",
+        });
+      }
+    }
+
+    // 2. In any project file other than the revocation migration or this audit script itself, the compromised secret hash must not appear
+    if (
+      !file.relativePath.includes("revoke_compromised_kiosk_credentials.sql") &&
+      !file.relativePath.includes("package-audit.mjs") &&
+      content.includes("4041ae0cadff17abd0deb0b37eb7920955bd85fdf4b6a6f4ad27b20cf98f30db")
+    ) {
+      violations.push({
+        file: file.relativePath,
+        reason: "Compromised kiosk secret hash found outside revocation migration.",
+      });
+    }
+
     for (const pattern of SECRET_DETECTION_PATTERNS) {
       if (pattern.regex.test(content)) {
         violations.push({

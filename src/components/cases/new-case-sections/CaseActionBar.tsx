@@ -11,6 +11,7 @@ interface CaseActionBarProps {
   onNext: () => void;
   onFinalize: () => void;
   isSaving: boolean;
+  disabled?: boolean;
 }
 
 export function CaseActionBar({
@@ -21,6 +22,7 @@ export function CaseActionBar({
   onNext,
   onFinalize,
   isSaving,
+  disabled = false,
 }: CaseActionBarProps) {
   const isFirst = activeSection === 0;
   const isLast = activeSection >= sectionsCount - 1;
@@ -50,9 +52,9 @@ export function CaseActionBar({
         <button
           type="button"
           onClick={onFinalize}
-          disabled={isSaving}
+          disabled={isSaving || disabled}
           aria-busy={isSaving}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           <span>{isSaving ? "Finalizing Consultation..." : "Finalize Consultation"}</span>

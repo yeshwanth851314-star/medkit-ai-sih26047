@@ -109,17 +109,6 @@ class MockDatabaseAdapter {
       expires_at: null,
       last_active_at: null,
     });
-
-    this.kioskInstances.set("a11a0000-0000-4000-8000-000000000001", {
-      id: "a11a0000-0000-4000-8000-000000000001",
-      facility_id: "facility-aiia-delhi",
-      name: "SIH Evaluation Kiosk — AIIA Delhi",
-      secret_hash: "sih-demo-kiosk-aiia-delhi-2026",
-      status: "active",
-      created_at: new Date().toISOString(),
-      expires_at: null,
-      last_active_at: null,
-    });
   }
 
   private initializeFromFixtures() {

@@ -7,7 +7,7 @@ import { requirePatientAccess } from "@/lib/auth/object-guard";
 import { getSupabaseClient, getServiceSupabaseClient } from "@/lib/db/supabase";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { env } from "@/config/env";
-import { resolveKioskCredential, DEFAULT_EVALUATION_KIOSK } from "@/lib/auth/kiosk-credential";
+import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
 
 const DEMO_PATIENT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -79,10 +79,15 @@ export async function POST(request: Request) {
       }
     } else {
       // Independent kiosk intake: resolve kiosk credentials using centralized resolver
-      let credential = resolveKioskCredential(request);
+      const credential = resolveKioskCredential(request);
       if (!credential) {
-        // Fallback to active registered SIH evaluation kiosk for patient self-intake
-        credential = DEFAULT_EVALUATION_KIOSK;
+        return NextResponse.json(
+          {
+            error: "KIOSK_NOT_PROVISIONED",
+            message: "This device is not registered for hospital intake. Please contact hospital staff to register this terminal."
+          },
+          { status: 401 }
+        );
       }
 
       resolvedCredential = credential;

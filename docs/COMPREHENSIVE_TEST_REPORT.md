@@ -111,7 +111,7 @@ HTTP/2 200 OK
 ### Test 3: Doctor Clinical Case Creation & Finalization (P0-2 Verified)
 ```json
 POST https://medkit-ai-sih26047.vercel.app/api/auth/login
-Payload: { "email": "doctor@medkit.ai", "password": "doctor123" }
+Payload: { "email": "doctor@medkit.ai", "password": "[REDACTED_SECURE_CREDENTIAL]" }
 HTTP/2 200 OK
 Set-Cookie: medkit_session_token=eyJhbGci...; HttpOnly; Secure; SameSite=Lax
 {
@@ -175,12 +175,12 @@ HTTP/2 401 Unauthorized
 
 Evaluators and jury members can verify every clinical journey using official provisioned accounts:
 
-| Role | Email | Password | Assigned Facility | Permissions & Scopes |
+| Role | Email | Authentication Model | Assigned Facility | Permissions & Scopes |
 | :--- | :--- | :--- | :--- | :--- |
-| **Allopathic MD** | `doctor@medkit.ai` | `doctor123` | AIIA Delhi (`facility-aiia-delhi`) | Full clinical intake, vitals, case finalization, FHIR export |
-| **Ayush Physician** | `ayush@medkit.ai` | `doctor123` | AIIA Delhi (`facility-aiia-delhi`) | Dashavidha Pariksha, Prakriti, Vikriti, Panchakarma plan |
-| **Triage Staff** | `staff@medkit.ai` | `staff123` | AIIA Delhi (`facility-aiia-delhi`) | Patient registration, intake queuing, document OCR triage |
-| **Patient Kiosk** | *(No credentials)* | *(Autonomous)* | AIIA Delhi (`facility-aiia-delhi`) | Self-service multilingual voice & touchscreen intake at `/intake/new` |
+| **Allopathic MD** | `doctor@medkit.ai` | Protected Institutional Credential | AIIA Delhi (`facility-aiia-delhi`) | Full clinical intake, vitals, case finalization, FHIR export |
+| **Ayush Physician** | `ayush@medkit.ai` | Protected Institutional Credential | AIIA Delhi (`facility-aiia-delhi`) | Dashavidha Pariksha, Prakriti, Vikriti, Panchakarma plan |
+| **Triage Staff** | `staff@medkit.ai` | Protected Institutional Credential | AIIA Delhi (`facility-aiia-delhi`) | Patient registration, intake queuing, document OCR triage |
+| **Hospital Kiosk** | *(Hardware-bound)* | Device Cookie (`/api/kiosk/provision`) | AIIA Delhi (`facility-aiia-delhi`) | Self-service multilingual voice & touchscreen intake at `/intake/new` |
 
 ---
 

@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const DOCTOR_PASSWORD = process.env.CLINICIAN_PASSWORD || "MedKit#Doctor!2026$SecP9";
+
 test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suite", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -52,7 +54,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     // Fill credentials
     await page.fill('input[type="email"]', "doctor@medkit.ai");
-    await page.fill('input[type="password"]', "doctor123");
+    await page.fill('input[type="password"]', DOCTOR_PASSWORD);
     await page.click('button[type="submit"]');
 
     // Should redirect to doctor patients hub
@@ -147,7 +149,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     // If redirected to login, log in first
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     }
@@ -182,7 +184,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/timeline/);
     }
@@ -202,7 +204,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/documents/);
     }
@@ -235,7 +237,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     }
@@ -275,7 +277,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c1111111-1111-4111-8111-111111111111/);
     }
@@ -317,7 +319,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c4444444-4444-4444-8444-444444444444/);
     }
@@ -346,7 +348,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
 
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/cases\/c2222222-2222-4222-8222-222222222222/);
     }
@@ -387,7 +389,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await page.goto("/doctor/patients");
     if (page.url().includes("/login")) {
       await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', "doctor123");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
       await page.click('button[type="submit"]');
       await page.waitForURL(/\/doctor\/patients/);
     }

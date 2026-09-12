@@ -4,31 +4,31 @@ import { AuthUser, LoginCredentials } from "./types";
 
 import { signSessionToken, verifySessionToken } from "@/lib/auth/jwt";
 
-// Known synthetic demo clinical users for reliable hackathon presentation
+// Known default clinical test users for offline unit test execution
 export const DEMO_USERS: Record<string, AuthUser & { passwordHash: string }> = {
   "doctor@medkit.ai": {
     id: "usr-doc-0001",
     email: "doctor@medkit.ai",
     fullName: "Dr. Ananya Rao, MD",
     role: "doctor",
-    facilityId: "fac-hyd-01",
-    passwordHash: "doctor123",
+    facilityId: "facility-aiia-delhi",
+    passwordHash: "MedKit#Doctor!2026$SecP9",
   },
   "ayush@medkit.ai": {
     id: "usr-doc-0002",
     email: "ayush@medkit.ai",
     fullName: "Vaidya Rajesh Sharma, BAMS",
     role: "doctor",
-    facilityId: "fac-hyd-01",
-    passwordHash: "doctor123",
+    facilityId: "facility-aiia-delhi",
+    passwordHash: "MedKit#Ayush!2026$Vaidya7",
   },
   "staff@medkit.ai": {
     id: "usr-stf-0001",
     email: "staff@medkit.ai",
     fullName: "Kiran Reddy (Triage Nurse)",
     role: "staff",
-    facilityId: "fac-hyd-01",
-    passwordHash: "staff123",
+    facilityId: "facility-aiia-delhi",
+    passwordHash: "MedKit#Staff!2026$Triage3",
   },
 };
 

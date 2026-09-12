@@ -33,7 +33,7 @@ export default function NewCasePage() {
   const patientIdParam = searchParams.get("patientId") || "";
 
   const [activeSection, setActiveSection] = useState(0);
-  const [patientId, setPatientId] = useState(patientIdParam);
+  const [patientId, setPatientId] = useState("");
   const [caseType, setCaseType] = useState<"general" | "ayush">("general");
   const [patientLanguage, setPatientLanguage] = useState("en");
 
@@ -121,14 +121,22 @@ export default function NewCasePage() {
     async function loadPatients() {
       setIsLoadingPatients(true);
       try {
-        const res = await fetch("/api/patients?pageSize=50");
+        const res = await fetch("/api/patients?pageSize=100");
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data.patients && data.patients.length > 0) {
             setPatientList(data.patients);
-            // If no patient ID is set, or if set to the synthetic demo mock, auto-select first real patient
-            if (!patientIdParam || patientIdParam === "11111111-1111-4111-8111-111111111111") {
-              setPatientId(data.patients[0].id);
+            // Explicit validation: only select if patientIdParam is an authorized facility patient
+            if (patientIdParam) {
+              const matched = data.patients.find((p: any) => p.id === patientIdParam);
+              if (matched) {
+                setPatientId(matched.id);
+              } else {
+                setPatientId("");
+                setErrorMsg("Specified patient was not found or is not accessible within your clinical facility.");
+              }
+            } else {
+              setPatientId("");
             }
           }
         }
@@ -380,8 +388,8 @@ export default function NewCasePage() {
         <button
           type="button"
           onClick={handleSaveDraft}
-          disabled={isSaving}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 focus:outline-none focus:ring-2 focus:ring-clinical-500 disabled:opacity-50 transition-colors"
+          disabled={isSaving || !patientId}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 focus:outline-none focus:ring-2 focus:ring-clinical-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Save className="h-4 w-4 text-clinical-600" aria-hidden="true" />
           <span>{isSaving ? "Saving Draft..." : "Save Draft"}</span>
@@ -390,8 +398,8 @@ export default function NewCasePage() {
         <button
           type="button"
           onClick={handleFinalize}
-          disabled={isSaving}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-50 transition-colors"
+          disabled={isSaving || !patientId}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
           <span>Finalize Consultation</span>
@@ -579,6 +587,7 @@ export default function NewCasePage() {
           onNext={() => setActiveSection(Math.min(sections.length - 1, activeSection + 1))}
           onFinalize={handleFinalize}
           isSaving={isSaving}
+          disabled={!patientId}
         />
       </div>
     </div>

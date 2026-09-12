@@ -74,6 +74,30 @@ export function CaseHeader({
               <span className="font-mono font-semibold text-slate-900">{patientId || "Select Patient"}</span>
             )}
           </div>
+
+          {/* Explicit Patient Selection Confirmation Banner */}
+          <div className="mt-3">
+            {(() => {
+              const selectedPatient = patientList?.find((p) => p.id === patientId);
+              if (selectedPatient) {
+                return (
+                  <div className="inline-flex items-center gap-2 rounded-lg bg-clinical-50 px-3 py-1.5 text-xs text-clinical-800 border border-clinical-200">
+                    <span className="font-bold text-clinical-900">Documenting Case For:</span>
+                    <span className="font-semibold text-slate-900">{selectedPatient.full_name}</span>
+                    <span className="font-mono text-clinical-600 font-medium">({selectedPatient.patient_code || selectedPatient.id.slice(0, 8)})</span>
+                    {selectedPatient.age ? <span>• {selectedPatient.age}y</span> : null}
+                    {selectedPatient.gender ? <span>• {selectedPatient.gender}</span> : null}
+                  </div>
+                );
+              }
+              return (
+                <div className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800 border border-amber-200">
+                  <span className="font-bold text-amber-900">Patient Selection Required:</span>
+                  <span>Select a registered patient from your facility to enable clinical documentation.</span>
+                </div>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Global Case Settings */}

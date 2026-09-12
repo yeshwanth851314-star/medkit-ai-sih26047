@@ -6,12 +6,6 @@ export interface KioskCredential {
   source: "cookie" | "test_header";
 }
 
-export const DEFAULT_EVALUATION_KIOSK: KioskCredential = {
-  kioskId: "a11a0000-0000-4000-8000-000000000001",
-  kioskSecret: "sih-demo-kiosk-aiia-delhi-2026",
-  source: "cookie",
-};
-
 /**
  * Centralized server-only resolver for kiosk device credentials.
  * Extracts the trusted kiosk identity and secret from the HttpOnly device cookie.

@@ -23,7 +23,7 @@ async function loginAsDoctor(page: Page) {
   await page.goto("/login");
   await page.waitForLoadState("domcontentloaded");
   await page.fill('input[type="email"]', "doctor@medkit.ai");
-  await page.fill('input[type="password"]', "doctor123");
+  await page.fill('input[type="password"]', process.env.CLINICIAN_PASSWORD || "MedKit#Doctor!2026$SecP9");
   await page.click('button[type="submit"]');
   await page.waitForURL(/\/doctor\/patients/);
   await expect(page).toHaveURL(/\/doctor\/patients/);
