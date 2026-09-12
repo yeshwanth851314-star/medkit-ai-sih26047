@@ -112,12 +112,37 @@ export default function NewCasePage() {
 
   const errorRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-fill patient if query param exists or fallback to first synthetic patient
+  const [patientList, setPatientList] = useState<Array<{ id: string; full_name: string; patient_code?: string; age?: number; gender?: string }>>([]);
+  const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+
+  // Load facility patients to populate selection
   useEffect(() => {
-    if (!patientId) {
-      setPatientId("11111111-1111-4111-8111-111111111111");
+    let isMounted = true;
+    async function loadPatients() {
+      setIsLoadingPatients(true);
+      try {
+        const res = await fetch("/api/patients?pageSize=50");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.patients && data.patients.length > 0) {
+            setPatientList(data.patients);
+            // If no patient ID is set, or if set to the synthetic demo mock, auto-select first real patient
+            if (!patientIdParam || patientIdParam === "11111111-1111-4111-8111-111111111111") {
+              setPatientId(data.patients[0].id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load facility patients for new case:", err);
+      } finally {
+        if (isMounted) setIsLoadingPatients(false);
+      }
     }
-  }, [patientId]);
+    loadPatients();
+    return () => {
+      isMounted = false;
+    };
+  }, [patientIdParam]);
 
   // Adjust activeSection if out of bounds (e.g. toggling AYUSH mode)
   useEffect(() => {
@@ -186,6 +211,12 @@ export default function NewCasePage() {
   };
 
   const handleSaveDraft = async () => {
+    if (!patientId || patientId === "11111111-1111-4111-8111-111111111111") {
+      setErrorMsg("Please select a valid patient before saving the case draft.");
+      errorRef.current?.focus();
+      return;
+    }
+
     if (!chiefComplaint.trim()) {
       setErrorMsg("Please enter at least a brief chief complaint to save a draft.");
       errorRef.current?.focus();
@@ -258,6 +289,12 @@ export default function NewCasePage() {
   };
 
   const handleFinalize = async () => {
+    if (!patientId || patientId === "11111111-1111-4111-8111-111111111111") {
+      setErrorMsg("Please select a valid patient before finalizing the case.");
+      errorRef.current?.focus();
+      return;
+    }
+
     if (!chiefComplaint || chiefComplaint.trim().length < 3) {
       setErrorMsg("Chief complaint is required before finalization (at least 3 characters).");
       errorRef.current?.focus();
@@ -326,6 +363,9 @@ export default function NewCasePage() {
       {/* Case Header Component */}
       <CaseHeader
         patientId={patientId}
+        patientList={patientList}
+        onSelectPatient={setPatientId}
+        isLoadingPatients={isLoadingPatients}
         caseType={caseType}
         setCaseType={setCaseType}
         patientLanguage={patientLanguage}

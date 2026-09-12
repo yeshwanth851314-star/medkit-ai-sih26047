@@ -6,6 +6,9 @@ import { ArrowLeft, Stethoscope, Leaf, WifiOff, Clock } from "lucide-react";
 
 interface CaseHeaderProps {
   patientId: string;
+  patientList?: Array<{ id: string; full_name: string; patient_code?: string; age?: number; gender?: string }>;
+  onSelectPatient?: (id: string) => void;
+  isLoadingPatients?: boolean;
   caseType: "general" | "ayush";
   setCaseType: (type: "general" | "ayush") => void;
   patientLanguage: string;
@@ -17,6 +20,9 @@ interface CaseHeaderProps {
 
 export function CaseHeader({
   patientId,
+  patientList,
+  onSelectPatient,
+  isLoadingPatients,
   caseType,
   setCaseType,
   patientLanguage,
@@ -46,9 +52,28 @@ export function CaseHeader({
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
             Clinical Consultation & Case-Taking
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Patient ID: <span className="font-mono font-semibold text-slate-900">{patientId || "Select Patient"}</span>
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span className="font-medium text-slate-700">Patient:</span>
+            {isLoadingPatients ? (
+              <span className="text-xs text-slate-400 italic">Loading facility patients...</span>
+            ) : patientList && patientList.length > 0 ? (
+              <select
+                id="case-patient-select"
+                value={patientId}
+                onChange={(e) => onSelectPatient && onSelectPatient(e.target.value)}
+                className="rounded-lg border border-surface-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-sm focus:border-clinical-500 focus:outline-none focus:ring-2 focus:ring-clinical-500"
+              >
+                <option value="">-- Select Facility Patient --</option>
+                {patientList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name} ({p.patient_code || p.id.slice(0, 8)}) {p.age ? `• ${p.age}y` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-mono font-semibold text-slate-900">{patientId || "Select Patient"}</span>
+            )}
+          </div>
         </div>
 
         {/* Global Case Settings */}

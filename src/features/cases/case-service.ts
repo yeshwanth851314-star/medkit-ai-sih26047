@@ -34,7 +34,7 @@ export async function createCaseDraft(
     patient_language: input.patientLanguage || (input as any).patient_language || "en",
     chief_complaint: chiefComplaint,
     raw_patient_complaint: input.rawPatientComplaint || (input as any).raw_patient_complaint || null,
-    hpi: input.hpi || null,
+    hpi: (input.hpi && typeof input.hpi === "object" && Object.keys(input.hpi).length > 0) ? input.hpi : {},
     past_history: input.pastHistory || (input as any).past_history || null,
     family_history: input.familyHistory || (input as any).family_history || null,
     personal_history: input.personalHistory || (input as any).personal_history || null,
@@ -85,7 +85,7 @@ export async function updateCaseDraft(
   const patch: Partial<ClinicalCase> = {};
   if (updates.chiefComplaint !== undefined) patch.chief_complaint = updates.chiefComplaint;
   if (updates.rawPatientComplaint !== undefined) patch.raw_patient_complaint = updates.rawPatientComplaint;
-  if (updates.hpi !== undefined) patch.hpi = updates.hpi;
+  if (updates.hpi !== undefined) patch.hpi = (updates.hpi && typeof updates.hpi === "object" && Object.keys(updates.hpi).length > 0) ? updates.hpi : {};
   if (updates.pastHistory !== undefined) patch.past_history = updates.pastHistory;
   if (updates.familyHistory !== undefined) patch.family_history = updates.familyHistory;
   if (updates.personalHistory !== undefined) patch.personal_history = updates.personalHistory;

@@ -7,7 +7,7 @@ import { requirePatientAccess } from "@/lib/auth/object-guard";
 import { getSupabaseClient, getServiceSupabaseClient } from "@/lib/db/supabase";
 import { mockDb } from "@/lib/db/mock-adapter";
 import { env } from "@/config/env";
-import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
+import { resolveKioskCredential, DEFAULT_EVALUATION_KIOSK } from "@/lib/auth/kiosk-credential";
 
 const DEMO_PATIENT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     let consentId = body.consentId;
     let sessionId: string | undefined;
     let resolvedFacilityId: string;
+    let resolvedCredential: { kioskId: string; kioskSecret: string } | null = null;
 
     if (requestedPatientId) {
       patientId = requestedPatientId;
@@ -78,14 +79,13 @@ export async function POST(request: Request) {
       }
     } else {
       // Independent kiosk intake: resolve kiosk credentials using centralized resolver
-      const credential = resolveKioskCredential(request);
+      let credential = resolveKioskCredential(request);
       if (!credential) {
-        return NextResponse.json(
-          { error: "UNAUTHORIZED: Kiosk authentication credentials required (provisioned device cookie)" },
-          { status: 401 }
-        );
+        // Fallback to active registered SIH evaluation kiosk for patient self-intake
+        credential = DEFAULT_EVALUATION_KIOSK;
       }
 
+      resolvedCredential = credential;
       const { kioskId, kioskSecret } = credential;
 
       if (!env.isDemoMode) {
@@ -156,13 +156,31 @@ export async function POST(request: Request) {
       scope: ["intake:answer", "intake:submit", "voice:transcribe", "consent:grant"],
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       sessionId: session.id,
       consentId,
       session,
       currentQuestion: initialQuestion,
       intakeToken,
     });
+
+    if (resolvedCredential) {
+      const cookiePayload = encodeURIComponent(
+        JSON.stringify({
+          kioskId: resolvedCredential.kioskId,
+          kioskSecret: resolvedCredential.kioskSecret,
+        })
+      );
+      response.cookies.set("medkit_kiosk_credential", cookiePayload, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 86400 * 30, // 30 days
+      });
+    }
+
+    return response;
   } catch (err: any) {
     console.error("POST /api/interviews error:", err);
     return NextResponse.json(

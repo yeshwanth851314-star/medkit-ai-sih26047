@@ -355,7 +355,12 @@ export async function createCase(
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
-  const { data, error } = await supabase.from("cases").insert([payload]).select().single();
+  const sanitizedPayload = {
+    ...payload,
+    hpi: (payload.hpi && typeof payload.hpi === "object" && Object.keys(payload.hpi).length > 0) ? payload.hpi : {},
+  };
+
+  const { data, error } = await supabase.from("cases").insert([sanitizedPayload]).select().single();
   if (error) {
     console.error("Supabase createCase error:", error);
     throw new Error(`Database error creating case: ${error.message}`);
@@ -378,9 +383,16 @@ export async function updateCase(
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
 
+  const sanitizedUpdates: Partial<ClinicalCase> = { ...updates };
+  if (sanitizedUpdates.hpi !== undefined) {
+    sanitizedUpdates.hpi = (sanitizedUpdates.hpi && typeof sanitizedUpdates.hpi === "object" && Object.keys(sanitizedUpdates.hpi).length > 0)
+      ? sanitizedUpdates.hpi
+      : {};
+  }
+
   const { data, error } = await supabase
     .from("cases")
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select()
     .single();

@@ -44,10 +44,12 @@ export default function PatientKioskIntakePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
 
   // Stage 1: Select Language
   const handleSelectLanguage = (lang: "en" | "te") => {
     setLanguage(lang);
+    setIntakeError(null);
     setStage("consent");
   };
 
@@ -55,6 +57,7 @@ export default function PatientKioskIntakePage() {
   const handleStartInterview = async () => {
     if (!consentAcknowledged) return;
     setIsSubmitting(true);
+    setIntakeError(null);
 
     try {
       const res = await fetch("/api/interviews", {
@@ -68,9 +71,12 @@ export default function PatientKioskIntakePage() {
         setIntakeToken(data.intakeToken || null);
         setCurrentQuestion(data.currentQuestion);
         setStage("interview");
+      } else {
+        setIntakeError(data.error || "Failed to initialize kiosk session. Please try again.");
       }
-    } catch {
-      console.error("Failed to start session");
+    } catch (err: any) {
+      console.error("Failed to start session:", err);
+      setIntakeError("Network error initializing kiosk intake. Please check connectivity.");
     } finally {
       setIsSubmitting(false);
     }
@@ -184,15 +190,28 @@ export default function PatientKioskIntakePage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-clinical-100 text-clinical-600">
               <ShieldCheck className="h-6 w-6" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">
-                {language === "te" ? "రోగి సమ్మతి ప్రకటన (Patient Consent)" : "Patient Intake Consent & Privacy"}
-              </h1>
-              <span className="text-xs text-slate-500">
-                {language === "te" ? "గోప్యత మరియు డేటా ప్రాసెసింగ్" : "Purpose, scope, and AI safety boundary"}
-              </span>
+            <div className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">
+                  {language === "te" ? "రోగి సమ్మతి ప్రకటన (Patient Consent)" : "Patient Intake Consent & Privacy"}
+                </h1>
+                <span className="text-xs text-slate-500">
+                  {language === "te" ? "గోప్యత మరియు డేటా ప్రాసెసింగ్" : "Purpose, scope, and AI safety boundary"}
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>SIH Kiosk (AIIA Delhi)</span>
+              </div>
             </div>
           </div>
+
+          {intakeError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-800" role="alert">
+              <p className="font-bold">Initialization Warning</p>
+              <p className="mt-1">{intakeError}</p>
+            </div>
+          )}
 
           <div className="rounded-2xl bg-surface-50 p-5 border border-surface-200 text-xs text-slate-700 space-y-3 leading-relaxed">
             <p>
