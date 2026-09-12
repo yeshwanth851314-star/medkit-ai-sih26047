@@ -1,0 +1,33 @@
+﻿================================================================================
+MedKit AI — Local Migration Inventory Evidence
+Timestamp: 2026-09-12T06:16:00.000Z
+Git Branch: main
+Directory: supabase/migrations/
+================================================================================
+
+Total Migrations: 21
+
+#   Migration Filename                                            Size (bytes)  SHA-256 Checksum
+--  ------------------------------------------------------------  ------------  ----------------------------------------------------------------
+01  20260906000001_initial_schema.sql                             11629         EE7D9BCD99719CBF1A95E2F8BAF9C1F84828DD7A0A6CED857B9D1292C0E839AF
+02  20260906000002_schema_alignment.sql                           3280          01E0FEE8CC0500894CA18E7FB8C91520009B6652EE10418FC6A993FE6EF6EE4A
+03  20260906000003_audit_and_red_flags.sql                        959           5AEE84D0D2E6121A89AD9BC821D7B6FA3BC3834FAB8DE3B537B40C1851CCDBCD
+04  20260907000001_documents_schema_alignment.sql                 2474          48F4A2E6FE6A5B8B41E75CE07104B816114928C4A10D453B81DC10E2D77C4941
+05  20260907000002_sync_mutations.sql                             1495          C6BB69D19DBDBBEF57ABEDE4B0EE20F861C4D5AC1B264572950EBA38A97D1BB4
+06  20260907000003_facility_rls_and_document_update.sql           1802          631B8E5FB4983765AFA62AB49B651100CBB297DA4A665AC9849B765FB8648158
+07  20260908000001_facility_boundaries_and_ownership.sql          7869          7FD9B9E0760AF02638553D2E77AF87B86C5FCF9993193131FFF920615D9EA966
+08  20260908000002_harden_rls_drop_legacy_policies.sql           13303         C7376BB6A8E8CCA9F471811C9F9728BA815831E0FFCA5BC89822F6C552996DDB
+09  20260909000001_remediation_zero_compromise.sql               22554         354417B39E4851053BF2FB80297399C018C972EA88B69B45A3EF7E4D4DDFA3ED
+10  20260910000001_production_integrity_closure.sql              41018         4AA2531A92F8A505823E7FF11A5A104330FCA1DD4376842CFBBCCC3C98F1C20C
+11  20260910000002_final_code_closure.sql                        22948         F3757B3823F14674B7AFC65B170A3B474624B539AE614ABBF31F016243CA0200
+12  20260910000003_final_surgical_closure.sql                    18717         4E5E6A13E8EFF97E403D60E2EA2B201A31B4B2E7B8BF1D6B6B0DBF1DEB02F333
+13  20260910000004_storage_verification_and_kiosk_revocation.sql 22373         88B0E5AEB3496410A5621D88C52421518E9733425068300661D74A5FC63D0700
+14  20260910000005_adversarial_remediation_exit.sql              21027         C628437F1E18AD045BC42F10BBE8F737BC4A49991C865276CFD924AA0551659B
+15  20260910000006_final_schema_rpc_consistency.sql              23893         75A4EEFD05C17E02129E369AF0CB4C2E78AD6896EBEC136974BC543C771D497D
+16  20260911000001_production_contract_closure.sql               30600         4D62D90250B8FB80A2FA3CDDD2ED2B047E05793117337CDDDC75D72F73A17C72
+17  20260911000002_final_policy_audit_closure.sql                15102         F890825F745CF8940E5C1BA7C8653F35ADDD6E38225B7CE5149605B627A3F15B
+18  20260911000003_kiosk_and_redflag_integrity_closure.sql        7752         6A2C2F03330DBAC216458BDFA15D3B8A4B7AB4475548DE6A199562F245952BFD
+19  20260911000004_clinician_actor_and_revocation_integrity.sql   5014         711DA420F679ED7D087F413D949CB35DF9243799167E1D9A6A19BCDAB64EE059
+20  20260911000005_final_session_state_authority.sql             19362         91B3BAADC2C4DD6D723779E72CAA611E8856DCE4F4C9F87A6A56855F37189B30
+21  20260912000001_reconcile_remote_schema_drift.sql               916         15DEC543B2CE507704214B10F90F96636FDD119F9C5F8BF7056C40FEDE43D252
+================================================================================

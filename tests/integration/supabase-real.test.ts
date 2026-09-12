@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import fs from "fs";
@@ -54,13 +54,31 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
   const facA = "facility-aiia-delhi";
   const facB = "facility-aiia-goa";
   const emailA = "synthetic.dr.a@example.com";
-  const passA = "SecureAlphaPass123!";
+  const passA = `Alpha-${crypto.randomUUID()}!Aa1`;
   const emailB = "synthetic.dr.b@example.com";
-  const passB = "SecureBetaPass123!";
+  const passB = `Beta-${crypto.randomUUID()}!Bb1`;
 
   let patientA: any;
   let patientB: any;
   let caseA: any;
+
+  afterAll(async () => {
+    if (serviceClient) {
+      try {
+        // Step 19: Clean up / rotate synthetic credentials so no known test passwords remain active
+        const { data: usersData } = await serviceClient.auth.admin.listUsers();
+        for (const u of usersData?.users || []) {
+          if (u.email === emailA || u.email === emailB) {
+            await serviceClient.auth.admin.updateUserById(u.id, {
+              password: crypto.randomBytes(32).toString("hex") + "-Locked99!",
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Test credential hygiene warning:", err);
+      }
+    }
+  });
 
   it("Step 22: verifies real database availability and connection", async () => {
     if (!isConfigured()) {
@@ -76,7 +94,7 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
     expect(error).toBeNull();
     expect(data).toBeDefined();
 
-    // Provision synthetic doctor users & profiles
+    // Provision synthetic doctor users & profiles with fresh run-scoped credentials
     const { data: usersData } = await serviceClient.auth.admin.listUsers();
     let userA: any = usersData.users.find((u) => u.email === emailA);
     if (!userA) {
@@ -87,6 +105,8 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
       });
       expect(errCreate).toBeNull();
       userA = created.user;
+    } else {
+      await serviceClient.auth.admin.updateUserById(userA.id, { password: passA });
     }
 
     let userB: any = usersData.users.find((u) => u.email === emailB);
@@ -98,6 +118,8 @@ describe("Integration: Real Supabase Infrastructure & Security Suite", () => {
       });
       expect(errCreate).toBeNull();
       userB = created.user;
+    } else {
+      await serviceClient.auth.admin.updateUserById(userB.id, { password: passB });
     }
 
     await serviceClient.from("profiles").upsert([

@@ -1,0 +1,41 @@
+﻿================================================================================
+MedKit AI — Remote Migration History Evidence
+Timestamp: 2026-09-12T06:17:00.000Z
+Supabase Project: MED-KIT-AI
+Project Ref: aqxwmlqfvnlwabpxqchr
+Region: ap-southeast-1
+Source Table: supabase_migrations.schema_migrations
+Query: SELECT version FROM supabase_migrations.schema_migrations ORDER BY version;
+================================================================================
+
+Total Remote Migrations: 21
+
+#   Version         Local Migration Name Match                                   Status
+--  --------------  -----------------------------------------------------------  ----------
+01  20260906000001  20260906000001_initial_schema.sql                            APPLIED_OK
+02  20260906000002  20260906000002_schema_alignment.sql                          APPLIED_OK
+03  20260906000003  20260906000003_audit_and_red_flags.sql                       APPLIED_OK
+04  20260907000001  20260907000001_documents_schema_alignment.sql                APPLIED_OK
+05  20260907000002  20260907000002_sync_mutations.sql                            APPLIED_OK
+06  20260907000003  20260907000003_facility_rls_and_document_update.sql          APPLIED_OK
+07  20260908000001  20260908000001_facility_boundaries_and_ownership.sql         APPLIED_OK
+08  20260908000002  20260908000002_harden_rls_drop_legacy_policies.sql           APPLIED_OK
+09  20260909000001  20260909000001_remediation_zero_compromise.sql               APPLIED_OK
+10  20260910000001  20260910000001_production_integrity_closure.sql              APPLIED_OK
+11  20260910000002  20260910000002_final_code_closure.sql                        APPLIED_OK
+12  20260910000003  20260910000003_final_surgical_closure.sql                    APPLIED_OK
+13  20260910000004  20260910000004_storage_verification_and_kiosk_revocation.sql  APPLIED_OK
+14  20260910000005  20260910000005_adversarial_remediation_exit.sql              APPLIED_OK
+15  20260910000006  20260910000006_final_schema_rpc_consistency.sql              APPLIED_OK
+16  20260911000001  20260911000001_production_contract_closure.sql               APPLIED_OK
+17  20260911000002  20260911000002_final_policy_audit_closure.sql                APPLIED_OK
+18  20260911000003  20260911000003_kiosk_and_redflag_integrity_closure.sql       APPLIED_OK
+19  20260911000004  20260911000004_clinician_actor_and_revocation_integrity.sql  APPLIED_OK
+20  20260911000005  20260911000005_final_session_state_authority.sql             APPLIED_OK
+21  20260912000001  20260912000001_reconcile_remote_schema_drift.sql              APPLIED_OK
+================================================================================
+Remote / Local Lineage Comparison: EXACT MATCH (21 / 21)
+Missing Remote Migrations: 0
+Unapplied Local Migrations: 0
+Mismatched Migration Versions: 0
+================================================================================

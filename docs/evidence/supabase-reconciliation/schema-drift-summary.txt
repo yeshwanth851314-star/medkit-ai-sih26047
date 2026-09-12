@@ -1,0 +1,126 @@
+﻿================================================================================
+MedKit AI — Remote PostgreSQL Schema Drift Analysis & Reconciliation Audit
+Timestamp: 2026-09-12T06:15:00.000Z
+Supabase Project: MED-KIT-AI (aqxwmlqfvnlwabpxqchr)
+Postgres Version: 17.6.1.109
+Git HEAD: 842e5dad468119404ad10448197033dd21268e62
+================================================================================
+
+1. CORE DATABASE TABLES (12 / 12 MATCH)
+--------------------------------------------------------------------------------
+- profiles                      [MATCH: 7 columns, RLS enabled]
+- patients                      [MATCH: 11 columns, RLS enabled]
+- consents                      [MATCH: 12 columns, RLS enabled]
+- cases                         [MATCH: 24 columns, RLS enabled]
+- documents                     [MATCH: 15 columns, RLS enabled]
+- audit_logs                    [MATCH: 8 columns, RLS enabled, immutable]
+- red_flag_events               [MATCH: 8 columns, RLS enabled]
+- case_amendments               [MATCH: 8 columns, RLS enabled]
+- sync_mutations                [MATCH: 14 columns, RLS enabled]
+- intake_sessions               [MATCH: 12 columns, RLS enabled]
+- kiosk_instances               [MATCH: 11 columns, RLS enabled]
+- kiosk_capability_revocations  [MATCH: 4 columns, RLS enabled]
+
+Unexpected Tables: 0
+Missing Tables: 0
+Table Schema Drift: 0
+
+2. ROW LEVEL SECURITY & POLICIES (25 / 25 MATCH)
+--------------------------------------------------------------------------------
+Row Security Status:
+- All 12 public tables have rowsecurity = true.
+
+Policies Evaluated:
+- audit_logs: 1 SELECT policy (Admin only). INSERT restricted to privileged contexts.
+- case_amendments: 2 policies (Facility SELECT, facility INSERT).
+- cases: 3 policies (Facility SELECT, facility INSERT, facility UPDATE draft-only).
+- consents: 2 policies (Facility SELECT, facility UPDATE).
+- documents: 3 policies (Facility SELECT, facility INSERT, facility UPDATE).
+- intake_sessions: 3 policies (Facility SELECT, facility INSERT, facility UPDATE).
+- kiosk_capability_revocations: 1 policy (Facility SELECT).
+- kiosk_instances: 1 policy (Facility SELECT).
+- patients: 3 policies (Facility SELECT, facility INSERT, facility UPDATE).
+- profiles: 2 policies (Authenticated SELECT, self-profile UPDATE).
+- red_flag_events: 3 policies (Facility SELECT, facility INSERT, facility UPDATE).
+- sync_mutations: 1 policy (Active owner / active admin SELECT).
+- storage.objects (clinical-documents): 2 policies (Facility SELECT, facility INSERT).
+
+Unexpected Permissive Policies (USING true): 0
+Broad Access Holes: 0
+RLS Drift: 0
+
+3. DATABASE TRIGGERS & PROCEDURES (3 / 3 MATCH)
+--------------------------------------------------------------------------------
+- trg_documents_updated_at               ON documents       -> set_documents_updated_at()
+- trg_enforce_intake_session_transitions ON intake_sessions -> check_intake_session_transition()
+- trg_protect_profile_privileges         ON profiles        -> protect_profile_privileges()
+
+Trigger Drift: 0
+
+4. PRIVILEGED FUNCTIONS & RPCS AUDIT
+--------------------------------------------------------------------------------
+Canonical Migration Functions (21 Verified):
+- check_intake_session_transition()
+- current_user_facility()
+- current_user_role()
+- protect_profile_privileges()
+- rpc_acknowledge_red_flag_with_audit(...)
+- rpc_add_amendment_with_audit(...)
+- rpc_clinician_revoke_session(...)
+- rpc_execute_idempotent_mutation(...)
+- rpc_finalize_case_with_audit(...)
+- rpc_get_kiosk_intake_session(...)
+- rpc_kiosk_bootstrap_intake(...)
+- rpc_provision_kiosk(...)
+- rpc_record_consent_with_audit(...)
+- rpc_revoke_consent_with_audit(...)
+- rpc_revoke_kiosk_session(UUID, TEXT, UUID)
+- rpc_revoke_kiosk_session(UUID, TEXT, UUID, TEXT, TEXT)
+- rpc_submit_intake_to_case(...)
+- rpc_submit_kiosk_answer(...)
+- rpc_update_kiosk_intake_session(...)
+- set_documents_updated_at()
+
+Platform Built-in Event Triggers (1 Verified):
+- rls_auto_enable()                      [Supabase default DDL event trigger]
+
+5. DETECTED REMOTE HOT-FIX DRIFT (1 OBJECT)
+--------------------------------------------------------------------------------
+Object Name: public.digest(bytea, text)
+Definition:
+  CREATE OR REPLACE FUNCTION public.digest(bytea, text)
+  RETURNS bytea
+  LANGUAGE sql
+  IMMUTABLE PARALLEL SAFE
+  AS $$
+    SELECT extensions.digest($1, $2);
+  $$;
+
+Root Cause Analysis:
+In 20260911000001_production_contract_closure.sql, rpc_execute_idempotent_mutation
+enforces strict isolation by declaring:
+  SET search_path = public, pg_temp;
+Inside the function body, it computes:
+  v_payload_hash := encode(digest(convert_to(COALESCE(p_payload, '{}'::jsonb)::text, 'UTF8'), 'sha256'), 'hex');
+In Supabase-managed PostgreSQL, the "pgcrypto" extension places cryptographic
+functions (including digest) in the "extensions" schema. Because "extensions" is
+intentionally excluded from search_path for SQL injection / schema-poisoning defense,
+calling digest() directly inside rpc_execute_idempotent_mutation failed with:
+  ERROR 42883: function digest(bytea, unknown) does not exist.
+During the previous live-verification session, public.digest(bytea, text) was created
+via direct remote SQL on the live database to resolve the runtime error without
+modifying the frozen migration file.
+
+However, because this was performed directly on the remote database, Git did not
+contain a migration creating public.digest. Thus, a clean deployment on a fresh
+database would fail to execute rpc_execute_idempotent_mutation.
+
+Resolution:
+Create a canonical forward migration:
+  20260912000001_reconcile_remote_schema_drift.sql
+This migration:
+1. Formally defines public.digest(bytea, text) in repository migration history.
+2. Restricts function execution privileges (REVOKE FROM PUBLIC, anon; GRANT TO authenticated, service_role).
+3. Pushes the migration to the remote database to register version 20260912000001 in schema_migrations.
+4. Leaves 100% parity between Git history and live PostgreSQL definitions.
+================================================================================
