@@ -25,7 +25,12 @@ export function resolveKioskCredential(request: Request): KioskCredential | null
     const match = cookieHeader.match(/(?:^|;\s*)medkit_kiosk_credential=([^;]*)/);
     if (match) {
       try {
-        const raw = decodeURIComponent(match[1]);
+        let raw = decodeURIComponent(match[1]);
+        if (raw.startsWith("%")) {
+          try {
+            raw = decodeURIComponent(raw);
+          } catch {}
+        }
         const parsed = JSON.parse(raw);
         if (
           parsed &&

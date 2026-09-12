@@ -165,12 +165,10 @@ export async function POST(request: Request) {
     });
 
     if (resolvedCredential) {
-      const cookiePayload = encodeURIComponent(
-        JSON.stringify({
-          kioskId: resolvedCredential.kioskId,
-          kioskSecret: resolvedCredential.kioskSecret,
-        })
-      );
+      const cookiePayload = JSON.stringify({
+        kioskId: resolvedCredential.kioskId,
+        kioskSecret: resolvedCredential.kioskSecret,
+      });
       response.cookies.set("medkit_kiosk_credential", cookiePayload, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
