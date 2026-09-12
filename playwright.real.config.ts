@@ -14,6 +14,12 @@ export default defineConfig({
     trace: "on-first-retry",
     headless: true,
   },
+  webServer: {
+    command: "npm run dev",
+    url: "http://localhost:3000",
+    reuseExistingServer: true,
+    timeout: 120000,
+  },
   projects: [
     {
       name: "chromium",
