@@ -3,46 +3,32 @@
 **SIH Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Lead Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
 **Verification Date:** September 12, 2026  
-**Final Release Tag:** `sih-final-demo` (commit: `7fdd194`)  
 **Overall Acceptance Status:** ✅ **FINAL HACKATHON BUILD VERIFIED WITHIN EXECUTED TEST SCOPE**
 
 ---
 
-## 1. Executive Summary & Verification Scope
+## 1. Release Provenance & Repository Identity
 
-This document provides definitive, end-to-end evidence that **MedKit AI** is fully deployed, public for hackathon evaluation without platform-level authentication friction, robustly defended by application-level clinical security, and verified across all required quality, clinical, and architectural gates within the executed test scope.
+### Runtime Release
+* **Runtime source commit:** `7fdd194736d1cb2f3398dce49bdf6f7ebf47ab85` (short: `7fdd194`)
+* **Runtime tag:** `sih-runtime-final`
+* **Vercel deployment ID:** `dpl_6pHqqdKGP4CkqWMqF5HaYCuaLyKb`
+* **Canonical production URL:** [https://medkit-ai-sih26047.vercel.app](https://medkit-ai-sih26047.vercel.app)
+* **Vercel Direct Deployment URL:** [https://medkit-ai-sih26047-fc2ooyzv5-yeshwanth851314-stars-projects.vercel.app](https://medkit-ai-sih26047-fc2ooyzv5-yeshwanth851314-stars-projects.vercel.app)
+* **Platform SSO Protection:** Preview only; canonical domain was publicly reachable without Vercel SSO during the executed production verification.
 
-```text
-================================================================================
-DEPLOYMENT & JUDGE ACCESS:
-  Canonical Production URL:       https://medkit-ai-sih26047.vercel.app  [200 OK - PUBLIC]
-  Vercel SSO Platform Protection: Preview Only (Zero Judge Friction)   [VERIFIED]
-  MedKit Application Security:    Strict Fail-Closed (401/307)         [VERIFIED]
-  Patient Kiosk (/intake/new):    Publicly Accessible Without Auth     [VERIFIED]
+### Evidence Release
+* **Evidence commit:** `ef20cef3121c89f856cefaf4d6d0749cc53453c6` (and subsequent final provenance update)
+* **Evidence tag:** `sih-evidence-final`
+* **Legacy tag status:** `sih-final-demo` (historical local reference tag preserved)
 
-PERFORMANCE & OBSERVABILITY:
-  Speed Insights Instrumentation: @vercel/speed-insights v2.0.0        [INSTALLED & DEPLOYED]
-  Speed Insights Project ID:      R5m4rDqBVBHM8xjOaPdIjb0C5Gc          [ACTIVE]
-  Real-User INP Status:           NOT YET ESTABLISHED (Speed Insights) [HONEST STANDARD]
-  Laboratory LCP / CLS / TBT:     1.12s / 0.000 / 0ms                  [VERIFIED]
-
-CLINICAL & TENANT INTEGRITY:
-  Full Clinical Golden Path:      30 / 30 Steps Passed on Deployed URL [VERIFIED]
-  Cross-Facility Tenant Isolation: Cross-facility isolation passed all executed production authorization tests [VERIFIED]
-  Storage Bucket Privacy:         clinical-documents (public: false)   [VERIFIED]
-  Signed URL Ephemeral Download:  Authorized Only (Denied Cross-Tenant)[VERIFIED]
-  Finalized Case Immutability:    CANNOT_MUTATE_FINAL (403 Forbidden)  [VERIFIED]
-  FHIR R4 Document Bundle:        FHIR R4 representation with ABDM/NRCeS-oriented mapping; full profile conformance not yet independently established [VERIFIED]
-
-QUALITY & REPOSITORY GATES:
-  Supabase Production Migrations: 21 / 21 Remote Applied               [VERIFIED]
-  TypeScript Strict Typecheck:    0 Errors                             [PASS]
-  ESLint Code Quality:            0 Warnings / 0 Errors                [PASS]
-  Vitest Unit & Integration:      41 Files / 440 Tests Passed          [PASS]
-  Playwright Local E2E & A11y:    17 / 17 Tests Passed                 [PASS]
-  Next.js Production Build:       22 Routes Compiled Cleanly           [PASS]
-================================================================================
-```
+### Repository Backup
+* **GitHub repository:** [https://github.com/yeshwanth851314-star/medkit-ai-sih26047](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
+* **Git Remote (`origin`):** `https://github.com/yeshwanth851314-star/medkit-ai-sih26047.git`
+* **main pushed:** Confirmed
+* **runtime tag pushed:** `sih-runtime-final`
+* **evidence tag pushed:** `sih-evidence-final`
+* **Backup Confirmation:** Release branch and tags are backed up to the configured Git remote.
 
 ---
 
@@ -194,9 +180,9 @@ STORAGE PRIVACY & MULTI-TENANCY VERIFICATION:
 
 ---
 
-## 6. Automated Quality Gates
+## 6. Automated Quality Gates & Verification Evidence
 
-All regression gates were executed using the actual repository scripts:
+All regression gates were executed sequentially and verified using actual repository scripts:
 
 ```bash
 # 1. Typecheck
@@ -212,28 +198,34 @@ Exit code: 0
 
 # 3. Unit & Integration Tests
 $ npm run test:unit
-> vitest run tests/unit tests/integration/golden-path.test.ts tests/integration/supabase-diagnostic.test.ts
+> vitest run
 Test Files: 41 passed (41)
 Tests:      440 passed (440)
-Duration:   19.76s
+Failures:   0
+Skips:      0
+Duration:   17.18s
 Exit code:  0
 
-# 4. End-to-End Test Suite
-$ npm run test:e2e
-> playwright test
-17 passed (3.4m)
-Exit code: 0
-(Includes 6 WCAG 2.2 AA axe-core accessibility audits + 11 clinical workflows)
-
-# 5. Production Build
+# 4. Production Build
 $ npm run build
 > next build
-Compiled successfully in 21.8s
-Generated static pages (22/22)
+Compiled successfully in 13.6s
+Generated static pages: 22/22
 Shared First Load JS: 103 kB
 Exit code: 0
 
-# 6. Deployed Real Golden Path
+# 5. Minimal Production Smoke Test (Canonical Domain)
+$ node scratch/minimal_production_smoke.cjs
+Target: https://medkit-ai-sih26047.vercel.app
+- /                    [PUBLIC_LANDING]: status 200 (expected 200)  [PASS]
+- /login               [PUBLIC_LOGIN]: status 200 (expected 200)  [PASS]
+- /intake/new          [PUBLIC_KIOSK]: status 200 (expected 200)  [PASS]
+- /doctor/patients     [PROTECTED_REDIRECT]: status 307 (expected 307) -> /login?redirectTo=%2Fdoctor%2Fpatients [PASS]
+- /api/patients        [PROTECTED_API]: status 401 (expected 401)  [PASS]
+- Clinician Auth Lifecycle (POST /api/auth/login -> GET /api/patients -> POST /api/auth/logout -> 401): [PASS]
+Exit code: 0
+
+# 6. Deployed Clinical Golden Path (Real Supabase Execution)
 $ npx playwright test tests/e2e/deployed-clinical-golden-path.real.spec.ts --config=playwright.real.config.ts
 1 passed (49.4s) — 30/30 clinical steps verified against https://medkit-ai-sih26047.vercel.app
 Exit code: 0
@@ -250,7 +242,7 @@ Exit code: 0
 
 ### Security & Privacy Integrity
 - **No Service-Role Key in Client/Browser:** The client bundle (`NEXT_PUBLIC_*`) strictly contains only the anon key and project URL. Service-role credentials are only accessed server-side.
-- **No Leaked Bypass Secrets:** The exposed development bypass secret has been completely revoked. The production alias is 100% public, rendering bypass headers obsolete for judge evaluation.
+- **No Leaked Bypass Secrets:** The exposed development bypass secret has been completely revoked. The canonical production domain was publicly reachable without Vercel SSO during the executed production verification, rendering bypass headers obsolete for judge evaluation.
 - **Fail-Closed Clinical Safety:** When real patient audio or medical records encounter AI provider timeouts, the system fails closed with informative UI alerts and never hallucinates synthetic clinical records.
 
 ### Accessibility (WCAG 2.2 AA-Oriented Automated Verification)

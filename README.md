@@ -1,12 +1,12 @@
 # MedKit AI — Intelligent Multimodal Clinical Intake & Physician Copilot
 
 [![Live Production](https://img.shields.io/badge/Live%20Production-medkit--ai--sih26047.vercel.app-emerald?style=for-the-badge&logo=vercel)](https://medkit-ai-sih26047.vercel.app)
-[![Unit Tests](https://img.shields.io/badge/Unit%20Tests-440%20Passed-emerald)](https://github.com/your-org/medkit-ai/actions)
-[![E2E Tests](https://img.shields.io/badge/E2E%20Playwright-17%20Passed-teal)](https://github.com/your-org/medkit-ai/actions)
+[![Unit Tests](https://img.shields.io/badge/Unit%20Tests-440%20Passed-emerald)](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
+[![E2E Tests](https://img.shields.io/badge/E2E%20Playwright-17%20Passed-teal)](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
 [![Deployed Golden Path](https://img.shields.io/badge/Deployed%20Golden%20Path-30%2F30%20Steps-success)](https://medkit-ai-sih26047.vercel.app)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20Passed-blue)](https://github.com/your-org/medkit-ai/actions)
-[![WCAG](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA--Oriented-purple)](https://github.com/your-org/medkit-ai/actions)
-[![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20Mapped-teal)](https://github.com/your-org/medkit-ai/actions)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20Passed-blue)](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
+[![Accessibility](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA--Oriented-purple)](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
+[![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20Mapped-teal)](https://github.com/yeshwanth851314-star/medkit-ai-sih26047)
 
 **SIH Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Lead Ministry / Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
