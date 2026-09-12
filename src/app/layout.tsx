@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/shared/header";
 import { OfflineSyncIndicator } from "@/components/shared/offline-sync-indicator";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "MedKit AI — Intelligent Multimodal Clinical Intake & Physician Copilot",
@@ -27,6 +28,7 @@ export default function RootLayout({
         <main id="main-content" className="flex-1" tabIndex={-1}>
           {children}
         </main>
+        <SpeedInsights />
         <footer className="border-t border-surface-200 bg-white py-4 text-center text-xs text-slate-500">
           <div className="mx-auto max-w-7xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div>

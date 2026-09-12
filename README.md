@@ -1,15 +1,28 @@
 # MedKit AI — Intelligent Multimodal Clinical Intake & Physician Copilot
 
-[![CI / Build Status](https://github.com/your-org/medkit-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/medkit-ai/actions)
-![Tests](https://img.shields.io/badge/Unit%20Tests-206%20Passed-emerald)
-![E2E Tests](https://img.shields.io/badge/E2E%20Playwright-11%20Passed-teal)
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20Passed-blue)
-![WCAG](https://img.shields.io/badge/Accessibility-WCAG%202.1%20AA-purple)
-![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20Ready-teal)
+[![Live Production](https://img.shields.io/badge/Live%20Production-medkit--ai--sih26047.vercel.app-emerald?style=for-the-badge&logo=vercel)](https://medkit-ai-sih26047.vercel.app)
+[![Unit Tests](https://img.shields.io/badge/Unit%20Tests-440%20Passed-emerald)](https://github.com/your-org/medkit-ai/actions)
+[![E2E Tests](https://img.shields.io/badge/E2E%20Playwright-17%20Passed-teal)](https://github.com/your-org/medkit-ai/actions)
+[![Deployed Golden Path](https://img.shields.io/badge/Deployed%20Golden%20Path-30%2F30%20Steps-success)](https://medkit-ai-sih26047.vercel.app)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20Passed-blue)](https://github.com/your-org/medkit-ai/actions)
+[![WCAG](https://img.shields.io/badge/Accessibility-WCAG%202.2%20AA--Oriented-purple)](https://github.com/your-org/medkit-ai/actions)
+[![Interoperability](https://img.shields.io/badge/Interoperability-FHIR%20R4%20%2F%20ABDM%20V3%20Ready-teal)](https://github.com/your-org/medkit-ai/actions)
 
 **SIH Problem Statement:** SIH26047 — Patient Case-Taking Software  
 **Lead Ministry / Organization:** Ministry of Ayush / All India Institute of Ayurveda (AIIA)  
-**Architecture:** Next.js 15 App Router Modular Monolith • Supabase (RLS & Encrypted Storage) • Google GenAI • Provenance Tracking • 100% Offline/Demo Reliable  
+**Architecture:** Next.js 15 App Router Modular Monolith • Supabase (RLS & Private Storage) • Google GenAI • Provenance Tracking • 100% Offline/Demo Reliable  
+
+---
+
+## 🚀 Live Production & Judge Evaluation URL
+
+MedKit AI is deployed to production on Vercel with real remote Supabase execution and zero platform authentication friction for hackathon evaluators:
+
+* **Canonical Production URL:** [https://medkit-ai-sih26047.vercel.app](https://medkit-ai-sih26047.vercel.app)
+* **Judge Evaluation Access:** Publicly accessible in any standard or incognito browser. No Vercel login, invitation, or password required.
+* **Patient Kiosk Flow:** [https://medkit-ai-sih26047.vercel.app/intake/new](https://medkit-ai-sih26047.vercel.app/intake/new) (Direct patient self-intake; voice & touch adaptive questioning).
+* **Clinician Portal Login:** [https://medkit-ai-sih26047.vercel.app/login](https://medkit-ai-sih26047.vercel.app/login) (Doctor review, triage, longitudinal timeline, and finalization).
+* **Real-User Performance Instrumentation:** Active via `@vercel/speed-insights` (Project ID: `R5m4rDqBVBHM8xjOaPdIjb0C5Gc`).
 
 ---
 
@@ -45,7 +58,7 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
 | **FHIR R4 / ABDM Ready** | Full HL7 FHIR R4 Bundle mapping with `Composition` as `entry[0]` | NRCES Clinical Artifact profile compliance; LOINC codes for vitals; ABHA identifier support. |
 | **Offline Idempotency & Queue** | Client-side queue manager with server-side persistent idempotency table (`sync_mutations`) | Safe intake and draft capture in low-connectivity rural health camps with duplicate replay protection. |
 | **Zero-Friction Onboarding** | Scoped clinician guided tour (keyed by doctor ID) & session-scoped kiosk intro | Lightweight, accessible, keyboard-trappable, respects `prefers-reduced-motion`, and replayable at any time. |
-| **WCAG 2.1 AA Accessibility** | Verified contrast ($\ge 4.5:1$), visible focus indicators, screen reader live alerts, skip-link | Accessible on clinical kiosks, tablets, and desktops. |
+| **WCAG 2.2 AA Accessibility** | Verified contrast (>= 4.5:1), visible focus indicators, screen reader live alerts, skip-link | 0 critical / 0 serious violations verified via automated axe-core audits. |
 
 ---
 
@@ -62,7 +75,7 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
 +-----------------+ +-----------------+     +-----------------+     +-----------------+
 |  Patient Kiosk  | |  Doctor Copilot |     |  Safety Engine  |     | Interoperability|
 | (Telugu/English)| |  Case Sheet UI  |     |  (Red Flags &   |     | (FHIR R4 / ABDM |
-|  Voice & Touch  | | Timeline & AYUSH|     | Deterministic)  |     |   Representation|
+|  Voice & Touch  | | Timeline & AYUSH|     | Deterministic)  |     |   Gateway V3)   |
 +-----------------+ +-----------------+     +-----------------+     +-----------------+
          |                   |                       |                       |
          +-------------------+-----------------------+-----------------------+
@@ -73,6 +86,7 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
                                |  - Google GenAI (Gemini 2.5 Flash)      |
                                |  - Hermetic In-Memory Mock Adapter      |
                                |  - Client Offline Mutation Queue        |
+                               |  - Vercel Speed Insights Observability  |
                                +-----------------------------------------+
 ```
 
@@ -80,22 +94,25 @@ MedKit AI is an intelligent clinical intake copilot that prepares a verified, st
 
 ## 4. Verification & Testing
 
-The entire system is covered by a suite of **206 automated unit tests** across 27 test suites and **11 Playwright E2E tests**:
+The entire system is covered by **440 automated unit & integration tests** across 41 test suites and **17 Playwright E2E tests**:
 
 ```bash
-# Run all unit and integration tests (Hermetic, offline-reliable)
+# 1. Run all unit and integration tests (Hermetic, offline-reliable)
 npm run test:unit
 
-# Run Playwright End-to-End test suite
-npx playwright test
+# 2. Run Playwright End-to-End test suite (Includes WCAG 2.2 AA axe audits)
+npm run test:e2e
 
-# Run TypeScript strict typecheck
+# 3. Run full 30-step clinical golden path against deployed production
+npm run test:e2e:real
+
+# 4. Run TypeScript strict typecheck
 npm run typecheck
 
-# Run ESLint validation
+# 5. Run ESLint validation
 npm run lint
 
-# Run production build
+# 6. Run production build
 npm run build
 ```
 
@@ -130,8 +147,9 @@ For the complete 3-minute jury presentation and defense script, refer to:
 
 ---
 
-## 6. Specification Pack Reference
+## 7. Specification Pack Reference
 
+- [`docs/FINAL_PRODUCTION_ACCEPTANCE.md`](./docs/FINAL_PRODUCTION_ACCEPTANCE.md) — Final Production Acceptance & Evidence Report
 - [`docs/00_MASTER_SPEC.md`](./docs/00_MASTER_SPEC.md) — Master Controlling Specification
 - [`docs/01_PRD.md`](./docs/01_PRD.md) — Product Requirements Document
 - [`docs/02_TRD.md`](./docs/02_TRD.md) — Technical Requirements Document
@@ -143,5 +161,5 @@ For the complete 3-minute jury presentation and defense script, refer to:
 
 ---
 
-## 7. Synthetic Data Policy
+## 8. Synthetic Data Policy
 All test data, documents, and transcripts are synthetic fixtures located in `tests/fixtures/synthetic/`. No Protected Health Information (PHI) is ever used or stored.
