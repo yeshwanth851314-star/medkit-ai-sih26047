@@ -204,6 +204,7 @@ export function categorizeFile(posixRelPath) {
       ".env.example",
       ".eslintrc.json",
       ".gitignore",
+      ".vercelignore",
       "next-env.d.ts",
       "next.config.ts",
       "package-lock.json",
