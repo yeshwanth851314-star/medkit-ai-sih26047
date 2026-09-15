@@ -45,6 +45,33 @@ export async function authenticateApiRequest(request: Request): Promise<AuthUser
     }
   }
 
+  const url = new URL(request.url);
+  const isOnboardingRoute = url.pathname.startsWith("/api/auth/onboarding/");
+
+  if (isOnboardingRoute) {
+    try {
+      const { getServiceSupabaseClient } = await import("@/lib/db/supabase");
+      const serviceClient = getServiceSupabaseClient();
+      if (serviceClient) {
+        const { data: profProfile } = await serviceClient
+          .from("clinician_professional_profiles")
+          .select("account_status, user_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (profProfile) {
+          return {
+            ...user,
+            id: profProfile.user_id,
+          };
+        }
+      }
+      return user;
+    } catch {
+      return user;
+    }
+  }
+
   try {
     const { verifyActiveClinicalProfile } = await import("@/lib/db/supabase");
     return await verifyActiveClinicalProfile(user);
