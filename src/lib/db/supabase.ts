@@ -134,6 +134,17 @@ export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthU
   if (!profile || profile.is_active !== true) return null;
   if (!["doctor", "clinician", "staff", "admin"].includes(profile.role)) return null;
 
+  // Enforce professional onboarding state machine check
+  const { data: profProfile } = await supabase
+    .from("clinician_professional_profiles")
+    .select("account_status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (profProfile && profProfile.account_status !== "ACTIVE") {
+    return null;
+  }
+
   return {
     ...user,
     fullName: profile.full_name || user.fullName,

@@ -138,6 +138,12 @@ export default function LoginPage() {
             <p className="text-[11px] text-slate-500 leading-relaxed">
               Authorized clinical personnel only. Access is monitored and protected by facility-isolated Row Level Security. For new physician or staff onboarding, contact your facility administrator.
             </p>
+            <div className="mt-3 pt-2 border-t border-surface-200 text-center text-xs">
+              <span className="text-slate-500">New healthcare professional? </span>
+              <a href="/register" className="font-semibold text-clinical-600 hover:text-clinical-700">
+                Register &amp; Verify Credentials &rarr;
+              </a>
+            </div>
           </div>
         </div>
       </div>

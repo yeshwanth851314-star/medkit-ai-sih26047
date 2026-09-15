@@ -26,7 +26,7 @@ export async function logAuditEvent(params: {
   actorId: string;
   actorRole?: string;
   action: AuditAction;
-  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions";
+  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions" | "clinician_onboarding";
   resourceId: string;
   metadata?: Record<string, any>;
   actorOrToken?: import("@/features/auth/types").AuthUser | string | null;
