@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json(
       {
         profile: result.profile,
+        sessionToken: result.sessionToken,
         message: result.message,
       },
       { status: 201 }
