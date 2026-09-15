@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { action, userId, verificationCode, secret } = body;
+    const { action, userId, verificationCode, secret, factorId } = body;
 
     // Security invariant: never trust client-supplied userId
     if (userId && userId !== user.id) {
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await verifyClinicianMfaChallenge(user, verificationCode, secret);
+    const result = await verifyClinicianMfaChallenge(user, verificationCode, secret, factorId);
     return NextResponse.json(result, { status: 200 });
   } catch (err: any) {
     console.error("Clinician MFA enrollment/verification error:", err);

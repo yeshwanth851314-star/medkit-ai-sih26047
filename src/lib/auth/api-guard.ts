@@ -54,10 +54,26 @@ export async function authenticateApiRequest(request: Request): Promise<AuthUser
   }
 }
 
+const CLINICAL_DATA_PREFIXES = [
+  "/api/patients",
+  "/api/cases",
+  "/api/documents",
+  "/api/consents",
+  "/api/timeline",
+  "/api/sync",
+];
+
+export function isClinicalDataRoute(pathname: string): boolean {
+  return CLINICAL_DATA_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
 export async function requireApiAuth(
   request: Request,
   options?: {
     allowedRoles?: UserRole[];
+    requireAal2?: boolean;
   }
 ): Promise<{ user: AuthUser } | { errorResponse: NextResponse }> {
   const user = await authenticateApiRequest(request);
@@ -77,6 +93,25 @@ export async function requireApiAuth(
         errorResponse: NextResponse.json(
           {
             error: `FORBIDDEN: Role '${user.role}' is not authorized for this clinical operation`,
+          },
+          { status: 403 }
+        ),
+      };
+    }
+  }
+
+  // Multi-Factor Assurance Level (AAL2) check for clinical data routes
+  const url = new URL(request.url);
+  const isClinical = isClinicalDataRoute(url.pathname) || options?.requireAal2 === true;
+
+  if (isClinical) {
+    // If active clinician has MFA enrolled (or required) but presents an AAL1 session
+    if (user.mfaEnrolled && user.aal === "aal1") {
+      return {
+        errorResponse: NextResponse.json(
+          {
+            error: "MFA_REQUIRED",
+            message: "Clinical data access requires AAL2 authentication. Complete MFA challenge.",
           },
           { status: 403 }
         ),

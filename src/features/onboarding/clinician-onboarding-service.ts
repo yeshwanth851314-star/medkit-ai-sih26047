@@ -321,6 +321,43 @@ export async function initiateClinicianMfaEnrollment(
     throw new Error("INVALID_ONBOARDING_STATE: MFA enrollment is only permitted after professional verification is confirmed.");
   }
 
+  // If live Supabase session exists, use Supabase Auth MFA
+  if (!env.isDemoMode && actorUser.supabaseToken) {
+    const userClient = getSupabaseClient(actorUser.supabaseToken);
+    if (userClient) {
+      const enrollResult = await userClient.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "MedKit Clinician TOTP",
+      });
+
+      if (!enrollResult.error && enrollResult.data) {
+        const factorId = enrollResult.data.id;
+        const totpSecret = enrollResult.data.totp.secret;
+        const qrUri = enrollResult.data.totp.uri;
+
+        const serviceClient = getServiceSupabaseClient();
+        if (serviceClient) {
+          await serviceClient
+            .from("clinician_professional_profiles")
+            .update({
+              mfa_factor_id: factorId,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId);
+        }
+
+        mockMfaSecrets.set(userId, totpSecret);
+
+        return {
+          factorId,
+          factorType: "totp",
+          secret: totpSecret,
+          qrCodeUri: qrUri,
+        };
+      }
+    }
+  }
+
   // Generate real cryptographic TOTP secret
   const secret = generateTotpSecret(20);
   const factorId = `totp_${Date.now()}`;
@@ -334,7 +371,7 @@ export async function initiateClinicianMfaEnrollment(
       await serviceClient
         .from("clinician_professional_profiles")
         .update({
-          mfa_secret: secret,
+          mfa_factor_id: factorId,
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId);
@@ -356,7 +393,8 @@ export async function initiateClinicianMfaEnrollment(
 export async function verifyClinicianMfaChallenge(
   actorUser: AuthUser,
   verificationCode: string,
-  providedSecret?: string
+  providedSecret?: string,
+  factorId?: string
 ): Promise<{ profile: ClinicianProfessionalProfile; success: boolean }> {
   const userId = actorUser.id;
   let profile = mockProfessionalProfiles.get(userId);
@@ -384,10 +422,10 @@ export async function verifyClinicianMfaChallenge(
           facilityRole: data.facility_role,
           accountStatus: data.account_status,
           mfaEnrolled: data.mfa_enrolled,
+          mfaFactorId: data.mfa_factor_id,
           createdAt: data.created_at,
           updatedAt: data.updated_at,
         };
-        if (data.mfa_secret) storedSecret = data.mfa_secret;
       }
     }
   }
@@ -400,11 +438,61 @@ export async function verifyClinicianMfaChallenge(
     throw new Error("INVALID_ONBOARDING_STATE: MFA verification requires verified professional status and MFA_REQUIRED state.");
   }
 
+  // 1. Try Supabase Auth MFA challenge if live session exists
+  if (!env.isDemoMode && actorUser.supabaseToken) {
+    const userClient = getSupabaseClient(actorUser.supabaseToken);
+    const targetFactorId = factorId || profile.mfaFactorId;
+    if (userClient && targetFactorId) {
+      const challengeResult = await userClient.auth.mfa.challengeAndVerify({
+        factorId: targetFactorId,
+        code: verificationCode,
+      });
+
+      if (!challengeResult.error) {
+        profile.mfaEnrolled = true;
+        profile.mfaVerifiedAt = new Date().toISOString();
+        profile.accountStatus = "PENDING_FACILITY_APPROVAL";
+        profile.updatedAt = new Date().toISOString();
+
+        const serviceClient = getServiceSupabaseClient();
+        if (serviceClient) {
+          await serviceClient
+            .from("clinician_professional_profiles")
+            .update({
+              mfa_enrolled: true,
+              mfa_verified_at: profile.mfaVerifiedAt,
+              mfa_assurance_level: "aal2",
+              account_status: "PENDING_FACILITY_APPROVAL",
+              updated_at: profile.updatedAt,
+            })
+            .eq("user_id", userId);
+        }
+
+        mockProfessionalProfiles.set(userId, profile);
+
+        await logAuditEvent({
+          action: "CLINICIAN_MFA_ENROLLED",
+          resourceType: "clinician_onboarding",
+          resourceId: userId,
+          actorId: userId,
+          metadata: {
+            facilityId: profile.requestedFacilityId,
+            mfaEnrolled: true,
+            assuranceLevel: "aal2",
+            nextStep: "PENDING_FACILITY_APPROVAL",
+          },
+        });
+
+        return { profile, success: true };
+      }
+    }
+  }
+
+  // 2. Cryptographic TOTP verification (RFC 6238)
   if (!storedSecret) {
     throw new Error("MFA_ENROLLMENT_REQUIRED: Must initiate MFA enrollment to generate authenticator challenge before verifying.");
   }
 
-  // Real cryptographic TOTP verification (RFC 6238)
   const isValid = verifyTotpCode(storedSecret, verificationCode);
   if (!isValid) {
     throw new Error("INVALID_MFA_CODE: 6-digit TOTP code failed cryptographic challenge verification.");
@@ -423,6 +511,7 @@ export async function verifyClinicianMfaChallenge(
         .update({
           mfa_enrolled: true,
           mfa_verified_at: profile.mfaVerifiedAt,
+          mfa_assurance_level: "aal2",
           account_status: "PENDING_FACILITY_APPROVAL",
           updated_at: profile.updatedAt,
         })
@@ -541,6 +630,7 @@ export async function approveFacilityApplication(
       // Execute the atomic PostgreSQL RPC
       const { data, error } = await serviceClient.rpc("approve_clinician_application", {
         p_profile_id: profileId,
+        p_reason: null,
         p_admin_id: adminUser.id,
       });
 

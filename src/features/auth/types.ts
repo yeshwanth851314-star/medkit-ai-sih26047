@@ -17,6 +17,8 @@ export interface AuthUser {
   supabaseToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  aal?: "aal1" | "aal2";
+  mfaEnrolled?: boolean;
 }
 
 export interface PublicAuthUser {

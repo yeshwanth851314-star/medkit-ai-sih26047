@@ -108,7 +108,70 @@ export class AllopathyNMRRegistryProvider implements IProfessionalRegistryProvid
     const nmcApiKey = process.env.NMC_NMR_API_KEY;
     const sandboxEnabled = process.env.ENABLE_TEST_REGISTRY_SANDBOX === "true" || process.env.NODE_ENV === "test";
 
-    if (!nmcApiUrl && !sandboxEnabled) {
+    if (nmcApiUrl) {
+      try {
+        const response = await fetch(`${nmcApiUrl.replace(/\/$/, "")}/verify`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(nmcApiKey ? { Authorization: `Bearer ${nmcApiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            registrationNumber: regNo,
+            registrationAuthority: request.registrationAuthority,
+            registrationState: request.registrationState,
+            applicantFullName: request.applicantFullName,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!response.ok) {
+          return {
+            verified: false,
+            status: "recheck_required",
+            provider: this.providerName,
+            verificationReference: `NMR-HTTP-${response.status}-${Date.now()}`,
+            remarks: `National Medical Register returned HTTP status ${response.status}. Credential queued for manual hospital verification.`,
+            error: "EXTERNAL_REGISTRY_ERROR",
+          };
+        }
+
+        const data = await response.json();
+        if (!data.verified) {
+          return {
+            verified: false,
+            status: data.status === "rejected" ? "rejected" : "recheck_required",
+            provider: this.providerName,
+            verificationReference: data.reference || `NMR-REJ-${Date.now()}`,
+            remarks: data.remarks || "Registry returned non-verified status.",
+            error: data.error || "REGISTRY_VERIFICATION_FAILED",
+          };
+        }
+
+        return {
+          verified: true,
+          status: "verified",
+          provider: this.providerName,
+          verificationReference: data.reference || `NMR-${Date.now()}`,
+          practitionerName: data.practitionerName || request.applicantFullName,
+          specialty: data.specialty || "General Medicine / Surgery",
+          remarks: data.remarks || "Registration verified with National Medical Commission.",
+          verifiedAt: new Date().toISOString(),
+          recheckAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+      } catch (fetchErr: any) {
+        return {
+          verified: false,
+          status: "recheck_required",
+          provider: this.providerName,
+          verificationReference: `NMR-FAIL-${Date.now()}`,
+          remarks: `National Medical Register gateway error: ${fetchErr?.message || "Connection failed"}. Credential queued for manual verification.`,
+          error: "EXTERNAL_REGISTRY_UNAVAILABLE",
+        };
+      }
+    }
+
+    if (!sandboxEnabled) {
       // In production without live registry API: fail-closed with unambiguous status
       return {
         verified: false,
@@ -205,9 +268,74 @@ export class AyushNCISMRegistryProvider implements IProfessionalRegistryProvider
 
     const regNo = request.registrationNumber.trim().toUpperCase();
     const ncismApiUrl = process.env.NCISM_API_URL;
+    const ncismApiKey = process.env.NCISM_API_KEY;
     const sandboxEnabled = process.env.ENABLE_TEST_REGISTRY_SANDBOX === "true" || process.env.NODE_ENV === "test";
 
-    if (!ncismApiUrl && !sandboxEnabled) {
+    if (ncismApiUrl) {
+      try {
+        const response = await fetch(`${ncismApiUrl.replace(/\/$/, "")}/verify`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(ncismApiKey ? { Authorization: `Bearer ${ncismApiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            registrationNumber: regNo,
+            registrationAuthority: request.registrationAuthority,
+            registrationState: request.registrationState,
+            applicantFullName: request.applicantFullName,
+            professionalType: request.professionalType,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!response.ok) {
+          return {
+            verified: false,
+            status: "recheck_required",
+            provider: this.providerName,
+            verificationReference: `NCISM-HTTP-${response.status}-${Date.now()}`,
+            remarks: `NCISM AYUSH registry returned HTTP status ${response.status}. Credential queued for manual verification.`,
+            error: "EXTERNAL_REGISTRY_ERROR",
+          };
+        }
+
+        const data = await response.json();
+        if (!data.verified) {
+          return {
+            verified: false,
+            status: data.status === "rejected" ? "rejected" : "recheck_required",
+            provider: this.providerName,
+            verificationReference: data.reference || `NCISM-REJ-${Date.now()}`,
+            remarks: data.remarks || "AYUSH Registry returned non-verified status.",
+            error: data.error || "REGISTRY_VERIFICATION_FAILED",
+          };
+        }
+
+        return {
+          verified: true,
+          status: "verified",
+          provider: this.providerName,
+          verificationReference: data.reference || `NCISM-${Date.now()}`,
+          practitionerName: data.practitionerName || request.applicantFullName,
+          specialty: data.specialty || (request.professionalType === "ayush_ayurveda" ? "Ayurveda / Kayachikitsa" : "Indian System of Medicine"),
+          remarks: data.remarks || "Registration verified with NCISM AYUSH council.",
+          verifiedAt: new Date().toISOString(),
+          recheckAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+      } catch (fetchErr: any) {
+        return {
+          verified: false,
+          status: "recheck_required",
+          provider: this.providerName,
+          verificationReference: `NCISM-FAIL-${Date.now()}`,
+          remarks: `NCISM AYUSH registry gateway error: ${fetchErr?.message || "Connection failed"}. Credential queued for manual verification.`,
+          error: "EXTERNAL_REGISTRY_UNAVAILABLE",
+        };
+      }
+    }
+
+    if (!sandboxEnabled) {
       return {
         verified: false,
         status: "recheck_required",
@@ -301,9 +429,74 @@ export class HomeopathyNCHRegistryProvider implements IProfessionalRegistryProvi
 
     const regNo = request.registrationNumber.trim().toUpperCase();
     const nchApiUrl = process.env.NCH_API_URL;
+    const nchApiKey = process.env.NCH_API_KEY;
     const sandboxEnabled = process.env.ENABLE_TEST_REGISTRY_SANDBOX === "true" || process.env.NODE_ENV === "test";
 
-    if (!nchApiUrl && !sandboxEnabled) {
+    if (nchApiUrl) {
+      try {
+        const response = await fetch(`${nchApiUrl.replace(/\/$/, "")}/verify`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(nchApiKey ? { Authorization: `Bearer ${nchApiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            registrationNumber: regNo,
+            registrationAuthority: request.registrationAuthority,
+            registrationState: request.registrationState,
+            applicantFullName: request.applicantFullName,
+            professionalType: "ayush_homeopathy",
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+
+        if (!response.ok) {
+          return {
+            verified: false,
+            status: "recheck_required",
+            provider: this.providerName,
+            verificationReference: `NCH-HTTP-${response.status}-${Date.now()}`,
+            remarks: `National Commission for Homoeopathy returned HTTP status ${response.status}. Credential queued for manual verification.`,
+            error: "EXTERNAL_REGISTRY_ERROR",
+          };
+        }
+
+        const data = await response.json();
+        if (!data.verified) {
+          return {
+            verified: false,
+            status: data.status === "rejected" ? "rejected" : "recheck_required",
+            provider: this.providerName,
+            verificationReference: data.reference || `NCH-REJ-${Date.now()}`,
+            remarks: data.remarks || "Homoeopathy Registry returned non-verified status.",
+            error: data.error || "REGISTRY_VERIFICATION_FAILED",
+          };
+        }
+
+        return {
+          verified: true,
+          status: "verified",
+          provider: this.providerName,
+          verificationReference: data.reference || `NCH-${Date.now()}`,
+          practitionerName: data.practitionerName || request.applicantFullName,
+          specialty: data.specialty || "Homoeopathy",
+          remarks: data.remarks || "Registration verified with National Commission for Homoeopathy.",
+          verifiedAt: new Date().toISOString(),
+          recheckAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+      } catch (fetchErr: any) {
+        return {
+          verified: false,
+          status: "recheck_required",
+          provider: this.providerName,
+          verificationReference: `NCH-FAIL-${Date.now()}`,
+          remarks: `National Commission for Homoeopathy registry gateway error: ${fetchErr?.message || "Connection failed"}. Credential queued for manual verification.`,
+          error: "EXTERNAL_REGISTRY_UNAVAILABLE",
+        };
+      }
+    }
+
+    if (!sandboxEnabled) {
       return {
         verified: false,
         status: "recheck_required",

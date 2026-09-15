@@ -137,7 +137,7 @@ export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthU
   // Enforce professional onboarding state machine check
   const { data: profProfile } = await supabase
     .from("clinician_professional_profiles")
-    .select("account_status")
+    .select("account_status, mfa_enrolled, mfa_assurance_level")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -145,11 +145,16 @@ export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthU
     return null;
   }
 
+  const mfaEnrolled = profProfile ? profProfile.mfa_enrolled === true : (user.mfaEnrolled ?? false);
+  const aal = (profProfile?.mfa_assurance_level as "aal1" | "aal2") || user.aal || (mfaEnrolled ? "aal2" : "aal1");
+
   return {
     ...user,
     fullName: profile.full_name || user.fullName,
     role: profile.role as AuthUser["role"],
     facilityId: profile.facility_id || null,
+    mfaEnrolled,
+    aal,
   };
 }
 

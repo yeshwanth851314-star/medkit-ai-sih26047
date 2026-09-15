@@ -4,37 +4,9 @@ import { AuthUser, LoginCredentials } from "./types";
 
 import { signSessionToken, verifySessionToken } from "@/lib/auth/jwt";
 
-// Known default clinical test users for offline unit test execution
-export const DEMO_USERS: Record<string, AuthUser & { passwordHash: string }> = {
-  "doctor@medkit.ai": {
-    id: "usr-doc-0001",
-    email: "doctor@medkit.ai",
-    fullName: "Dr. Ananya Rao, MD",
-    role: "doctor",
-    facilityId: "facility-aiia-delhi",
-    passwordHash: "MedKit#Doctor!2026$SecP9",
-  },
-  "ayush@medkit.ai": {
-    id: "usr-doc-0002",
-    email: "ayush@medkit.ai",
-    fullName: "Vaidya Rajesh Sharma, BAMS",
-    role: "doctor",
-    facilityId: "facility-aiia-delhi",
-    passwordHash: "MedKit#Ayush!2026$Vaidya7",
-  },
-  "staff@medkit.ai": {
-    id: "usr-stf-0001",
-    email: "staff@medkit.ai",
-    fullName: "Kiran Reddy (Triage Nurse)",
-    role: "staff",
-    facilityId: "facility-aiia-delhi",
-    passwordHash: "MedKit#Staff!2026$Triage3",
-  },
-};
-
 export async function authenticateClinician(credentials: LoginCredentials): Promise<{ user: AuthUser; token: string } | null> {
-  // Production authentication path (Supabase Auth + Profiles)
-  if (!env.isDemoMode) {
+  // Production authentication path (Strictly Supabase Auth + Verified Active Profiles)
+  if (process.env.NODE_ENV === "production" || !env.isDemoMode) {
     const supabase = getSupabaseClient();
     if (!supabase) {
       console.error("Authentication failed: Supabase client is not configured in production mode.");
@@ -90,15 +62,22 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
     };
   }
 
-  // Demo Fallback Mode (Strictly permitted ONLY when env.isDemoMode is true)
-  const demoAccount = DEMO_USERS[credentials.email.toLowerCase().trim()];
-  if (demoAccount && demoAccount.passwordHash === credentials.password) {
-    const { passwordHash, ...user } = demoAccount;
-    const token = signSessionToken(user);
-    return {
-      user,
-      token,
-    };
+  // Offline / Unit Test Execution: Isolated mock loader (never accessible in production bundle)
+  if (process.env.NODE_ENV === "test" || env.isDemoMode) {
+    try {
+      const { TEST_MOCK_USERS } = await import("../../../tests/mocks/auth");
+      const mockUser = TEST_MOCK_USERS[credentials.email.toLowerCase().trim()];
+      if (mockUser && mockUser.password === credentials.password) {
+        const { password, ...user } = mockUser;
+        const token = signSessionToken(user);
+        return {
+          user,
+          token,
+        };
+      }
+    } catch {
+      return null;
+    }
   }
 
   return null;

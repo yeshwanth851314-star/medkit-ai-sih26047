@@ -94,6 +94,8 @@ export interface ClinicianProfessionalProfile {
   facilityRole: "doctor" | "staff";
   accountStatus: AccountStatus;
   mfaEnrolled: boolean;
+  mfaFactorId?: string | null;
+  mfaAssuranceLevel?: string | null;
   mfaVerifiedAt?: string | null;
   facilityApprovedBy?: string | null;
   facilityApprovedAt?: string | null;

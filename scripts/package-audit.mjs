@@ -110,6 +110,8 @@ const SECRET_DETECTION_PATTERNS = [
   { name: "Anthropic Secret Key", regex: /sk-ant-[a-zA-Z0-9]{32,}/ },
   { name: "Generic Private Key", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
   { name: "AWS Secret Access Key", regex: /(?:aws_secret_access_key|AWS_SECRET_ACCESS_KEY)\s*=\s*[A-Za-z0-9/+=]{40}/ },
+  { name: "Plaintext TOTP Secret Key", regex: /mfa_secret\s*[:=]\s*['"][A-Z2-7]{16,32}['"]/i },
+  { name: "Hardcoded Clinician Credentials Map", regex: /export\s+const\s+DEMO_USERS\s*=/ },
 ];
 
 /**
