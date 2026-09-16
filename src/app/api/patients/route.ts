@@ -112,8 +112,11 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, patient: result.patient }, { status: 201 });
-  } catch (err) {
+  } catch (err: any) {
     console.error("POST /api/patients error:", err);
-    return NextResponse.json({ error: "Failed to register patient" }, { status: 500 });
+    if (err.message && err.message.includes("IDENTIFIER_CONFLICT")) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    return NextResponse.json({ error: err.message || "Failed to register patient" }, { status: 500 });
   }
 }

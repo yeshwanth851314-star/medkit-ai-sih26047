@@ -29,6 +29,7 @@ describe("Phase 4: ABDM / ABHA Interoperability & Integration Readiness", () => 
     date_of_birth: "1985-06-15",
     phone: "+919876543210",
     abha_id: "14-2345-6789-0123",
+    facility_id: "facility-aiia-delhi",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -40,6 +41,7 @@ describe("Phase 4: ABDM / ABHA Interoperability & Integration Readiness", () => 
     gender: "female",
     date_of_birth: "1990-11-20",
     phone: "+919876543211",
+    facility_id: "facility-aiia-delhi",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -422,6 +424,7 @@ describe("Phase 4: ABDM / ABHA Interoperability & Integration Readiness", () => 
         gender: "female",
         date_of_birth: "1992-04-10",
         phone: "+919876543299",
+        facility_id: "facility-aiia-delhi",
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

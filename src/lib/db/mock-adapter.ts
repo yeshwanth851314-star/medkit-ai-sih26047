@@ -94,6 +94,25 @@ class MockDatabaseAdapter {
     this.initializeFromFixtures();
   }
 
+  clearAll(): void {
+    this.patients.clear();
+    this.cases.clear();
+    this.documents.clear();
+    this.consents.clear();
+    this.syncMutations.clear();
+    this.storageFiles.clear();
+    this.auditLogs = [];
+    this.redFlagEvents.clear();
+    this.intakeSessions.clear();
+    this.caseAmendments.clear();
+    this.kioskInstances.clear();
+    this.capabilityRevocations.clear();
+    this.userProfiles.clear();
+    this.isInitialized = false;
+    this.seedKiosks();
+    this.initializeFromFixtures();
+  }
+
   private seedKiosks() {
     this.userProfiles.set("usr-staff-001", { role: "staff", facilityId: "fac-hyd-01" });
     this.userProfiles.set("usr-doctor-001", { role: "doctor", facilityId: "fac-hyd-01" });
@@ -108,6 +127,18 @@ class MockDatabaseAdapter {
       created_at: new Date().toISOString(),
       expires_at: null,
       last_active_at: null,
+    });
+
+    this.patients.set("00000000-0000-0000-0000-000000000001", {
+      id: "00000000-0000-0000-0000-000000000001",
+      patient_code: "MED-2026-0000",
+      full_name: "Default Kiosk Patient",
+      date_of_birth: "1980-01-01",
+      gender: "Other",
+      phone: "+91-98765-00000",
+      facility_id: "fac-hyd-01",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
   }
 

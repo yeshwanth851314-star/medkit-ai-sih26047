@@ -415,13 +415,16 @@ describe("Phase 5: Complete Clinical Workflow & Resilience Failure Matrix (A–N
   // N. Server/Cache Restart Recovery
   // ---------------------------------------------------------------------------
   it("[Scenario N] Server/cache restart: compilation to case succeeds after total cache wipe", async () => {
-    const { patient } = await registerPatient({
-      fullName: "Indira Priyadarshini",
-      dateOfBirth: "1981-10-31",
-      gender: "Female",
-      bloodGroup: "O+",
-      phone: "+919876543208",
-    });
+    const { patient } = await registerPatient(
+      {
+        fullName: "Indira Priyadarshini",
+        dateOfBirth: "1981-10-31",
+        gender: "Female",
+        bloodGroup: "O+",
+        phone: "+919876543208",
+      },
+      { actor: clinicianA, facilityId: facilityA }
+    );
 
     const consent = await recordPatientConsent({
       patientId: patient.id,

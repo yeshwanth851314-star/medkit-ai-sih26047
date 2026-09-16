@@ -2,6 +2,7 @@ import {
   createCase,
   updateCase,
   getCaseById,
+  getPatientById,
   getCasesByPatientId,
   getCaseAmendments,
   createCaseAmendment,
@@ -23,10 +24,28 @@ export async function createCaseDraft(
   }
 
   const patientId = input.patientId || (input as any).patient_id;
+  if (!patientId || typeof patientId !== "string" || patientId.trim().length === 0) {
+    throw new Error("PATIENT_REQUIRED: Valid patientId is required to create a clinical case draft");
+  }
+
+  const patient = await getPatientById(patientId, actorOrToken);
+  if (!patient) {
+    throw new Error(`PATIENT_NOT_FOUND: Patient '${patientId}' was not found`);
+  }
+
+  const actorFacilityId =
+    typeof actorOrToken === "object" && actorOrToken ? actorOrToken.facilityId : null;
+  if (actorFacilityId && patient.facility_id && actorFacilityId !== patient.facility_id) {
+    throw new Error(`FORBIDDEN: Clinician facility '${actorFacilityId}' does not match patient facility '${patient.facility_id}'`);
+  }
+
+  const resolvedFacilityId = patient.facility_id || actorFacilityId || "fac-delhi-01";
+
   const chiefComplaint = (input.chiefComplaint || (input as any).chief_complaint || "").trim();
 
   const newCase = await createCase({
     patient_id: patientId,
+    facility_id: resolvedFacilityId,
     consent_id: input.consentId || (input as any).consent_id || null,
     created_by: createdBy || null,
     status: "draft",

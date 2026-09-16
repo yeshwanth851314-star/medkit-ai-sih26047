@@ -10,17 +10,26 @@ export interface Profile {
   updated_at: string;
 }
 
+export type PatientIdentityStatus =
+  | "UNVERIFIED"
+  | "VERIFIED_LOCAL"
+  | "ABHA_LINKED"
+  | "MERGE_REVIEW_REQUIRED"
+  | "ARCHIVED";
+
 export interface Patient {
   id: string;
   patient_code: string;
   full_name: string;
   date_of_birth?: string | null;
+  age_estimate?: number | null;
   gender?: string | null;
   phone?: string | null;
   address?: string | null;
   blood_group?: string | null;
   abha_id?: string | null;
-  facility_id?: string | null;
+  facility_id: string;
+  identity_status?: PatientIdentityStatus;
   emergency_contact?: {
     name: string;
     relationship: string;
@@ -101,6 +110,7 @@ export interface AyushAssessment {
 export interface ClinicalCase {
   id: string;
   patient_id: string;
+  facility_id?: string | null;
   clinician_id?: string | null;
   consent_id?: string | null;
   created_by?: string | null;
@@ -226,3 +236,38 @@ export interface KioskInstance {
   expires_at?: string | null;
   last_active_at?: string | null;
 }
+
+export type ExternalIdentifierType = "ABHA_NUMBER" | "ABHA_ADDRESS" | "FACILITY_MRN" | "OTHER_APPROVED_ID";
+export type IdentifierVerificationStatus = "UNVERIFIED" | "VERIFIED" | "REJECTED";
+
+export interface PatientExternalIdentifier {
+  id: string;
+  patient_id: string;
+  facility_id: string;
+  identifier_type: ExternalIdentifierType;
+  identifier_value_encrypted_or_protected?: string | null;
+  identifier_hash: string;
+  issuing_authority?: string | null;
+  verification_status: IdentifierVerificationStatus;
+  verified_at?: string | null;
+  linked_at: string;
+  unlinked_at?: string | null;
+  metadata?: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteIntakeInvitation {
+  id: string;
+  facility_id: string;
+  patient_id?: string | null;
+  token_hash: string;
+  purpose: string;
+  expires_at: string;
+  max_uses: number;
+  used_count: number;
+  revoked_at?: string | null;
+  created_by: string;
+  created_at: string;
+}
+

@@ -25,6 +25,7 @@ describe("Phase 13: FHIR R4 & ABDM Interoperability Tests", () => {
     gender: "male",
     phone: "+919876543210",
     abha_id: "14-2345-6789-0123",
+    facility_id: "facility-aiia-delhi",
     created_at: "2026-09-01T10:00:00Z",
     updated_at: "2026-09-01T10:00:00Z",
   };

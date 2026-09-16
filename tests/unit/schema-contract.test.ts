@@ -88,7 +88,7 @@ describe("Schema & RPC Contract Invariant Tests", () => {
     const cases = schema.get("cases")!;
     expect(cases.has("clinician_id")).toBe(true);
     expect(cases.has("assigned_doctor_id")).toBe(false);
-    expect(cases.has("facility_id")).toBe(false);
+    expect(cases.has("facility_id")).toBe(true);
 
     for (const table of ["patients", "documents", "sync_mutations", "audit_logs"]) {
       expect(schema.has(table)).toBe(true);
