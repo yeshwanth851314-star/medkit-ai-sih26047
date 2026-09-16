@@ -28,6 +28,8 @@ export interface JwtPayload {
   supabaseToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  aal?: "aal1" | "aal2";
+  mfaEnrolled?: boolean;
   iat: number;
   exp: number;
 }
@@ -66,6 +68,8 @@ export function signSessionToken(
     supabaseToken: user.supabaseToken,
     refreshToken: user.refreshToken,
     tokenExpiresAt: user.tokenExpiresAt,
+    aal: user.aal !== undefined ? user.aal : "aal2",
+    mfaEnrolled: user.mfaEnrolled ?? (user.aal === "aal1" ? true : false),
     iat: now,
     exp: now + expiresInSeconds,
   };
@@ -168,6 +172,8 @@ export function verifySessionToken(token: string, customSecret?: string): AuthUs
       supabaseToken: payload.supabaseToken,
       refreshToken: payload.refreshToken,
       tokenExpiresAt: payload.tokenExpiresAt,
+      aal: payload.aal || "aal1",
+      mfaEnrolled: payload.mfaEnrolled ?? false,
     };
   } catch {
     return null;

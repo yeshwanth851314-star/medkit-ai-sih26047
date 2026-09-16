@@ -146,7 +146,25 @@ export async function verifyActiveClinicalProfile(user: AuthUser): Promise<AuthU
   }
 
   const mfaEnrolled = profProfile ? profProfile.mfa_enrolled === true : (user.mfaEnrolled ?? false);
-  const aal = (profProfile?.mfa_assurance_level as "aal1" | "aal2") || user.aal || (mfaEnrolled ? "aal2" : "aal1");
+  // Invariant (Phase B Target 1): AAL2 is strictly a property of the CURRENT authenticated Supabase
+  // session/JWT, NOT durable clinician-profile database state. Database column mfa_assurance_level
+  // is historical/audit metadata and MUST NOT participate in request authorization.
+  let aal: "aal1" | "aal2" = user.aal || "aal1";
+
+  // If a live Supabase JWT is available, parse its authoritative 'aal' claim
+  if (user.supabaseToken) {
+    try {
+      const parts = user.supabaseToken.split(".");
+      if (parts.length === 3) {
+        let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (b64.length % 4) b64 += "=";
+        const claims = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+        if (claims.aal === "aal2" || claims.aal === "aal1") {
+          aal = claims.aal;
+        }
+      }
+    } catch {}
+  }
 
   return {
     ...user,

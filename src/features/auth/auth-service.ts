@@ -56,6 +56,31 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
       return null; // Fail closed: never default to doctor or synthesize privileges
     }
 
+    // Derive authoritative session AAL directly from Supabase Auth JWT claims
+    let sessionAal: "aal1" | "aal2" = "aal1";
+    if (data.session?.access_token) {
+      try {
+        const parts = data.session.access_token.split(".");
+        if (parts.length === 3) {
+          let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          const claims = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+          if (claims.aal === "aal2") {
+            sessionAal = "aal2";
+          }
+        }
+      } catch {}
+    }
+
+    // Query MFA enrollment metadata from clinician_professional_profiles
+    const { data: profProfile } = await authenticatedClient
+      .from("clinician_professional_profiles")
+      .select("mfa_enrolled")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+
+    const mfaEnrolled = profProfile ? profProfile.mfa_enrolled === true : false;
+
     const authUser: AuthUser = {
       id: data.user.id,
       email: data.user.email || credentials.email,
@@ -65,6 +90,8 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
       supabaseToken: data.session?.access_token,
       refreshToken: data.session?.refresh_token,
       tokenExpiresAt: data.session?.expires_at,
+      aal: sessionAal,
+      mfaEnrolled,
     };
 
     const token = signSessionToken(authUser);
@@ -135,6 +162,29 @@ export async function refreshClinicianSession(
     return null;
   }
 
+  let sessionAal: "aal1" | "aal2" = "aal1";
+  if (data.session.access_token) {
+    try {
+      const parts = data.session.access_token.split(".");
+      if (parts.length === 3) {
+        let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (b64.length % 4) b64 += "=";
+        const claims = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"));
+        if (claims.aal === "aal2") {
+          sessionAal = "aal2";
+        }
+      }
+    } catch {}
+  }
+
+  const { data: profProfile } = await authenticatedClient
+    .from("clinician_professional_profiles")
+    .select("mfa_enrolled")
+    .eq("user_id", data.user.id)
+    .maybeSingle();
+
+  const mfaEnrolled = profProfile ? profProfile.mfa_enrolled === true : false;
+
   const authUser: AuthUser = {
     id: data.user.id,
     email: data.user.email || "",
@@ -144,6 +194,8 @@ export async function refreshClinicianSession(
     supabaseToken: data.session.access_token,
     refreshToken: data.session.refresh_token,
     tokenExpiresAt: data.session.expires_at,
+    aal: sessionAal,
+    mfaEnrolled,
   };
 
   const token = signSessionToken(authUser);

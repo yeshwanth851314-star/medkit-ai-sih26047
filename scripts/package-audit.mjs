@@ -194,7 +194,7 @@ export function categorizeFile(posixRelPath) {
   }
 
   // 2. Tests
-  if (posixRelPath.startsWith("tests/")) {
+  if (posixRelPath.startsWith("tests/") || posixRelPath.startsWith("postman/")) {
     return ARCHIVES.TESTS;
   }
 

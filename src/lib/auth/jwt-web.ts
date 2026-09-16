@@ -12,6 +12,8 @@ export interface JwtPayload {
   supabaseToken?: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  aal?: "aal1" | "aal2";
+  mfaEnrolled?: boolean;
   iat: number;
   exp: number;
 }
@@ -109,6 +111,8 @@ export async function verifySessionTokenWeb(token: string, secret?: string): Pro
       supabaseToken: parsed.supabaseToken,
       refreshToken: parsed.refreshToken,
       tokenExpiresAt: parsed.tokenExpiresAt,
+      aal: parsed.aal || "aal1",
+      mfaEnrolled: parsed.mfaEnrolled ?? false,
     };
   } catch {
     return null;
@@ -135,6 +139,8 @@ export async function signSessionTokenWeb(
     supabaseToken: user.supabaseToken,
     refreshToken: user.refreshToken,
     tokenExpiresAt: user.tokenExpiresAt,
+    aal: user.aal !== undefined ? user.aal : "aal2",
+    mfaEnrolled: user.mfaEnrolled ?? (user.aal === "aal1" ? true : false),
     iat: now,
     exp: now + expiresInSeconds,
   };

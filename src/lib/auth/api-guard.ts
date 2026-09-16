@@ -132,8 +132,22 @@ export async function requireApiAuth(
   const isClinical = isClinicalDataRoute(url.pathname) || options?.requireAal2 === true;
 
   if (isClinical) {
-    // If active clinician has MFA enrolled (or required) but presents an AAL1 session
-    if (user.mfaEnrolled && user.aal === "aal1") {
+    // Facility assignment check (Prompt Step 3: Facility membership valid)
+    if (!user.facilityId && user.role !== "admin") {
+      return {
+        errorResponse: NextResponse.json(
+          {
+            error: "FORBIDDEN: Clinician must be assigned to an active facility to access clinical data",
+          },
+          { status: 403 }
+        ),
+      };
+    }
+
+    // Phase B Target 1 (Step 4): Current-session AAL2 is strictly authoritative for clinical data access.
+    // Fresh password-only logins at aal1 MUST receive HTTP 403 MFA_REQUIRED until TOTP challenge
+    // upgrades session to aal2.
+    if (user.aal !== "aal2") {
       return {
         errorResponse: NextResponse.json(
           {
