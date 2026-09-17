@@ -23,7 +23,11 @@ class MockDatabaseAdapter {
     facility_id: string;
     identifier_type: string;
     identifier_hash: string;
-    identifier_value_encrypted_or_protected: string;
+    identifier_value_encrypted_or_protected: string | null;
+    unlinked_at?: string | null;
+    issuing_authority?: string;
+    verification_status?: string;
+    metadata?: any;
   }> = [];
   private isInitialized = false;
 
@@ -32,10 +36,15 @@ class MockDatabaseAdapter {
     facility_id: string;
     identifier_type: string;
     identifier_hash: string;
-    identifier_value_encrypted_or_protected: string;
+    identifier_value_encrypted_or_protected: string | null;
+    unlinked_at?: string | null;
+    issuing_authority?: string;
+    verification_status?: string;
+    metadata?: any;
   }): void {
     this.externalIdentifiers.push({
       id: crypto.randomUUID(),
+      unlinked_at: null,
       ...entry,
     });
   }
@@ -128,6 +137,7 @@ class MockDatabaseAdapter {
     this.storageFiles.clear();
     this.auditLogs = [];
     this.redFlagEvents.clear();
+    this.externalIdentifiers = [];
     this.intakeSessions.clear();
     this.caseAmendments.clear();
     this.kioskInstances.clear();
@@ -336,11 +346,111 @@ class MockDatabaseAdapter {
     const newPatient: Patient = {
       ...data,
       id,
+      abha_id: null,
       created_at: now,
       updated_at: now,
     };
     this.patients.set(id, newPatient);
     this.recordAudit("system", "CREATE_PATIENT", "patients", id, { patient_code: newPatient.patient_code });
+    return newPatient;
+  }
+
+  async registerPatientAtomic(params: {
+    patientData: any;
+    externalIdData?: any;
+    actorOrToken?: any;
+  }): Promise<Patient> {
+    const actor = params.actorOrToken;
+    const actorRole = typeof actor === "object" ? actor?.role : "clinician";
+    const actorFacility = typeof actor === "object" ? actor?.facilityId : null;
+
+    const targetFacility =
+      params.patientData.facility_id ||
+      params.patientData.facilityId ||
+      actorFacility;
+
+    if (!targetFacility) {
+      throw new Error("FACILITY_REQUIRED: Patient must be assigned to an active facility");
+    }
+
+    if (actor && actorRole !== "admin" && actorFacility && targetFacility !== actorFacility) {
+      throw new Error("FACILITY_ACCESS_DENIED: Cannot register patient for another facility");
+    }
+
+    if (params.externalIdData && params.externalIdData.identifier_hash) {
+      const activeDuplicate = this.externalIdentifiers.find(
+        (e) =>
+          e.identifier_type === (params.externalIdData.identifier_type || "ABHA_NUMBER") &&
+          e.identifier_hash === params.externalIdData.identifier_hash &&
+          !e.unlinked_at
+      );
+      if (activeDuplicate) {
+        throw new Error(
+          "UNIQUE_VIOLATION: An active external identifier with this hash already exists nationally"
+        );
+      }
+    }
+
+    const patientId = params.patientData.id || crypto.randomUUID();
+    const now = new Date().toISOString();
+    const identityStatus =
+      params.externalIdData && params.externalIdData.identifier_hash
+        ? params.patientData.identity_status || "ABHA_LINKED"
+        : params.patientData.identity_status || "UNVERIFIED";
+
+    const newPatient: Patient = {
+      id: patientId,
+      patient_code:
+        params.patientData.patient_code ||
+        params.patientData.patientCode ||
+        `PT-${patientId.slice(0, 8).toUpperCase()}`,
+      full_name:
+        params.patientData.full_name ||
+        params.patientData.fullName ||
+        "Unnamed Patient",
+      date_of_birth: params.patientData.date_of_birth || params.patientData.dateOfBirth || null,
+      age_estimate: params.patientData.age_estimate || params.patientData.ageEstimate || null,
+      gender: params.patientData.gender || "other",
+      phone: params.patientData.phone || null,
+      address: params.patientData.address || null,
+      blood_group: params.patientData.blood_group || null,
+      emergency_contact:
+        params.patientData.emergency_contact ||
+        params.patientData.emergencyContact ||
+        null,
+      facility_id: targetFacility,
+      abha_id: null,
+      identity_status: identityStatus as any,
+      created_at: now,
+      updated_at: now,
+    };
+
+    this.patients.set(patientId, newPatient);
+
+    if (params.externalIdData && params.externalIdData.identifier_hash) {
+      this.recordExternalIdentifier({
+        patient_id: patientId,
+        facility_id: targetFacility,
+        identifier_type: params.externalIdData.identifier_type || "ABHA_NUMBER",
+        identifier_hash: params.externalIdData.identifier_hash,
+        identifier_value_encrypted_or_protected:
+          params.externalIdData.identifier_value_encrypted_or_protected || null,
+      });
+    }
+
+    this.recordAudit(
+      typeof actor === "object" ? actor?.id : "system",
+      "CREATE_PATIENT",
+      "patients",
+      patientId,
+      {
+        patientCode: newPatient.patient_code,
+        facilityId: targetFacility,
+        identityStatus,
+        hasExternalId: Boolean(params.externalIdData),
+      }
+    );
+
     return newPatient;
   }
 
@@ -1452,7 +1562,7 @@ class MockDatabaseAdapter {
         gender: params.payload?.gender,
         phone: params.payload?.phone,
         facility_id: finalFacility,
-        abha_id: params.payload?.abhaId || params.payload?.abha_id,
+        abha_id: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

@@ -1,0 +1,11 @@
+query,total_exec_time,prop_exec_time,ncalls,sync_io_time
+SHOW transaction_read_only,00:00:00.194638,0.4%,"1,742",00:00:00
+"select set_config('search_path', $1, true), set_config($2, $3, true), set_config('role', $4, true), set_config('request.jwt.claims', $5, true), set_config('request.method', $6, true), set_config('request.path', $7, true), set_config('request.headers', $8, true), set_config('request.cookies', $9, true)",00:00:00.059804,0.1%,971,00:00:00
+"WITH pgrst_source AS ( SELECT ""public"".""profiles"".""full_name"", ""public"".""profiles"".""role"", ""public"".""profiles"".""facility_id"", ""public"".""profiles"".""is_active"" FROM ""public"".""profiles"" WHERE  ""public"".""profiles"".""id"" = $1   LIMIT $2 OFFSET $3 )  SELECT $4::bigint AS total_result_set, pg_catalog.count(_postgrest_t) AS page_total, coalesce(json_agg(_postgrest_t), $5) AS body, nullif(current_setting($6, $7), $8) AS response_headers, nullif(current_setting($9, $10), $11) AS response_status, $12 AS response_inserted FROM ( SELECT * FROM pgrst_source ) _postgrest_t",00:00:00.039874,0.1%,377,00:00:00
+SELECT * FROM pgbouncer.get_auth($1),00:00:00.338133,0.8%,289,00:00:00
+commit,00:00:00.000281,0.0%,227,00:00:00
+begin,00:00:00.000326,0.0%,227,00:00:00
+SELECT EXISTS (SELECT schema_migrations.* FROM schema_migrations AS schema_migrations WHERE version = $1),00:00:00.007338,0.0%,215,00:00:00
+deallocate $1,00:00:00.000768,0.0%,212,00:00:00
+"SELECT identities.created_at, identities.email, identities.id, identities.identity_data, identities.last_sign_in_at, identities.provider, identities.provider_id, identities.updated_at, identities.user_id FROM identities AS identities WHERE user_id = $1",00:00:00.021924,0.1%,184,00:00:00
+"SELECT mfa_factors.created_at, mfa_factors.factor_type, mfa_factors.friendly_name, mfa_factors.id, mfa_factors.last_challenged_at, mfa_factors.last_webauthn_challenge_data, mfa_factors.phone, mfa_factors.secret, mfa_factors.status, mfa_factors.updated_at, mfa_factors.user_id, mfa_factors.web_authn_aaguid, mfa_factors.web_authn_credential FROM mfa_factors AS mfa_factors WHERE user_id = $1",00:00:00.003637,0.0%,184,00:00:00

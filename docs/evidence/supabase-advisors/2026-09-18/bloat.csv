@@ -1,0 +1,17 @@
+type,name,bloat,waste
+index,public.consents::idx_consents_patient_id,2.0,8192 bytes
+table,public.consents,2.0,8192 bytes
+index,public.consents::idx_consents_case_id,2.0,8192 bytes
+index,public.consents::consents_pkey,2.0,8192 bytes
+table,public.cases,1.5,8192 bytes
+index,public.cases::idx_cases_status,1.0,0 bytes
+index,public.cases::idx_cases_patient_id,1.0,0 bytes
+index,public.cases::cases_pkey,1.0,0 bytes
+index,public.cases::idx_cases_clinician_id,1.0,0 bytes
+index,public.cases::idx_cases_created_at,1.0,0 bytes
+index,public.cases::idx_cases_facility_id,1.0,0 bytes
+table,public.audit_logs,1.0,0 bytes
+index,public.audit_logs::idx_audit_resource,0.5,0 bytes
+index,public.audit_logs::idx_audit_actor,0.5,0 bytes
+index,public.audit_logs::idx_audit_created_at,0.5,0 bytes
+index,public.audit_logs::audit_logs_pkey,0.5,0 bytes

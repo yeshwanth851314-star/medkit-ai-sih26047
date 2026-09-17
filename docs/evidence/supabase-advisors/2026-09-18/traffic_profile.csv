@@ -1,0 +1,24 @@
+schemaname,table_name,blocks_read,write_tuples,blocks_write,activity_ratio
+auth,users,24,191,38.2,1.6:1 (Write-Heavy)
+auth,refresh_tokens,12,173,34.6,2.9:1 (Write-Heavy)
+auth,sessions,9,173,34.6,3.8:1 (Write-Heavy)
+auth,mfa_amr_claims,2,173,34.6,17.3:1 (Write-Heavy)
+public,cases,6,58,8.28571428571429,1.4:1 (Write-Heavy)
+public,patients,10,52,2.12244897959184,0.2:1 (Write-Heavy)
+public,audit_logs,4,122,5.70093457943925,1.4:1 (Write-Heavy)
+storage,migrations,7,68,1,1:7.0 (Read-Heavy)
+storage,objects,8,28,-0,Read-Only
+public,sync_mutations,8,29,-0,Read-Only
+public,consents,3,51,4.43478260869565,1.5:1 (Write-Heavy)
+auth,identities,7,12,-0,Read-Only
+auth,schema_migrations,6,75,0.974025974025974,1:6.2 (Read-Heavy)
+public,clinician_professional_profiles,6,19,-0,Read-Only
+public,intake_sessions,5,29,-0,Read-Only
+realtime,schema_migrations,2,82,1,0.5:1 (Write-Heavy)
+public,kiosk_instances,3,26,-0,Read-Only
+public,documents,3,9,-0,Read-Only
+storage,buckets,2,1,-0,Read-Only
+public,red_flag_events,2,28,-0,Read-Only
+public,kiosk_capability_revocations,2,7,-0,Read-Only
+public,profiles,1,48,-0,Read-Only
+supabase_migrations,schema_migrations,1,32,-0,Read-Only

@@ -30,7 +30,9 @@ export type AuditAction =
   | "PROFESSIONAL_REGISTRY_REJECTED"
   | "CLINICIAN_MFA_ENROLLED"
   | "CLINICIAN_FACILITY_APPROVED"
-  | "CLINICIAN_FACILITY_REJECTED";
+  | "CLINICIAN_FACILITY_REJECTED"
+  | "REMOTE_INVITE_CREATED"
+  | "REMOTE_INVITE_REVOKED";
 
 
 export interface ClinicalAuditLog {
@@ -38,7 +40,18 @@ export interface ClinicalAuditLog {
   actor_id: string;
   actor_role?: string;
   action: AuditAction;
-  resource_type: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions" | "clinician_onboarding";
+  resource_type:
+    | "patients"
+    | "cases"
+    | "documents"
+    | "auth"
+    | "fhir"
+    | "consents"
+    | "transcripts"
+    | "kiosk_instances"
+    | "intake_sessions"
+    | "clinician_onboarding"
+    | "remote_intake_invitations";
   resource_id: string;
   metadata?: Record<string, any> | null;
   created_at: string;
@@ -60,6 +73,7 @@ export const clinicalAuditSchema = z.object({
     "kiosk_instances",
     "intake_sessions",
     "clinician_onboarding",
+    "remote_intake_invitations",
   ]),
   resource_id: z.string(),
   metadata: z.record(z.any()).optional().nullable(),

@@ -88,6 +88,9 @@ export async function checkDuplicatePatient(
 
   const cleanPhone = normalizePhoneNumber(input.phone);
   const candidates: DuplicateCandidate[] = [];
+  const abhaKeyedHash = input.abhaId?.trim()
+    ? computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId.trim())
+    : null;
 
   if (!env.isDemoMode) {
     const userClient = getAuthorizedSupabaseClient(actorOrToken);
@@ -101,6 +104,7 @@ export async function checkDuplicatePatient(
         p_date_of_birth: input.dateOfBirth || null,
         p_abha_id: input.abhaId?.trim() || null,
         p_facility_mrn: input.facilityMrn?.trim() || null,
+        p_abha_identifier_hash: abhaKeyedHash,
       });
 
       if (!error && Array.isArray(data)) {
@@ -146,19 +150,15 @@ export async function checkDuplicatePatient(
       }
     }
 
-    // 2. Verified ABHA collision
+    // 2. Verified ABHA collision via HMAC index
     if (input.abhaId && input.abhaId.trim()) {
       const abhaKeyedHash = computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId);
-      let abhaMatch = existingPatients.find(
-        (p) => p.abha_id && p.abha_id.trim().toLowerCase() === input.abhaId!.trim().toLowerCase()
+      let abhaMatch: Patient | undefined;
+      const ext = mockDb.getExternalIdentifiers().find(
+        (e) => e.identifier_type === "ABHA_NUMBER" && e.identifier_hash === abhaKeyedHash && !e.unlinked_at
       );
-      if (!abhaMatch) {
-        const ext = mockDb.getExternalIdentifiers().find(
-          (e) => e.identifier_type === "ABHA_NUMBER" && e.identifier_hash === abhaKeyedHash
-        );
-        if (ext) {
-          abhaMatch = existingPatients.find((p) => p.id === ext.patient_id);
-        }
+      if (ext) {
+        abhaMatch = existingPatients.find((p) => p.id === ext.patient_id);
       }
       if (abhaMatch) {
         if (resolvedFacilityId && abhaMatch.facility_id !== resolvedFacilityId) {
@@ -346,10 +346,24 @@ export async function registerPatient(
   }
 
   const patientCode = input.facilityMrn?.trim() || generatePatientCode();
-  const identityStatus = input.identityStatus || (input.abhaId ? "ABHA_LINKED" : "UNVERIFIED");
 
-  const newPatient = await createPatient(
-    {
+  let externalIdData: any = null;
+  if (input.abhaId && input.abhaId.trim()) {
+    const abhaKeyedHash = computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId);
+    const maskedAbha = maskExternalIdentifier("ABHA_NUMBER", input.abhaId);
+    externalIdData = {
+      identifier_type: "ABHA_NUMBER",
+      identifier_value_encrypted_or_protected: maskedAbha,
+      identifier_hash: abhaKeyedHash,
+      issuing_authority: "ABDM/NDHM",
+      verification_status: "UNVERIFIED",
+      metadata: { source: "registration" },
+    };
+  }
+
+  const { registerPatientAtomic } = await import("@/lib/db/supabase");
+  const newPatient = await registerPatientAtomic({
+    patientData: {
       patient_code: patientCode,
       full_name: input.fullName.trim(),
       date_of_birth: input.dateOfBirth || null,
@@ -361,66 +375,11 @@ export async function registerPatient(
       emergency_contact: input.emergencyContact || null,
       facility_id: facilityIdToUse,
       abha_id: null,
-      identity_status: identityStatus,
+      identity_status: externalIdData ? "ABHA_LINKED" : (input.identityStatus || "UNVERIFIED"),
     },
-    options?.actor
-  );
-
-  // If ABHA or external MRN is provided, register external identifier with keyed digest and masked display value
-  if (input.abhaId && input.abhaId.trim()) {
-    try {
-      const abhaKeyedHash = computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId);
-      const maskedAbha = maskExternalIdentifier("ABHA_NUMBER", input.abhaId);
-      if (!env.isDemoMode) {
-        const userClient = getAuthorizedSupabaseClient(options?.actor);
-        const client = userClient || getServiceSupabaseClient();
-        if (client) {
-          await client.from("patient_external_identifiers").insert([
-            {
-              patient_id: newPatient.id,
-              facility_id: facilityIdToUse,
-              identifier_type: "ABHA_NUMBER",
-              identifier_value_encrypted_or_protected: maskedAbha,
-              identifier_hash: abhaKeyedHash,
-              issuing_authority: "ABDM/NDHM",
-              verification_status: "UNVERIFIED",
-              metadata: { source: "registration" },
-            },
-          ]);
-        }
-      } else {
-        mockDb.recordExternalIdentifier({
-          patient_id: newPatient.id,
-          facility_id: facilityIdToUse,
-          identifier_type: "ABHA_NUMBER",
-          identifier_hash: abhaKeyedHash,
-          identifier_value_encrypted_or_protected: maskedAbha,
-        });
-      }
-    } catch (extErr) {
-      console.warn("External identifier linking deferred:", extErr);
-    }
-  }
-
-  // Audit trail
-  try {
-    await logAuditEvent({
-      actorId: options?.actor?.id || "system",
-      actorRole: options?.actor?.role || "clinician",
-      action: "CREATE_PATIENT",
-      resourceType: "patients",
-      resourceId: newPatient.id,
-      metadata: {
-        patientCode: newPatient.patient_code,
-        facilityId: facilityIdToUse,
-        hasAbha: Boolean(input.abhaId),
-        identityStatus,
-      },
-      actorOrToken: options?.actor,
-    });
-  } catch (auditErr) {
-    console.warn("Audit logging for patient registration non-blocking warning:", auditErr);
-  }
+    externalIdData,
+    actorOrToken: options?.actor,
+  });
 
   return {
     patient: newPatient,

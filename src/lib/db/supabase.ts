@@ -4,6 +4,7 @@ import { mockDb } from "@/lib/db/mock-adapter";
 import { Patient, ClinicalCase, MedicalDocument, IntakeSessionRecord } from "@/types/database";
 import type { AuthUser } from "@/features/auth/types";
 import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
+import { computePayloadHash } from "@/features/security/canonical-hash";
 
 /**
  * Create an ephemeral, request-bound Supabase client.
@@ -301,6 +302,35 @@ export async function createPatient(
   if (error) {
     console.error("Supabase createPatient error:", error);
     throw new Error(`Database error creating patient: ${error.message}`);
+  }
+
+  return data as Patient;
+}
+
+export async function registerPatientAtomic(params: {
+  patientData: any;
+  externalIdData?: any;
+  actorOrToken?: AuthUser | string | null;
+}): Promise<Patient> {
+  if (env.isDemoMode) {
+    return mockDb.registerPatientAtomic(params);
+  }
+
+  const supabase = getAuthorizedSupabaseClient(params.actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) {
+    throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
+  }
+
+  const { data, error } = await supabase.rpc("rpc_register_patient_atomic", {
+    p_patient_data: params.patientData,
+    p_external_id_data: params.externalIdData || null,
+    p_actor_id: typeof params.actorOrToken === "object" ? params.actorOrToken?.id : null,
+    p_actor_role: typeof params.actorOrToken === "object" ? params.actorOrToken?.role : null,
+  });
+
+  if (error) {
+    console.error("Supabase rpc_register_patient_atomic error:", error.message);
+    throw new Error(`Database error registering patient atomically: ${error.message}`);
   }
 
   return data as Patient;
@@ -850,8 +880,14 @@ export async function executeIdempotentMutation(params: {
   resourceId?: string | null;
   summary?: any;
 }> {
+  const authoritativePayloadHash =
+    params.payloadHash || computePayloadHash(params.payload || {});
+
   if (env.isDemoMode) {
-    return mockDb.executeIdempotentMutation(params);
+    return mockDb.executeIdempotentMutation({
+      ...params,
+      payloadHash: authoritativePayloadHash,
+    });
   }
 
   const supabase = getAuthorizedSupabaseClient(params.actorOrToken);
@@ -863,7 +899,7 @@ export async function executeIdempotentMutation(params: {
     p_idempotency_key: params.idempotencyKey,
     p_entity: params.entity,
     p_action: params.action,
-    p_payload_hash: params.payloadHash || null,
+    p_payload_hash: authoritativePayloadHash,
     p_payload: params.payload || {},
   });
 

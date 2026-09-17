@@ -1,0 +1,16 @@
+name,last_vacuum,last_autovacuum,last_analyze,last_autoanalyze,rowcount,dead_rowcount,autovacuum_threshold,expect_autovacuum,autoanalyze_threshold,expect_autoanalyze
+public.audit_logs,"","","",2026-09-12 18:26,           107,             0,            71,no,            61,no
+public.cases,"","","",2026-09-16 16:32,            21,            27,            54,no,            52,no
+public.consents,"","","",2026-09-16 16:32,            23,            23,            55,no,            52,no
+public.patients,"","","","",            49,             3,            60,no,            55,no
+public.case_amendments,"","","","",            -1,             0,            50,no,            50,no
+public.clinician_professional_profiles,"","","","",            -1,             7,            50,no,            50,no
+public.documents,"","","","",            -1,             0,            50,no,            50,no
+public.intake_sessions,"","","","",            -1,             8,            50,no,            50,no
+public.kiosk_capability_revocations,"","","","",            -1,             0,            50,no,            50,no
+public.kiosk_instances,"","","","",            -1,            16,            50,no,            50,no
+public.patient_external_identifiers,"","","","",            -1,             0,            50,no,            50,no
+public.profiles,"","","","",            -1,            36,            50,no,            50,no
+public.red_flag_events,"","","","",            -1,            14,            50,no,            50,no
+public.remote_intake_invitations,"","","","",            -1,             0,            50,no,            50,no
+public.sync_mutations,"","","","",            -1,            17,            50,no,            50,no

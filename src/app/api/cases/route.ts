@@ -64,11 +64,14 @@ export async function POST(request: Request) {
 
     if (idempotencyKey && idempotencyKey.trim().length > 0) {
       const { executeIdempotentMutation, getCaseById } = await import("@/lib/db/supabase");
+      const { computePayloadHash } = await import("@/features/security/canonical-hash");
+      const payloadHash = computePayloadHash(validated.data);
       const result = await executeIdempotentMutation({
         idempotencyKey: idempotencyKey.trim(),
         userId: auth.user.id,
         entity: "cases",
         action: "create",
+        payloadHash,
         payload: validated.data,
         actorOrToken: auth.user,
       });

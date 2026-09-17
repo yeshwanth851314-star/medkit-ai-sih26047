@@ -26,7 +26,7 @@ export async function logAuditEvent(params: {
   actorId: string;
   actorRole?: string;
   action: AuditAction;
-  resourceType: "patients" | "cases" | "documents" | "auth" | "fhir" | "consents" | "transcripts" | "kiosk_instances" | "intake_sessions" | "clinician_onboarding";
+  resourceType: ClinicalAuditLog["resource_type"];
   resourceId: string;
   metadata?: Record<string, any>;
   actorOrToken?: import("@/features/auth/types").AuthUser | string | null;
@@ -100,22 +100,23 @@ export async function getAuditTrailForResource(
   resourceId: string,
   actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalAuditLog[]> {
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    try {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .eq("resource_type", resourceType)
-        .eq("resource_id", resourceId)
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        return data as ClinicalAuditLog[];
-      }
-    } catch (err) {
-      console.warn("Failed to fetch audit logs from Supabase, falling back to mockDb:", err);
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("CRITICAL_AUDIT_FAILURE: Durable audit store is unavailable in production.");
     }
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("resource_type", resourceType)
+      .eq("resource_id", resourceId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Supabase audit log query error:", error.message);
+      throw new Error(`CRITICAL_AUDIT_FAILURE: Failed to query audit trail: ${error.message}`);
+    }
+    return (data || []) as ClinicalAuditLog[];
   }
 
   const all = mockDb.getAuditLogs();
@@ -139,20 +140,21 @@ export async function getAuditTrailForResource(
 export async function getAllAuditLogs(
   actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalAuditLog[]> {
-  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
-  if (supabase && !env.isDemoMode) {
-    try {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (!error && data) {
-        return data as ClinicalAuditLog[];
-      }
-    } catch (err) {
-      console.warn("Failed to fetch all audit logs from Supabase, falling back to mockDb:", err);
+  if (!env.isDemoMode) {
+    const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+    if (!supabase) {
+      throw new Error("CRITICAL_AUDIT_FAILURE: Durable audit store is unavailable in production.");
     }
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Supabase audit log query error:", error.message);
+      throw new Error(`CRITICAL_AUDIT_FAILURE: Failed to query all audit logs: ${error.message}`);
+    }
+    return (data || []) as ClinicalAuditLog[];
   }
 
   const all = mockDb.getAuditLogs();

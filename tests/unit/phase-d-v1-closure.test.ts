@@ -10,9 +10,9 @@ import { env } from "@/config/env";
 const mockDoctor: AuthUser = {
   id: "usr-doctor-001",
   email: "doctor@aiia.gov.in",
+  fullName: "Dr. Anand Sharma",
   role: "doctor",
   facilityId: "fac-hyd-01",
-  facilityName: "AIIA Hyderabad",
   aal: "aal2",
 };
 
@@ -201,6 +201,104 @@ describe("Phase D V1 Surgical Closure Verification Gate", () => {
       } finally {
         (env as any).isDemoMode = originalDemoMode;
       }
+    });
+
+    it("fails closed on audit trail query when database is unavailable in production (Zero Mock Read Fallback)", async () => {
+      const { getAuditTrailForResource, getAllAuditLogs } = await import("@/features/security/audit-service");
+      const originalDemoMode = env.isDemoMode;
+      try {
+        (env as any).isDemoMode = false;
+
+        await expect(
+          getAuditTrailForResource("cases", "test-case-id", mockDoctor)
+        ).rejects.toThrow(/CRITICAL_AUDIT_FAILURE/);
+
+        await expect(
+          getAllAuditLogs(mockDoctor)
+        ).rejects.toThrow(/CRITICAL_AUDIT_FAILURE/);
+      } finally {
+        (env as any).isDemoMode = originalDemoMode;
+      }
+    });
+  });
+
+  describe("T5: Atomic Registration & National ABHA Collision Prevention (R3)", () => {
+    it("atomically links ABHA and rejects registration when active ABHA hash exists nationally", async () => {
+      const rawAbha = "99-1234-5678-0001";
+      const reg1 = await registerPatient(
+        {
+          fullName: "Unique First Patient",
+          gender: "Male",
+          phone: "+91-9876599901",
+          abhaId: rawAbha,
+        },
+        { actor: mockDoctor }
+      );
+
+      expect(reg1.patient).toBeDefined();
+      expect(reg1.patient.id).toBeDefined();
+      expect(reg1.patient.identity_status).toBe("ABHA_LINKED");
+
+      // Attempting to register another patient with the same active ABHA must fail atomically
+      await expect(
+        registerPatient(
+          {
+            fullName: "Second Patient Colliding",
+            gender: "Female",
+            phone: "+91-9876599902",
+            abhaId: rawAbha,
+          },
+          { actor: mockDoctor, ignoreDuplicateWarning: true }
+        )
+      ).rejects.toThrow(/UNIQUE_VIOLATION/);
+    });
+  });
+
+  describe("T6: Authoritative HMAC Duplicate Candidate Detection (R1)", () => {
+    it("detects existing patient via external identifier HMAC index without searching plaintext ABHA", async () => {
+      const rawAbha = "55-4321-8765-1111";
+      await registerPatient(
+        {
+          fullName: "Indexed Patient",
+          gender: "Female",
+          phone: "+91-9876500099",
+          abhaId: rawAbha,
+        },
+        { actor: mockDoctor }
+      );
+
+      const { checkDuplicatePatient } = await import("@/features/patients/patient-service");
+      const dup = await checkDuplicatePatient(
+        {
+          fullName: "Different Name",
+          gender: "Female",
+          phone: "+91-9999999999",
+          abhaId: rawAbha,
+        },
+        mockDoctor,
+        "fac-hyd-01"
+      );
+
+      expect(dup.isDuplicateSuspect).toBe(true);
+      expect(dup.matchConfidence).toBe("STRONG_MATCH");
+      expect(dup.matchedName).toBe("Indexed Patient");
+    });
+  });
+
+  describe("T7: Remote Intake Invitation Audit Resource Type Canonicalization (R6)", () => {
+    it("accepts canonical remote_intake_invitations resource type and action", async () => {
+      const entry = await logAuditEvent({
+        actorId: mockDoctor.id,
+        actorRole: mockDoctor.role,
+        action: "REMOTE_INVITE_REVOKED",
+        resourceType: "remote_intake_invitations",
+        resourceId: crypto.randomUUID(),
+        metadata: { reason: "Patient cancelled appointment" },
+        actorOrToken: mockDoctor,
+      });
+
+      expect(entry.resource_type).toBe("remote_intake_invitations");
+      expect(entry.action).toBe("REMOTE_INVITE_REVOKED");
     });
   });
 });

@@ -1,0 +1,16 @@
+name,table_size,index_size,total_size,estimated_row_count,seq_scans
+public.patients,48 kB,144 kB,192 kB,49,246
+public.cases,56 kB,96 kB,152 kB,21,20
+public.sync_mutations,16 kB,128 kB,144 kB,12,12
+public.audit_logs,72 kB,64 kB,136 kB,122,10
+public.clinician_professional_profiles,16 kB,96 kB,112 kB,12,15
+public.intake_sessions,16 kB,80 kB,96 kB,12,6
+public.consents,48 kB,48 kB,96 kB,23,9
+public.documents,16 kB,48 kB,64 kB,9,5
+public.kiosk_instances,16 kB,48 kB,64 kB,10,10
+public.kiosk_capability_revocations,16 kB,32 kB,48 kB,7,3
+public.patient_external_identifiers,8192 bytes,40 kB,48 kB,0,5
+public.red_flag_events,16 kB,32 kB,48 kB,14,4
+public.remote_intake_invitations,8192 bytes,32 kB,40 kB,0,4
+public.profiles,16 kB,16 kB,32 kB,12,16
+public.case_amendments,8192 bytes,16 kB,24 kB,0,2
