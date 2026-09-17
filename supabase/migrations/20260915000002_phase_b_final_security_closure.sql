@@ -310,10 +310,10 @@ END;
 $$;
 
 -- 7. Grant execution privileges on the hardened non-spoofable RPCs
-REVOKE ALL ON FUNCTION public.approve_clinician_application(UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.approve_clinician_application(UUID, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.approve_clinician_application(UUID, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.approve_clinician_application(UUID, TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.approve_clinician_application(UUID, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.approve_clinician_application(UUID, TEXT, UUID) TO service_role;
 
-REVOKE ALL ON FUNCTION public.reject_clinician_application(UUID, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.reject_clinician_application(UUID, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.reject_clinician_application(UUID, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.reject_clinician_application(UUID, TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reject_clinician_application(UUID, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.reject_clinician_application(UUID, TEXT, UUID) TO service_role;
