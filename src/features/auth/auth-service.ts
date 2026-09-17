@@ -105,8 +105,8 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
   let activeMockUsers = testMockUsers;
   if (!activeMockUsers) {
     try {
-      const { TEST_MOCK_USERS } = await import("../../../tests/mocks/auth");
-      activeMockUsers = TEST_MOCK_USERS;
+      const { DEMO_CLINICIAN_USERS } = require("@/lib/auth/demo-users");
+      activeMockUsers = DEMO_CLINICIAN_USERS;
     } catch {}
   }
   if (activeMockUsers) {
