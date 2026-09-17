@@ -1,0 +1,448 @@
+{
+  "timestamp": "2026-09-17T20:58:04.631Z",
+  "baseUrl": "https://medkit-ai-sih26047.vercel.app",
+  "collectionName": "MedKit — Phase C Security & Evidence Verification",
+  "totalRequests": 24,
+  "totalAssertions": 30,
+  "passedAssertions": 9,
+  "failedAssertions": 21,
+  "passRate": "30.0%",
+  "results": [
+    {
+      "folder": "00 Health",
+      "name": "01 Health Check",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/health",
+      "status": 200,
+      "latency": 492,
+      "assertions": [
+        {
+          "name": "Status is 200",
+          "pass": true,
+          "detail": "Received 200"
+        },
+        {
+          "name": "Expected to include healthy",
+          "pass": true,
+          "detail": "Received healthy,ok"
+        }
+      ],
+      "passedCount": 2,
+      "failedCount": 0
+    },
+    {
+      "folder": "01 Authentication",
+      "name": "01 Anonymous Patient API Access Blocked",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 949,
+      "assertions": [
+        {
+          "name": "Status is 401",
+          "pass": true,
+          "detail": "Received 401"
+        },
+        {
+          "name": "Expected type string",
+          "pass": true,
+          "detail": "Received string"
+        }
+      ],
+      "passedCount": 2,
+      "failedCount": 0
+    },
+    {
+      "folder": "01 Authentication",
+      "name": "02 Anonymous Case Creation Blocked",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/cases",
+      "status": 401,
+      "latency": 452,
+      "assertions": [
+        {
+          "name": "Status is 401",
+          "pass": true,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 1,
+      "failedCount": 0
+    },
+    {
+      "folder": "01 Authentication",
+      "name": "03 AAL1 Clinical Access Blocked with MFA_REQUIRED",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 492,
+      "assertions": [
+        {
+          "name": "Status is 403",
+          "pass": false,
+          "detail": "Received 401"
+        },
+        {
+          "name": "Expected \"MFA_REQUIRED\"",
+          "pass": false,
+          "detail": "Received \"UNAUTHORIZED: Missing or invalid clinical authentication session\""
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 2
+    },
+    {
+      "folder": "02 Patient Registration",
+      "name": "01 Register Patient Without ABHA Allowed",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 564,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 200,201"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "02 Patient Registration",
+      "name": "02 Register Patient With Estimated Age Allowed",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 596,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 200,201"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "02 Patient Registration",
+      "name": "03 Register Patient With Negative Age Rejected",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 629,
+      "assertions": [
+        {
+          "name": "Status is 400",
+          "pass": false,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "02 Patient Registration",
+      "name": "04 Register Patient With Excessive Age Rejected",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 475,
+      "assertions": [
+        {
+          "name": "Status is 400",
+          "pass": false,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "03 Duplicate Detection",
+      "name": "01 Same Phone Generates Candidate Warning Without Auto-Merge",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 519,
+      "assertions": [],
+      "passedCount": 0,
+      "failedCount": 0
+    },
+    {
+      "folder": "03 Duplicate Detection",
+      "name": "02 Same Name and DOB Generates Candidate Warning",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 333,
+      "assertions": [],
+      "passedCount": 0,
+      "failedCount": 0
+    },
+    {
+      "folder": "04 External Identifiers",
+      "name": "01 Reject Passport Identifier In V1",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 481,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 400,500"
+        },
+        {
+          "name": "Expected to include UNSUPPORTED_IDENTIFIER_TYPE",
+          "pass": false,
+          "detail": "Received UNAUTHORIZED: Missing or invalid clinical authentication session"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 2
+    },
+    {
+      "folder": "04 External Identifiers",
+      "name": "02 Reject Driver License Identifier In V1",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 433,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 400,500"
+        },
+        {
+          "name": "Expected to include UNSUPPORTED_IDENTIFIER_TYPE",
+          "pass": false,
+          "detail": "Received UNAUTHORIZED: Missing or invalid clinical authentication session"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 2
+    },
+    {
+      "folder": "05 Consent",
+      "name": "01 Anonymous Consent Recording Denied",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/consents",
+      "status": 401,
+      "latency": 572,
+      "assertions": [
+        {
+          "name": "Status is 401",
+          "pass": true,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 1,
+      "failedCount": 0
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "01 Anonymous Invite Creation Blocked",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invite",
+      "status": 401,
+      "latency": 549,
+      "assertions": [
+        {
+          "name": "Status is 401",
+          "pass": true,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 1,
+      "failedCount": 0
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "02 Create Valid Remote Intake Invite",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invite",
+      "status": 401,
+      "latency": 424,
+      "assertions": [
+        {
+          "name": "Status is 201",
+          "pass": false,
+          "detail": "Received 401"
+        },
+        {
+          "name": "Expected type string",
+          "pass": false,
+          "detail": "Received undefined"
+        },
+        {
+          "name": "Invitation and rawToken returned",
+          "pass": false,
+          "detail": "Cannot read properties of undefined (reading 'id')"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 3
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "03 Validate Nonexistent Token Returns 404",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invite/nonexistent_token_0000000000",
+      "status": 404,
+      "latency": 2024,
+      "assertions": [
+        {
+          "name": "Status is 404",
+          "pass": true,
+          "detail": "Received 404"
+        }
+      ],
+      "passedCount": 1,
+      "failedCount": 0
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "04 Revoke Remote Intake Invitation",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invitations//revoke",
+      "status": 404,
+      "latency": 722,
+      "assertions": [
+        {
+          "name": "Status is 200",
+          "pass": false,
+          "detail": "Received 404"
+        },
+        {
+          "name": "Expected type string",
+          "pass": false,
+          "detail": "Received undefined"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 2
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "05 Validate Revoked Invitation Returns 403",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invite/",
+      "status": 405,
+      "latency": 562,
+      "assertions": [
+        {
+          "name": "Status is 403",
+          "pass": false,
+          "detail": "Received 405"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "06 Remote Intake Invitations",
+      "name": "06 Cross-Facility Revocation Denied With 403",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/intake/invitations//revoke",
+      "status": 404,
+      "latency": 698,
+      "assertions": [
+        {
+          "name": "Status is 403",
+          "pass": false,
+          "detail": "Received 404"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "07 Case Binding",
+      "name": "01 Missing Patient ID in Case Creation Rejected",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/cases",
+      "status": 401,
+      "latency": 532,
+      "assertions": [
+        {
+          "name": "Status is 400",
+          "pass": false,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "07 Case Binding",
+      "name": "02 Create Case With Explicit Patient Binding Allowed",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/cases",
+      "status": 401,
+      "latency": 599,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 200,201"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "07 Case Binding",
+      "name": "03 Cross-Facility Case Creation Blocked",
+      "method": "POST",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/cases",
+      "status": 401,
+      "latency": 557,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 403,404"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "08 Cross-Facility Security",
+      "name": "01 Cross-Facility Patient Record Access Denied",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients/",
+      "status": 401,
+      "latency": 905,
+      "assertions": [
+        {
+          "name": "Expected to include undefined",
+          "pass": false,
+          "detail": "Received 403,404"
+        }
+      ],
+      "passedCount": 0,
+      "failedCount": 1
+    },
+    {
+      "folder": "09 Negative / Adversarial Security",
+      "name": "01 Tampered Bearer Token Blocked",
+      "method": "GET",
+      "url": "https://medkit-ai-sih26047.vercel.app/api/patients",
+      "status": 401,
+      "latency": 294,
+      "assertions": [
+        {
+          "name": "Status is 401",
+          "pass": true,
+          "detail": "Received 401"
+        }
+      ],
+      "passedCount": 1,
+      "failedCount": 0
+    }
+  ]
+}
