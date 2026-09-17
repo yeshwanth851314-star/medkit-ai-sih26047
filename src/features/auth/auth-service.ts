@@ -18,7 +18,7 @@ export function setTestMockUsers(users: Record<string, any> | null): void {
 
 export async function authenticateClinician(credentials: LoginCredentials): Promise<{ user: AuthUser; token: string } | null> {
   // Production authentication path (Strictly Supabase Auth + Verified Active Profiles)
-  if (process.env.NODE_ENV === "production" || !env.isDemoMode || !testMockUsers) {
+  if (process.env.NODE_ENV === "production" || !env.isDemoMode) {
     const supabase = getSupabaseClient();
     if (!supabase) {
       console.error("Authentication failed: Supabase client is not configured in production mode.");
@@ -101,9 +101,16 @@ export async function authenticateClinician(credentials: LoginCredentials): Prom
     };
   }
 
-  // Offline / Unit Test Execution with injected mock users (never accessible in production)
-  if (testMockUsers) {
-    const mockUser = testMockUsers[credentials.email.toLowerCase().trim()];
+  // Offline / Unit Test Execution with injected mock users (strictly reached only when not in production and in demo mode)
+  let activeMockUsers = testMockUsers;
+  if (!activeMockUsers) {
+    try {
+      const { TEST_MOCK_USERS } = await import("../../../tests/mocks/auth");
+      activeMockUsers = TEST_MOCK_USERS;
+    } catch {}
+  }
+  if (activeMockUsers) {
+    const mockUser = activeMockUsers[credentials.email.toLowerCase().trim()];
     if (mockUser && mockUser.password === credentials.password) {
       const { password, ...user } = mockUser;
       const token = signSessionToken(user);

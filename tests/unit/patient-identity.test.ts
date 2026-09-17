@@ -242,4 +242,92 @@ describe("Phase C: Patient Identity & Duplicate Detection", () => {
       expect(normalizePhoneNumber(null)).toBe("");
     });
   });
+
+  describe("C6: Keyed Identifier Storage Protection & Masking", () => {
+    it("computes reproducible keyed HMAC-SHA256 digests that differ when pepper/secret changes", async () => {
+      const { computeKeyedIdentifierDigest } = await import("@/features/patients/patient-service");
+      const digestA = computeKeyedIdentifierDigest("ABHA_NUMBER", "14-2345-6789-0123", "secret-key-alpha");
+      const digestB = computeKeyedIdentifierDigest("ABHA_NUMBER", "14-2345-6789-0123", "secret-key-beta");
+      const digestA2 = computeKeyedIdentifierDigest("ABHA_NUMBER", "14-2345-6789-0123", "secret-key-alpha");
+
+      expect(digestA).toHaveLength(64);
+      expect(digestA).toBe(digestA2); // Stable given same key
+      expect(digestA).not.toBe(digestB); // Different key produces different digest
+    });
+
+    it("masks external identifiers properly to avoid storing or logging raw values", async () => {
+      const { maskExternalIdentifier } = await import("@/features/patients/patient-service");
+      expect(maskExternalIdentifier("ABHA_NUMBER", "14-2345-6789-0123")).toBe("**-****-****-0123");
+      expect(maskExternalIdentifier("ABHA_NUMBER", "14234567890123")).toBe("**-****-****-0123");
+      expect(maskExternalIdentifier("FACILITY_MRN", "MRN-DELHI-9988")).toBe("**********9988");
+    });
+
+    it("rejects unsupported V1 identifier types like Passport and Driver's License", async () => {
+      await expect(
+        registerPatient(
+          {
+            fullName: "Foreign ID Attempt",
+            abhaId: "PASSPORT-A1234567",
+            phone: "+91-9876500001",
+          },
+          { actor: mockDoctorDelhi }
+        )
+      ).rejects.toThrow(/UNSUPPORTED_IDENTIFIER_TYPE/);
+
+      await expect(
+        registerPatient(
+          {
+            fullName: "Driver License Attempt",
+            abhaId: "DRIVER-LIC-DL-001",
+            phone: "+91-9876500002",
+          },
+          { actor: mockDoctorDelhi }
+        )
+      ).rejects.toThrow(/UNSUPPORTED_IDENTIFIER_TYPE/);
+    });
+  });
+
+  describe("C7: Cross-Facility External Identifier Duplicate Privacy", () => {
+    it("returns opaque candidate warning without leaking foreign patient PII when ABHA exists in another facility", async () => {
+      // Register patient in Delhi with ABHA
+      const sharedAbha = "14-9999-8888-7777";
+      await registerPatient(
+        {
+          fullName: "Private Delhi Patient",
+          dateOfBirth: "1975-03-20",
+          phone: "+91-9811122233",
+          abhaId: sharedAbha,
+        },
+        { actor: mockDoctorDelhi }
+      );
+
+      // Clinician in Goa searches duplicate using the same ABHA
+      const checkGoa = await checkDuplicatePatient(
+        {
+          fullName: "Goa Walkin",
+          abhaId: sharedAbha,
+        },
+        mockDoctorGoa,
+        "fac-goa-01"
+      );
+
+      expect(checkGoa.isDuplicateSuspect).toBe(true);
+      expect(checkGoa.matchConfidence).toBe("MANUAL_IDENTITY_REVIEW_REQUIRED");
+      // CRITICAL: Must NOT leak Delhi patient details to Goa clinician
+      expect(checkGoa.matchedPatientId).toBeUndefined();
+      expect(checkGoa.matchedPatientCode).toBeUndefined();
+      expect(checkGoa.matchedName).toBe("REDACTED_CROSS_FACILITY");
+      expect(checkGoa.reason).toBe("external_identifier_exists_outside_current_facility");
+
+      const candidate = checkGoa.candidates?.[0];
+      expect(candidate).toBeDefined();
+      expect(candidate?.patientId).toBe("");
+      expect(candidate?.patientCode).toBe("");
+      expect(candidate?.fullName).toBe("REDACTED_CROSS_FACILITY");
+      expect(candidate?.phone).toBeNull();
+      expect(candidate?.dateOfBirth).toBeNull();
+      expect(candidate?.facilityId).toBe("");
+    });
+  });
 });
+

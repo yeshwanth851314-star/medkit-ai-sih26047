@@ -21,7 +21,7 @@ export const patientRegistrationSchema = z.object({
 
 export type PatientRegistrationInput = z.input<typeof patientRegistrationSchema>;
 
-export type DuplicateMatchConfidence = "NO_MATCH" | "POSSIBLE_MATCH" | "STRONG_MATCH" | "IDENTIFIER_CONFLICT";
+export type DuplicateMatchConfidence = "NO_MATCH" | "POSSIBLE_MATCH" | "STRONG_MATCH" | "IDENTIFIER_CONFLICT" | "MANUAL_IDENTITY_REVIEW_REQUIRED";
 
 export interface DuplicateCandidate {
   patientId: string;

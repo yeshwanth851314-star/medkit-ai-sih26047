@@ -109,4 +109,51 @@ describe("Phase C: Remote Intake Invitations", () => {
     // Replay attack: second consumption throws INVITATION_CONSUMED
     await expect(consumeRemoteInvitation(result.rawToken)).rejects.toThrow(/INVITATION_CONSUMED/);
   });
+
+  it("strictly prevents cross-facility invitation revocation", async () => {
+    const mockClinicianGoa: AuthUser = {
+      id: "88888888-8888-4888-8888-888888888882",
+      fullName: "Clinician Goa",
+      email: "clinician.goa@medkit.ai",
+      role: "clinician",
+      facilityId: "fac-goa-01",
+      aal: "aal2",
+    };
+
+    // Delhi clinician creates invite
+    const result = await createRemoteInvitation({
+      actor: mockClinician,
+      expiresInHours: 24,
+    });
+
+    // Goa clinician attempts to revoke Delhi invitation
+    await expect(
+      revokeRemoteInvitation(result.invitation.id, mockClinicianGoa)
+    ).rejects.toThrow(/FORBIDDEN: Cannot revoke invitation belonging to another facility/);
+
+    // Verify invitation remains valid
+    const validation = await validateRemoteInvitation(result.rawToken);
+    expect(validation.valid).toBe(true);
+  });
+
+  it("rejects revocation by unauthorized roles", async () => {
+    const mockPatientUser: AuthUser = {
+      id: "88888888-8888-4888-8888-888888888883",
+      fullName: "Patient User",
+      email: "patient@medkit.ai",
+      role: "patient" as any,
+      facilityId: "fac-delhi-01",
+      aal: "aal2",
+    };
+
+    const result = await createRemoteInvitation({
+      actor: mockClinician,
+      expiresInHours: 24,
+    });
+
+    await expect(
+      revokeRemoteInvitation(result.invitation.id, mockPatientUser)
+    ).rejects.toThrow(/FORBIDDEN: Insufficient role/);
+  });
 });
+

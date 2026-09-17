@@ -30,6 +30,37 @@ export function normalizePhoneNumber(phone?: string | null): string {
   return phone.replace(/\D/g, "");
 }
 
+export function computeKeyedIdentifierDigest(
+  identifierType: string,
+  rawValue: string,
+  pepper?: string
+): string {
+  const secret =
+    pepper ||
+    process.env.IDENTIFIER_INDEX_PEPPER ||
+    process.env.SESSION_SECRET ||
+    "medkit-default-identifier-index-salt-v1";
+  const normalized = rawValue.trim().toLowerCase();
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`${identifierType}:${normalized}`)
+    .digest("hex");
+}
+
+export function maskExternalIdentifier(identifierType: string, rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (identifierType === "ABHA_NUMBER" || identifierType === "ABHA_ID") {
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length >= 4) {
+      return `**-****-****-${digits.slice(-4)}`;
+    }
+  }
+  if (trimmed.length <= 4) {
+    return "*".repeat(trimmed.length);
+  }
+  return `${"*".repeat(trimmed.length - 4)}${trimmed.slice(-4)}`;
+}
+
 /**
  * Deterministic duplicate patient candidate detection.
  * Invariant: Weak matches generate candidate warnings for clinical review;
@@ -111,16 +142,30 @@ export async function checkDuplicatePatient(
         (p) => p.abha_id && p.abha_id.trim().toLowerCase() === input.abhaId!.trim().toLowerCase()
       );
       if (abhaMatch) {
-        candidates.push({
-          patientId: abhaMatch.id,
-          patientCode: abhaMatch.patient_code,
-          fullName: abhaMatch.full_name,
-          dateOfBirth: abhaMatch.date_of_birth,
-          phone: abhaMatch.phone,
-          facilityId: abhaMatch.facility_id,
-          matchType: "EXACT_ABHA_ID",
-          matchConfidence: "STRONG_MATCH",
-        });
+        if (resolvedFacilityId && abhaMatch.facility_id !== resolvedFacilityId) {
+          // Cross-facility match: OPAQUE return to prevent patient privacy oracle
+          candidates.push({
+            patientId: "",
+            patientCode: "",
+            fullName: "REDACTED_CROSS_FACILITY",
+            dateOfBirth: null,
+            phone: null,
+            facilityId: "",
+            matchType: "EXTERNAL_IDENTIFIER_EXISTS_OUTSIDE_CURRENT_FACILITY",
+            matchConfidence: "MANUAL_IDENTITY_REVIEW_REQUIRED",
+          });
+        } else {
+          candidates.push({
+            patientId: abhaMatch.id,
+            patientCode: abhaMatch.patient_code,
+            fullName: abhaMatch.full_name,
+            dateOfBirth: abhaMatch.date_of_birth,
+            phone: abhaMatch.phone,
+            facilityId: abhaMatch.facility_id,
+            matchType: "EXACT_ABHA_ID",
+            matchConfidence: "STRONG_MATCH",
+          });
+        }
       }
     }
 
@@ -181,6 +226,18 @@ export async function checkDuplicatePatient(
     if (primary.matchType === "NAME_AND_DOB_MATCH") legacyReason = "matching_name_and_dob";
     if (primary.matchType === "EXACT_FACILITY_MRN") legacyReason = "matching_mrn";
     if (primary.matchType === "EXACT_ABHA_ID") legacyReason = "matching_abha";
+    if (primary.matchType === "EXTERNAL_IDENTIFIER_EXISTS_OUTSIDE_CURRENT_FACILITY") {
+      legacyReason = "external_identifier_exists_outside_current_facility";
+      return {
+        isDuplicateSuspect: true,
+        matchConfidence: "MANUAL_IDENTITY_REVIEW_REQUIRED",
+        matchedPatientId: undefined,
+        matchedPatientCode: undefined,
+        matchedName: "REDACTED_CROSS_FACILITY",
+        reason: legacyReason,
+        candidates,
+      };
+    }
 
     return {
       isDuplicateSuspect: true,
@@ -243,6 +300,14 @@ export async function registerPatient(
 
   const facilityIdToUse = resolvedFacilityId || "fac-delhi-01";
 
+  // Enforce V1 identifier type narrowing: Reject Passport and Driver's License
+  if (
+    (input.abhaId && (input.abhaId.toUpperCase().includes("PASSPORT") || input.abhaId.toUpperCase().includes("DRIVER"))) ||
+    (input.facilityMrn && (input.facilityMrn.toUpperCase().includes("PASSPORT") || input.facilityMrn.toUpperCase().includes("DRIVER")))
+  ) {
+    throw new Error("UNSUPPORTED_IDENTIFIER_TYPE: Passport and Driver's License are not supported in MedKit V1");
+  }
+
   // Check for duplicate suspicion
   const duplicateWarning = await checkDuplicatePatient(input, options?.actor, facilityIdToUse);
 
@@ -282,20 +347,21 @@ export async function registerPatient(
     options?.actor
   );
 
-  // If ABHA or external MRN is provided and in non-demo mode, register external identifier
+  // If ABHA or external MRN is provided and in non-demo mode, register external identifier with keyed digest and masked display value
   if (!env.isDemoMode && input.abhaId && input.abhaId.trim()) {
     try {
       const userClient = getAuthorizedSupabaseClient(options?.actor);
       const client = userClient || getServiceSupabaseClient();
       if (client) {
-        const abhaHash = crypto.createHash("sha256").update(input.abhaId.trim()).digest("hex");
+        const abhaKeyedHash = computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId);
+        const maskedAbha = maskExternalIdentifier("ABHA_NUMBER", input.abhaId);
         await client.from("patient_external_identifiers").insert([
           {
             patient_id: newPatient.id,
             facility_id: facilityIdToUse,
             identifier_type: "ABHA_NUMBER",
-            identifier_value_encrypted_or_protected: input.abhaId.trim(),
-            identifier_hash: abhaHash,
+            identifier_value_encrypted_or_protected: maskedAbha,
+            identifier_hash: abhaKeyedHash,
             issuing_authority: "ABDM/NDHM",
             verification_status: "UNVERIFIED",
             metadata: { source: "registration" },

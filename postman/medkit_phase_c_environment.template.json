@@ -1,0 +1,51 @@
+{
+  "id": "medkit-phase-c-environment-template",
+  "name": "MedKit Phase C Environment Template",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://medkit-ai-sih26047.vercel.app",
+      "enabled": true
+    },
+    {
+      "key": "aal1Token",
+      "value": "PASTE_AAL1_JWT_HERE",
+      "enabled": true
+    },
+    {
+      "key": "aal2Token",
+      "value": "PASTE_AAL2_JWT_HERE",
+      "enabled": true
+    },
+    {
+      "key": "facilityBDoctorToken",
+      "value": "PASTE_FACILITY_B_DOCTOR_JWT_HERE",
+      "enabled": true
+    },
+    {
+      "key": "activeInviteToken",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "activeInviteId",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "facilityAInviteId",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "createdPatientId",
+      "value": "",
+      "enabled": true
+    },
+    {
+      "key": "facilityBPatientId",
+      "value": "",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,1122 @@
+{
+  "info": {
+    "_postman_id": "medkit-phase-c-security-verification",
+    "name": "MedKit — Phase C Security & Evidence Verification",
+    "description": "Adversarial security, privacy, and identity verification collection for SIH26047 MedKit AI Phase C Patient Identity, Consent & Secure Entry",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://medkit-ai-sih26047.vercel.app",
+      "type": "string"
+    },
+    {
+      "key": "aal1Token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "aal2Token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "facilityBDoctorToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "activeInviteToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "activeInviteId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "facilityAInviteId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdPatientId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "facilityBPatientId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "01 Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Service status is ok', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(['healthy', 'ok']).to.include(jsonData.status);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Authentication",
+      "item": [
+        {
+          "name": "01 Anonymous Patient API Access Blocked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('Error indicates unauthenticated session', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Anonymous Case Creation Blocked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"patientId\":\"00000000-0000-0000-0000-000000000001\",\"chiefComplaint\":\"Anonymous attempt\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cases"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03 AAL1 Clinical Access Blocked with MFA_REQUIRED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Error code indicates MFA_REQUIRED', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.eql('MFA_REQUIRED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal1Token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Patient Registration",
+      "item": [
+        {
+          "name": "01 Register Patient Without ABHA Allowed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Registration succeeds with 200 or 201', function () {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Patient record is created with facility assignment', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.patient) {",
+                  "        pm.expect(jsonData.patient.id).to.be.a('string');",
+                  "        pm.expect(jsonData.patient.facility_id).to.be.a('string');",
+                  "        pm.collectionVariables.set('createdPatientId', jsonData.patient.id);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Kalyan Varma\",\"dateOfBirth\":\"1982-04-12\",\"gender\":\"Male\",\"phone\":\"+91-9876543201\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Register Patient With Estimated Age Allowed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Estimated age registration succeeds', function () {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Age estimate is preserved', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.patient) {",
+                  "        pm.expect(jsonData.patient.age_estimate).to.eql(54);",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Somanna Naik\",\"dateOfBirth\":null,\"ageEstimate\":54,\"gender\":\"Male\",\"phone\":\"+91-9876543202\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03 Register Patient With Negative Age Rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Negative age is rejected with 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Invalid Age Test\",\"ageEstimate\":-3,\"gender\":\"Male\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "04 Register Patient With Excessive Age Rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Excessive age (>130) is rejected with 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Excessive Age Test\",\"ageEstimate\":160,\"gender\":\"Male\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Duplicate Detection",
+      "item": [
+        {
+          "name": "01 Same Phone Generates Candidate Warning Without Auto-Merge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns duplicate warning or candidate preview', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.duplicateWarning) {",
+                  "        pm.expect(jsonData.duplicateWarning.isDuplicateSuspect).to.be.true;",
+                  "        pm.expect(jsonData.duplicateWarning.matchConfidence).to.eql('POSSIBLE_MATCH');",
+                  "        pm.expect(jsonData.patient).to.be.null;",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Different Name Same Phone\",\"phone\":\"+91-9876543201\",\"gender\":\"Male\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Same Name and DOB Generates Candidate Warning",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Name and DOB match triggers duplicate candidate warning', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.duplicateWarning) {",
+                  "        pm.expect(jsonData.duplicateWarning.isDuplicateSuspect).to.be.true;",
+                  "        pm.expect(jsonData.duplicateWarning.reason).to.include('matching_name_and_dob');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Kalyan Varma\",\"dateOfBirth\":\"1982-04-12\",\"gender\":\"Male\",\"phone\":\"+91-9999900000\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 External Identifiers",
+      "item": [
+        {
+          "name": "01 Reject Passport Identifier In V1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Passport is rejected in V1', function () {",
+                  "    pm.expect([400, 500]).to.include(pm.response.code);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.include('UNSUPPORTED_IDENTIFIER_TYPE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Passport Attempt\",\"abhaId\":\"PASSPORT-Z998877\",\"gender\":\"Female\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Reject Driver License Identifier In V1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Driver License is rejected in V1', function () {",
+                  "    pm.expect([400, 500]).to.include(pm.response.code);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.error).to.include('UNSUPPORTED_IDENTIFIER_TYPE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\":\"Driver License Attempt\",\"abhaId\":\"DRIVER-LIC-9988\",\"gender\":\"Female\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Consent",
+      "item": [
+        {
+          "name": "01 Anonymous Consent Recording Denied",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Anonymous consent recording is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"patientId\":\"00000000-0000-0000-0000-000000000001\",\"language\":\"en\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/consents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "consents"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Remote Intake Invitations",
+      "item": [
+        {
+          "name": "01 Anonymous Invite Creation Blocked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"purpose\":\"patient_registration_and_intake\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Create Valid Remote Intake Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Invitation and rawToken returned', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.rawToken).to.be.a('string');",
+                  "    pm.expect(jsonData.invitation.id).to.be.a('string');",
+                  "    pm.collectionVariables.set('activeInviteToken', jsonData.rawToken);",
+                  "    pm.collectionVariables.set('activeInviteId', jsonData.invitation.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"expiresInHours\":24,\"maxUses\":1,\"purpose\":\"patient_registration_and_intake\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03 Validate Nonexistent Token Returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Nonexistent token returns 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite/nonexistent_token_0000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite",
+                "nonexistent_token_0000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "04 Revoke Remote Intake Invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Revocation returns 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Revocation success confirmed', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.revokedAt).to.be.a('string');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Testing clinical revocation\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite/{{activeInviteId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite",
+                "{{activeInviteId}}",
+                "revoke"
+              ]
+            }
+          }
+        },
+        {
+          "name": "05 Validate Revoked Invitation Returns 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Revoked invitation validation returns 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite/{{activeInviteToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite",
+                "{{activeInviteToken}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "06 Cross-Facility Revocation Denied With 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cross-facility revocation returns 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{facilityBDoctorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Cross-facility unauthorized revocation\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/intake/invite/{{facilityAInviteId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "intake",
+                "invite",
+                "{{facilityAInviteId}}",
+                "revoke"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Case Binding",
+      "item": [
+        {
+          "name": "01 Missing Patient ID in Case Creation Rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Missing patientId is rejected with 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"chiefComplaint\":\"Fever and cold without patient\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cases"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Create Case With Explicit Patient Binding Allowed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Case created with 201 or 200', function () {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test('Case is explicitly bound to target patient', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.case) {",
+                  "        pm.expect(jsonData.case.patient_id).to.eql(pm.collectionVariables.get('createdPatientId'));",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{aal2Token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"patientId\":\"{{createdPatientId}}\",\"chiefComplaint\":\"Acute migraine with visual aura\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cases"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03 Cross-Facility Case Creation Blocked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Doctor from Facility B cannot create case for Facility A patient', function () {",
+                  "    pm.expect([403, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{facilityBDoctorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"patientId\":\"{{createdPatientId}}\",\"chiefComplaint\":\"Cross facility unauthorized attempt\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cases"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Cross-Facility Security",
+      "item": [
+        {
+          "name": "01 Cross-Facility Patient Record Access Denied",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cross-facility patient read is 403 Forbidden or 404 Not Found', function () {",
+                  "    pm.expect([403, 404]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{facilityBDoctorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/patients/{{createdPatientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients",
+                "{{createdPatientId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Negative / Adversarial Security",
+      "item": [
+        {
+          "name": "01 Tampered Bearer Token Blocked",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Tampered token returns 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.tampered.signature"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/patients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "patients"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

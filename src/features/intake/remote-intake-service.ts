@@ -23,8 +23,16 @@ export interface ValidateInviteResult {
   remainingUses?: number;
 }
 
-// In-memory store for mock/demo and unit test isolation
-const mockInvitations = new Map<string, RemoteIntakeInvitation & { rawToken?: string }>();
+// In-memory store for mock/demo and unit test isolation preserved across route modules
+const globalForInvitations = globalThis as unknown as {
+  __medkit_mock_invitations?: Map<string, RemoteIntakeInvitation & { rawToken?: string }>;
+};
+
+if (!globalForInvitations.__medkit_mock_invitations) {
+  globalForInvitations.__medkit_mock_invitations = new Map();
+}
+
+const mockInvitations = globalForInvitations.__medkit_mock_invitations;
 
 export function hashInvitationToken(rawToken: string): string {
   return crypto.createHash("sha256").update(rawToken.trim()).digest("hex");
@@ -251,32 +259,77 @@ export async function consumeRemoteInvitation(rawToken: string): Promise<{
 }
 
 export async function revokeRemoteInvitation(
-  invitationId: string,
-  actor: AuthUser
-): Promise<void> {
+  invitationIdOrToken: string,
+  actor: AuthUser,
+  reason?: string
+): Promise<{ success: boolean; revokedAt: string }> {
+  if (!actor || !actor.id) {
+    throw new Error("UNAUTHORIZED: Authentication required to revoke intake invitation");
+  }
+
+  const allowedRoles = ["doctor", "clinician", "staff", "admin"];
+  if (!allowedRoles.includes(actor.role || "")) {
+    throw new Error("FORBIDDEN: Insufficient role to revoke intake invitations");
+  }
+
   if (!env.isDemoMode) {
-    const userClient = getAuthorizedSupabaseClient(actor) || getServiceSupabaseClient();
-    if (!userClient) {
-      throw new Error("Database unavailable");
+    const userClient = getAuthorizedSupabaseClient(actor);
+    const client = userClient || getServiceSupabaseClient();
+    if (!client) {
+      throw new Error("Database unavailable: Supabase client is not configured.");
     }
 
-    const { error } = await userClient
-      .from("remote_intake_invitations")
-      .update({ revoked_at: new Date().toISOString() })
-      .eq("id", invitationId);
+    // Try calling the authoritative RPC first
+    const { data, error } = await client.rpc("rpc_revoke_remote_intake_invitation", {
+      p_invitation_id: invitationIdOrToken,
+      p_reason: reason || null,
+    });
 
     if (error) {
-      throw new Error(`Failed to revoke invitation: ${error.message}`);
+      if (error.message.includes("FORBIDDEN")) {
+        throw new Error(`FORBIDDEN: ${error.message}`);
+      }
+      if (error.message.includes("INVITATION_NOT_FOUND")) {
+        throw new Error("INVITATION_NOT_FOUND: Remote intake invitation not found");
+      }
+      // Fallback to direct update if RPC is not yet applied on local/remote DB
+      const query = client
+        .from("remote_intake_invitations")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("id", invitationIdOrToken);
+
+      if (actor.role !== "admin" && actor.facilityId) {
+        query.eq("facility_id", actor.facilityId);
+      }
+
+      const { data: updateData, error: updateErr } = await query.select();
+      if (updateErr) {
+        throw new Error(`Failed to revoke invitation: ${updateErr.message}`);
+      }
+      if (!updateData || updateData.length === 0) {
+        throw new Error("FORBIDDEN: Cannot revoke invitation belonging to another facility or not found");
+      }
     }
-    return;
+
+    return { success: true, revokedAt: new Date().toISOString() };
   }
 
-  for (const inv of mockInvitations.values()) {
-    if (inv.id === invitationId) {
-      inv.revoked_at = new Date().toISOString();
-      break;
-    }
+  // Demo / Unit test mode
+  const target = Array.from(mockInvitations.values()).find(
+    (inv) => inv.id === invitationIdOrToken || inv.token_hash === hashInvitationToken(invitationIdOrToken)
+  );
+
+  if (!target) {
+    throw new Error("INVITATION_NOT_FOUND: Remote intake invitation not found");
   }
+
+  if (actor.role !== "admin" && actor.facilityId && target.facility_id !== actor.facilityId) {
+    throw new Error("FORBIDDEN: Cannot revoke invitation belonging to another facility");
+  }
+
+  const now = new Date().toISOString();
+  target.revoked_at = now;
+  return { success: true, revokedAt: now };
 }
 
 export function clearMockInvitations(): void {
