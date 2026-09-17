@@ -95,7 +95,7 @@ describe("Phase C: Patient Identity & Duplicate Detection", () => {
       );
 
       expect(result.patient).toBeDefined();
-      expect(result.patient.abha_id).toBe("12-3456-7890-1234");
+      expect(result.patient.abha_id).toBeNull();
       expect(result.patient.identity_status).toBe("ABHA_LINKED");
     });
   });

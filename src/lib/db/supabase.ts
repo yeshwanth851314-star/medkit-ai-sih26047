@@ -406,10 +406,11 @@ export async function createCase(
 export async function updateCase(
   id: string,
   updates: Partial<ClinicalCase>,
-  actorOrToken?: AuthUser | string | null
+  actorOrToken?: AuthUser | string | null,
+  expectedUpdatedAt?: string
 ): Promise<ClinicalCase | null> {
   if (env.isDemoMode) {
-    return mockDb.updateCase(id, updates);
+    return mockDb.updateCase(id, updates, expectedUpdatedAt);
   }
 
   const supabase = getAuthorizedSupabaseClient(actorOrToken);
@@ -424,19 +425,29 @@ export async function updateCase(
       : {};
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("cases")
     .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
+    .eq("id", id);
+
+  if (expectedUpdatedAt) {
+    query = query.eq("updated_at", expectedUpdatedAt);
+  }
+
+  const { data, error } = await query.select().maybeSingle();
 
   if (error) {
     console.error("Supabase updateCase error:", error);
     throw new Error(`Database error updating case ${id}: ${error.message}`);
   }
 
-  return data as ClinicalCase;
+  if (!data && expectedUpdatedAt) {
+    throw new Error(
+      `CONFLICT_CONCURRENT_UPDATE: Case was modified concurrently by another session. Expected ${expectedUpdatedAt}`
+    );
+  }
+
+  return (data || null) as ClinicalCase | null;
 }
 
 // Case Amendments (Dedicated Immutable Append-Only Storage)

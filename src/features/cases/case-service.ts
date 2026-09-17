@@ -122,7 +122,7 @@ export async function updateCaseDraft(
   if (updates.provenance !== undefined) patch.provenance = updates.provenance;
   patch.updated_at = new Date().toISOString();
 
-  const updated = await updateCase(id, patch, options?.actor);
+  const updated = await updateCase(id, patch, options?.actor, options?.expectedUpdatedAt);
   if (!updated) {
     throw new Error("Failed to update case");
   }

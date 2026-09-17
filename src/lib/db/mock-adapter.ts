@@ -17,7 +17,32 @@ class MockDatabaseAdapter {
   private kioskInstances: Map<string, any> = new Map();
   private capabilityRevocations: Set<string> = new Set();
   private userProfiles: Map<string, { role: string; facilityId: string | null }> = new Map();
+  private externalIdentifiers: Array<{
+    id: string;
+    patient_id: string;
+    facility_id: string;
+    identifier_type: string;
+    identifier_hash: string;
+    identifier_value_encrypted_or_protected: string;
+  }> = [];
   private isInitialized = false;
+
+  recordExternalIdentifier(entry: {
+    patient_id: string;
+    facility_id: string;
+    identifier_type: string;
+    identifier_hash: string;
+    identifier_value_encrypted_or_protected: string;
+  }): void {
+    this.externalIdentifiers.push({
+      id: crypto.randomUUID(),
+      ...entry,
+    });
+  }
+
+  getExternalIdentifiers() {
+    return [...this.externalIdentifiers];
+  }
 
   setUserProfile(userId: string, profile: { role: string; facilityId: string | null }): void {
     this.userProfiles.set(userId, profile);
@@ -108,6 +133,7 @@ class MockDatabaseAdapter {
     this.kioskInstances.clear();
     this.capabilityRevocations.clear();
     this.userProfiles.clear();
+    this.externalIdentifiers = [];
     this.isInitialized = false;
     this.seedKiosks();
     this.initializeFromFixtures();
@@ -380,9 +406,25 @@ class MockDatabaseAdapter {
     return newCase;
   }
 
-  async updateCase(id: string, updates: Partial<ClinicalCase>): Promise<ClinicalCase | null> {
+  async updateCase(
+    id: string,
+    updates: Partial<ClinicalCase>,
+    expectedUpdatedAt?: string
+  ): Promise<ClinicalCase | null> {
     const existing = this.cases.get(id);
     if (!existing) return null;
+
+    if (expectedUpdatedAt && existing.updated_at) {
+      if (existing.updated_at !== expectedUpdatedAt) {
+        const existingTime = new Date(existing.updated_at).getTime();
+        const expectedTime = new Date(expectedUpdatedAt).getTime();
+        if (Math.abs(existingTime - expectedTime) > 1000) {
+          throw new Error(
+            `CONFLICT_CONCURRENT_UPDATE: Case was modified by another clinician or session at ${existing.updated_at}. Expected ${expectedUpdatedAt}.`
+          );
+        }
+      }
+    }
 
     // Finalized case immutability check (mirrors Postgres RLS policy status != 'final')
     if (existing.status === "final" && updates.status !== "final") {

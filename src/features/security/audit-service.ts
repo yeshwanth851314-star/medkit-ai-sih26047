@@ -48,20 +48,9 @@ export async function logAuditEvent(params: {
   if (!env.isDemoMode) {
     const supabase = getServiceSupabaseClient() || getAuthorizedSupabaseClient(params.actorOrToken);
     if (!supabase) {
-      if (isCritical) {
-        throw new Error(
-          `CRITICAL_AUDIT_FAILURE: Durable audit store is unavailable in production for mandatory action '${validated.action}'. Refusing operation to preserve legal audit trail.`
-        );
-      }
-      console.warn("Audit store unavailable in production for non-critical action, recording to fallback:", validated.action);
-      mockDb.recordAudit(
-        validated.actor_id,
-        validated.action,
-        validated.resource_type,
-        validated.resource_id,
-        validated.metadata || undefined
+      throw new Error(
+        `CRITICAL_AUDIT_FAILURE: Durable audit store is unavailable in production for action '${validated.action}'. Refusing operation to preserve legal audit trail.`
       );
-      return validated as ClinicalAuditLog;
     }
 
     try {
@@ -79,33 +68,15 @@ export async function logAuditEvent(params: {
       ]);
       if (error) {
         console.error("Supabase audit log insert error:", error.message);
-        if (isCritical) {
-          throw new Error(
-            `CRITICAL_AUDIT_FAILURE: Failed to persist mandatory clinical audit action '${validated.action}' to durable storage: ${error.message}`
-          );
-        }
-        mockDb.recordAudit(
-          validated.actor_id,
-          validated.action,
-          validated.resource_type,
-          validated.resource_id,
-          validated.metadata || undefined
+        throw new Error(
+          `CRITICAL_AUDIT_FAILURE: Failed to persist audit action '${validated.action}' to durable storage: ${error.message}`
         );
       }
     } catch (err: any) {
-      if (isCritical) {
-        throw err instanceof Error
-          ? err
-          : new Error(`CRITICAL_AUDIT_FAILURE: Exception persisting mandatory audit action '${validated.action}'.`);
-      }
-      console.warn("Audit persistence exception, using fallback for non-critical action:", err);
-      mockDb.recordAudit(
-        validated.actor_id,
-        validated.action,
-        validated.resource_type,
-        validated.resource_id,
-        validated.metadata || undefined
-      );
+      console.error("Audit persistence exception in production:", err);
+      throw err instanceof Error
+        ? err
+        : new Error(`CRITICAL_AUDIT_FAILURE: Exception persisting audit action '${validated.action}'.`);
     }
   } else {
     // In demo mode, in-memory mockDb provides an isolated mock audit trail

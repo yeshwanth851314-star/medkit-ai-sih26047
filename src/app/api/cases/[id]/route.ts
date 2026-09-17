@@ -117,9 +117,15 @@ export async function PATCH(
       return NextResponse.json({ success: true, case: amended });
     }
 
+    const expectedUpdatedAt =
+      body.expectedUpdatedAt ||
+      request.headers.get("If-Match") ||
+      request.headers.get("X-Expected-Updated-At") ||
+      undefined;
+
     // Standard draft update
     const updated = await updateCaseDraft(id, body, {
-      expectedUpdatedAt: body.expectedUpdatedAt,
+      expectedUpdatedAt,
       actor: auth.user,
     });
 
