@@ -35,11 +35,20 @@ export function computeKeyedIdentifierDigest(
   rawValue: string,
   pepper?: string
 ): string {
-  const secret =
-    pepper ||
-    process.env.IDENTIFIER_INDEX_PEPPER ||
-    process.env.SESSION_SECRET ||
-    "medkit-default-identifier-index-salt-v1";
+  const isProduction = process.env.NODE_ENV === "production" || !env.isDemoMode;
+  const secret = pepper || process.env.IDENTIFIER_INDEX_PEPPER;
+
+  if (!secret) {
+    if (isProduction) {
+      throw new Error("CONFIGURATION_ERROR: IDENTIFIER_INDEX_PEPPER is required in production");
+    }
+    // Only permitted in non-production development/demo mode; SESSION_SECRET fallback is strictly removed
+    return crypto
+      .createHmac("sha256", "medkit-default-identifier-index-salt-v1")
+      .update(`${identifierType}:${rawValue.trim().toLowerCase()}`)
+      .digest("hex");
+  }
+
   const normalized = rawValue.trim().toLowerCase();
   return crypto
     .createHmac("sha256", secret)

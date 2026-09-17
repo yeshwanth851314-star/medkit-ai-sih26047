@@ -218,10 +218,9 @@ test.describe("MedKit AI: Phase C Patient Identity, Consent & Secure Entry Real 
     expect(checkData.valid).toBe(true);
     expect(checkData.invitation.id).toBe(invitationId);
 
-    // Revoke the invitation via POST /api/intake/invite/[token]/revoke
-    const revokeRes = await request.post(`/api/intake/invite/${invitationToken}/revoke`, {
+    // Revoke the invitation via non-secret invitation ID: POST /api/intake/invitations/[invitationId]/revoke
+    const revokeRes = await request.post(`/api/intake/invitations/${invitationId}/revoke`, {
       data: {
-        invitationId,
         reason: "Patient checked in physically at registration desk",
       },
     });

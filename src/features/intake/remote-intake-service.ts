@@ -53,7 +53,8 @@ export async function createRemoteInvitation(input: CreateInviteInput): Promise<
   const maxUses = input.maxUses || 1;
   const purpose = input.purpose || "patient_registration_and_intake";
 
-  if (!env.isDemoMode) {
+  const isProduction = process.env.NODE_ENV === "production" || !env.isDemoMode;
+  if (isProduction) {
     const userClient = getAuthorizedSupabaseClient(input.actor);
     const client = userClient || getServiceSupabaseClient();
     if (!client) {
@@ -116,7 +117,8 @@ export async function validateRemoteInvitation(rawToken: string): Promise<Valida
 
   const tokenHash = hashInvitationToken(rawToken);
 
-  if (!env.isDemoMode) {
+  const isProduction = process.env.NODE_ENV === "production" || !env.isDemoMode;
+  if (isProduction) {
     const client = getServiceSupabaseClient();
     if (!client) {
       throw new Error("Database unavailable: Supabase client is not configured.");
@@ -205,7 +207,8 @@ export async function consumeRemoteInvitation(rawToken: string): Promise<{
 }> {
   const tokenHash = hashInvitationToken(rawToken);
 
-  if (!env.isDemoMode) {
+  const isProduction = process.env.NODE_ENV === "production" || !env.isDemoMode;
+  if (isProduction) {
     const client = getServiceSupabaseClient();
     if (!client) {
       throw new Error("Database unavailable: Supabase client is not configured.");
@@ -272,7 +275,8 @@ export async function revokeRemoteInvitation(
     throw new Error("FORBIDDEN: Insufficient role to revoke intake invitations");
   }
 
-  if (!env.isDemoMode) {
+  const isProduction = process.env.NODE_ENV === "production" || !env.isDemoMode;
+  if (isProduction) {
     const userClient = getAuthorizedSupabaseClient(actor);
     const client = userClient || getServiceSupabaseClient();
     if (!client) {

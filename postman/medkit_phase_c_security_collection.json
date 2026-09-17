@@ -803,14 +803,14 @@
               "raw": "{\"reason\":\"Testing clinical revocation\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/intake/invite/{{activeInviteId}}/revoke",
+              "raw": "{{baseUrl}}/api/intake/invitations/{{activeInviteId}}/revoke",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "intake",
-                "invite",
+                "invitations",
                 "{{activeInviteId}}",
                 "revoke"
               ]
@@ -881,14 +881,14 @@
               "raw": "{\"reason\":\"Cross-facility unauthorized revocation\"}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/intake/invite/{{facilityAInviteId}}/revoke",
+              "raw": "{{baseUrl}}/api/intake/invitations/{{facilityAInviteId}}/revoke",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "intake",
-                "invite",
+                "invitations",
                 "{{facilityAInviteId}}",
                 "revoke"
               ]
