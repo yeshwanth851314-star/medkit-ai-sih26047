@@ -158,4 +158,20 @@ describe("Phase C Ultra-Strict Security & Evidence Closure Suite", () => {
       ).rejects.toThrow(/Database unavailable/);
     });
   });
+
+  describe("Target C1: Legacy Raw-Token Revoke Endpoint Elimination", () => {
+    it("ensures legacy route file /api/intake/invite/[token]/revoke/route.ts is permanently removed", () => {
+      const legacyPath = path.resolve("src/app/api/intake/invite/[token]/revoke/route.ts");
+      expect(fs.existsSync(legacyPath)).toBe(false);
+    });
+
+    it("ensures non-secret invitation ID revoke route /api/intake/invitations/[invitationId]/revoke/route.ts exists and is active", () => {
+      const safePath = path.resolve("src/app/api/intake/invitations/[invitationId]/revoke/route.ts");
+      expect(fs.existsSync(safePath)).toBe(true);
+      const content = fs.readFileSync(safePath, "utf8");
+      expect(content).toContain("invitationId");
+      expect(content).toContain("revokeRemoteInvitation");
+    });
+  });
 });
+
