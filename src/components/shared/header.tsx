@@ -60,27 +60,41 @@ export function Header() {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1 text-sm font-medium text-slate-600">
+          <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-1 text-xs font-semibold text-slate-600">
             <Link
               href="/doctor/dashboard"
-              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
+              className="flex min-h-[36px] items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-surface-100 hover:text-slate-900 transition-colors"
             >
-              <Stethoscope className="h-4 w-4 text-clinical-600" aria-hidden="true" />
-              <span>Doctor Copilot</span>
+              <Stethoscope className="h-3.5 w-3.5 text-clinical-600" aria-hidden="true" />
+              <span>Doctor</span>
             </Link>
             <Link
-              href="/doctor/patients"
-              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
+              href="/opd/queue"
+              className="flex min-h-[36px] items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-surface-100 hover:text-slate-900 transition-colors"
             >
-              <Users className="h-4 w-4 text-slate-500" aria-hidden="true" />
-              <span>Patients</span>
+              <Users className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
+              <span>OPD Queue</span>
             </Link>
             <Link
-              href="/intake/new"
-              className="flex min-h-[40px] items-center gap-1.5 px-3 py-2 rounded-md hover:bg-surface-100 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-clinical-500"
+              href="/diagnostics/queue"
+              className="flex min-h-[36px] items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-surface-100 hover:text-slate-900 transition-colors"
             >
-              <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
-              <span>Patient Kiosk</span>
+              <Activity className="h-3.5 w-3.5 text-purple-600" aria-hidden="true" />
+              <span>Diagnostics</span>
+            </Link>
+            <Link
+              href="/pharmacy/queue"
+              className="flex min-h-[36px] items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-surface-100 hover:text-slate-900 transition-colors"
+            >
+              <span className="text-emerald-600 font-bold">Rx</span>
+              <span>Pharmacy</span>
+            </Link>
+            <Link
+              href="/patient/portal"
+              className="flex min-h-[36px] items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-surface-100 hover:text-slate-900 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              <span>Patient Portal</span>
             </Link>
           </nav>
         </div>
@@ -121,6 +135,38 @@ export function Header() {
             >
               <Users className="h-5 w-5 text-slate-500" aria-hidden="true" />
               <span>Patient Directory &amp; Records</span>
+            </Link>
+            <Link
+              href="/opd/queue"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-clinical-500"
+            >
+              <Users className="h-5 w-5 text-blue-600" aria-hidden="true" />
+              <span>OPD Triage &amp; Token Queue</span>
+            </Link>
+            <Link
+              href="/diagnostics/queue"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-clinical-500"
+            >
+              <Activity className="h-5 w-5 text-purple-600" aria-hidden="true" />
+              <span>Diagnostics Laboratory Queue</span>
+            </Link>
+            <Link
+              href="/pharmacy/queue"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-clinical-500"
+            >
+              <span className="h-5 w-5 text-emerald-600 font-bold text-center">Rx</span>
+              <span>Pharmacy Dispensary Queue</span>
+            </Link>
+            <Link
+              href="/patient/portal"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-clinical-500"
+            >
+              <Sparkles className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              <span>Patient Portal &amp; Timeline</span>
             </Link>
             <Link
               href="/intake/new"

@@ -13,6 +13,10 @@ import {
   Shield,
   Activity,
   CheckCircle2,
+  FlaskConical,
+  Pill,
+  Calendar,
+  Users,
 } from "lucide-react";
 import { DEMO_QUICK_ACCESS } from "@/lib/auth/demo-users";
 
@@ -203,6 +207,134 @@ export default function HomePage() {
           <div className="leading-relaxed">
             <strong className="font-semibold text-amber-950">Non-Autonomous Safety Boundary:</strong> MedKit AI assists with clinical history acquisition and documentation. It never performs autonomous diagnosis, prescribing, or treatment decisions. The clinician remains the final decision-maker.
           </div>
+        </div>
+      </section>
+
+      {/* ─── Connected Healthcare Continuum (18-Step Ecosystem) ─── */}
+      <section aria-labelledby="ecosystem-heading" className="space-y-6">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-clinical-700">
+            <Activity className="h-4 w-4" aria-hidden="true" />
+            <span>End-to-End Hospital Continuum</span>
+          </div>
+          <h2 id="ecosystem-heading" className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Complete Connected Healthcare Ecosystem
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-600">
+            From patient self-intake to doctor consultation, diagnostic testing, and pharmacy dispensing with single canonical patient identity.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Module 1: Patient Portal */}
+          <Link
+            href="/patient/portal"
+            className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm hover:border-amber-400 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+          >
+            <div className="space-y-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <div className="text-xs font-bold uppercase text-amber-700 tracking-wider">Step 1 &bull; Patient</div>
+              <h3 className="font-bold text-slate-900 text-sm group-hover:text-amber-800 transition-colors">
+                Patient Portal &amp; Timeline
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Consultation booking, OPD check-in, live queue token, and longitudinal medical timeline.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 group-hover:translate-x-1 transition-transform">
+              <span>Open Portal</span> &rarr;
+            </div>
+          </Link>
+
+          {/* Module 2: OPD Queue */}
+          <Link
+            href="/opd/queue"
+            className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+          >
+            <div className="space-y-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
+                <Users className="h-5 w-5" />
+              </div>
+              <div className="text-xs font-bold uppercase text-blue-700 tracking-wider">Step 2 &bull; Triage</div>
+              <h3 className="font-bold text-slate-900 text-sm group-hover:text-blue-800 transition-colors">
+                OPD Queue &amp; Reception
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Token calling display, triage priority, wait-time tracking, and doctor room routing.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 group-hover:translate-x-1 transition-transform">
+              <span>View Queue</span> &rarr;
+            </div>
+          </Link>
+
+          {/* Module 3: Doctor Workspace */}
+          <Link
+            href="/doctor"
+            className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm hover:border-clinical-500 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+          >
+            <div className="space-y-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-clinical-100 text-clinical-700">
+                <Stethoscope className="h-5 w-5" />
+              </div>
+              <div className="text-xs font-bold uppercase text-clinical-700 tracking-wider">Step 3 &bull; Clinician</div>
+              <h3 className="font-bold text-slate-900 text-sm group-hover:text-clinical-700 transition-colors">
+                Doctor Copilot Workspace
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                15-second glance, readiness score, Ayush assessment, diagnostic orders &amp; prescription sign-off.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-clinical-700 group-hover:translate-x-1 transition-transform">
+              <span>Doctor Login</span> &rarr;
+            </div>
+          </Link>
+
+          {/* Module 4: Diagnostics */}
+          <Link
+            href="/diagnostics/queue"
+            className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm hover:border-purple-400 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+          >
+            <div className="space-y-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-700">
+                <FlaskConical className="h-5 w-5" />
+              </div>
+              <div className="text-xs font-bold uppercase text-purple-700 tracking-wider">Step 4 &bull; Laboratory</div>
+              <h3 className="font-bold text-slate-900 text-sm group-hover:text-purple-700 transition-colors">
+                Diagnostic Pathology Lab
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Specimen accessioning, diagnostic test processing, report uploading &amp; instant doctor alert.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 group-hover:translate-x-1 transition-transform">
+              <span>Lab Worklist</span> &rarr;
+            </div>
+          </Link>
+
+          {/* Module 5: Pharmacy */}
+          <Link
+            href="/pharmacy/queue"
+            className="group rounded-2xl border border-surface-200 bg-white p-5 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+          >
+            <div className="space-y-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <Pill className="h-5 w-5" />
+              </div>
+              <div className="text-xs font-bold uppercase text-emerald-700 tracking-wider">Step 5 &bull; Pharmacy</div>
+              <h3 className="font-bold text-slate-900 text-sm group-hover:text-emerald-700 transition-colors">
+                Dispensary &amp; Stock Formulary
+              </h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Strict isolation queue for FINAL prescriptions, batch &amp; expiry tracking, stock decrement.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 group-hover:translate-x-1 transition-transform">
+              <span>Dispensary</span> &rarr;
+            </div>
+          </Link>
         </div>
       </section>
 

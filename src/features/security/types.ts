@@ -32,8 +32,28 @@ export type AuditAction =
   | "CLINICIAN_FACILITY_APPROVED"
   | "CLINICIAN_FACILITY_REJECTED"
   | "REMOTE_INVITE_CREATED"
-  | "REMOTE_INVITE_REVOKED";
-
+  | "REMOTE_INVITE_REVOKED"
+  | "APPOINTMENT_BOOKED"
+  | "PATIENT_CHECKED_IN"
+  | "QUEUE_ENTRY_CREATED"
+  | "QUEUE_CALLED"
+  | "CONSULTATION_STARTED"
+  | "CONSULTATION_COMPLETED"
+  | "QUEUE_STATUS_UPDATED"
+  | "DIAGNOSTIC_ORDER_CREATED"
+  | "DIAGNOSTIC_ORDER_ACCEPTED"
+  | "DIAGNOSTIC_SAMPLE_COLLECTED"
+  | "DIAGNOSTIC_RESULT_UPLOADED"
+  | "DIAGNOSTIC_RESULT_VERIFIED"
+  | "DIAGNOSTIC_RESULT_REVIEWED"
+  | "DIAGNOSTIC_STATUS_UPDATED"
+  | "PRESCRIPTION_CREATED"
+  | "PRESCRIPTION_FINALIZED"
+  | "MEDICINE_PARTIALLY_DISPENSED"
+  | "MEDICINE_DISPENSED"
+  | "DISPENSE_CONFIRMED"
+  | "PHARMACY_CLARIFICATION_RAISED"
+  | "PHARMACY_CLARIFICATION_RESOLVED";
 
 export interface ClinicalAuditLog {
   id: string;
@@ -51,7 +71,14 @@ export interface ClinicalAuditLog {
     | "kiosk_instances"
     | "intake_sessions"
     | "clinician_onboarding"
-    | "remote_intake_invitations";
+    | "remote_intake_invitations"
+    | "appointments"
+    | "opd_queues"
+    | "diagnostic_orders"
+    | "diagnostic_results"
+    | "prescriptions"
+    | "dispenses"
+    | "pharmacy_inventory";
   resource_id: string;
   metadata?: Record<string, any> | null;
   created_at: string;
@@ -74,6 +101,13 @@ export const clinicalAuditSchema = z.object({
     "intake_sessions",
     "clinician_onboarding",
     "remote_intake_invitations",
+    "appointments",
+    "opd_queues",
+    "diagnostic_orders",
+    "diagnostic_results",
+    "prescriptions",
+    "dispenses",
+    "pharmacy_inventory",
   ]),
   resource_id: z.string(),
   metadata: z.record(z.any()).optional().nullable(),

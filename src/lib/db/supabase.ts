@@ -5,6 +5,26 @@ import { Patient, ClinicalCase, MedicalDocument, IntakeSessionRecord } from "@/t
 import type { AuthUser } from "@/features/auth/types";
 import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
 import { computePayloadHash } from "@/features/security/canonical-hash";
+import { ecosystemMockStore } from "@/lib/db/ecosystem-mock-store";
+import type {
+  FacilityDepartment,
+  AppointmentSlot,
+  Appointment,
+  OpdQueueEntry,
+  DiagnosticCatalogItem,
+  DiagnosticOrder,
+  DiagnosticOrderItem,
+  DiagnosticResult,
+  Prescription,
+  PrescriptionItem,
+  PrescriptionClarification,
+  PharmacyInventoryItem,
+  DispenseEvent,
+  AppointmentStatus,
+  OpdQueueStatus,
+  DiagnosticOrderStatus,
+  PrescriptionStatus,
+} from "@/types/ecosystem";
 
 if (typeof globalThis !== "undefined" && typeof (globalThis as any).WebSocket === "undefined") {
   class NodeFallbackWebSocket {
@@ -1683,4 +1703,847 @@ export async function deleteIntakeSession(
   }
 
   return true;
+}
+
+// ─── Connected Healthcare Ecosystem Data Access Functions ───────────────────
+
+export async function getDepartmentsDb(
+  facilityId?: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<FacilityDepartment[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDepartments(facilityId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase.from("facility_departments").select("*").eq("active", true);
+  if (facilityId) q = q.eq("facility_id", facilityId);
+  const { data, error } = await q;
+  if (error) throw new Error(`Database error fetching departments: ${error.message}`);
+  return (data || []) as FacilityDepartment[];
+}
+
+export async function getAppointmentSlotsDb(
+  facilityId: string,
+  departmentId?: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<AppointmentSlot[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getSlots(facilityId, departmentId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase.from("appointment_slots").select("*").eq("facility_id", facilityId).eq("status", "available");
+  if (departmentId) q = q.eq("department_id", departmentId);
+  const { data, error } = await q.order("starts_at", { ascending: true });
+  if (error) throw new Error(`Database error fetching slots: ${error.message}`);
+  return (data || []) as AppointmentSlot[];
+}
+
+export async function bookAppointmentDb(
+  data: {
+    patientId: string;
+    facilityId: string;
+    departmentId?: string | null;
+    clinicianId?: string | null;
+    slotId?: string | null;
+    intakeCaseId?: string | null;
+    scheduledAt: string;
+    reason?: string | null;
+    createdBy?: string | null;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<Appointment> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.bookAppointment(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data: record, error } = await supabase
+    .from("appointments")
+    .insert({
+      patient_id: data.patientId,
+      facility_id: data.facilityId,
+      department_id: data.departmentId || null,
+      clinician_id: data.clinicianId || null,
+      slot_id: data.slotId || null,
+      intake_case_id: data.intakeCaseId || null,
+      scheduled_at: data.scheduledAt,
+      status: "BOOKED",
+      reason: data.reason || null,
+      created_by: data.createdBy || "patient",
+    })
+    .select("*, department:facility_departments(*)")
+    .single();
+
+  if (error) throw new Error(`Database error booking appointment: ${error.message}`);
+  return record as Appointment;
+}
+
+export async function getAppointmentsDb(
+  params: { patientId?: string; facilityId?: string; status?: AppointmentStatus },
+  actorOrToken?: AuthUser | string | null
+): Promise<Appointment[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getAppointments(params);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase.from("appointments").select("*, department:facility_departments(*)");
+  if (params.patientId) q = q.eq("patient_id", params.patientId);
+  if (params.facilityId) q = q.eq("facility_id", params.facilityId);
+  if (params.status) q = q.eq("status", params.status);
+
+  const { data, error } = await q.order("scheduled_at", { ascending: false });
+  if (error) throw new Error(`Database error fetching appointments: ${error.message}`);
+  return (data || []) as Appointment[];
+}
+
+export async function getAppointmentByIdDb(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<Appointment | null> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getAppointmentById(id);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*, department:facility_departments(*)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(`Database error fetching appointment: ${error.message}`);
+  return (data || null) as Appointment | null;
+}
+
+export async function checkInAppointmentDb(
+  appointmentId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<{ appointment: Appointment; queueEntry: OpdQueueEntry }> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.checkInAppointment(appointmentId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  // Fetch appointment
+  const { data: appt, error: apptError } = await supabase
+    .from("appointments")
+    .select("*, department:facility_departments(*)")
+    .eq("id", appointmentId)
+    .single();
+
+  if (apptError || !appt) throw new Error("APPOINTMENT_NOT_FOUND: Appointment does not exist");
+
+  // Check existing queue entry
+  const { data: existingQ } = await supabase
+    .from("opd_queue_entries")
+    .select("*")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  if (existingQ) {
+    return { appointment: appt as Appointment, queueEntry: existingQ as OpdQueueEntry };
+  }
+
+  // Get next token number
+  const { count } = await supabase
+    .from("opd_queue_entries")
+    .select("*", { count: "exact", head: true })
+    .eq("facility_id", appt.facility_id);
+
+  const tokenNumber = (count || 0) + 101;
+
+  // Insert queue entry
+  const { data: qEntry, error: qError } = await supabase
+    .from("opd_queue_entries")
+    .insert({
+      appointment_id: appt.id,
+      patient_id: appt.patient_id,
+      facility_id: appt.facility_id,
+      department_id: appt.department_id,
+      clinician_id: appt.clinician_id,
+      token_number: tokenNumber,
+      status: "WAITING",
+    })
+    .select("*")
+    .single();
+
+  if (qError) throw new Error(`Database error inserting queue entry: ${qError.message}`);
+
+  // Update appointment status to CHECKED_IN
+  await supabase
+    .from("appointments")
+    .update({ status: "CHECKED_IN" })
+    .eq("id", appointmentId);
+
+  return { appointment: appt as Appointment, queueEntry: qEntry as OpdQueueEntry };
+}
+
+export async function checkInOpdQueueDb(
+  appointmentId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<OpdQueueEntry> {
+  const { queueEntry } = await checkInAppointmentDb(appointmentId, actorOrToken);
+  return queueEntry;
+}
+
+export async function getOpdQueueDb(
+  facilityId: string,
+  status?: OpdQueueStatus,
+  actorOrToken?: AuthUser | string | null
+): Promise<OpdQueueEntry[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getOpdQueue(facilityId, status);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase
+    .from("opd_queue_entries")
+    .select("*, patient:patients(full_name, patient_code), department:facility_departments(name)")
+    .eq("facility_id", facilityId);
+
+  if (status) q = q.eq("status", status);
+
+  const { data, error } = await q.order("token_number", { ascending: true });
+  if (error) throw new Error(`Database error fetching OPD queue: ${error.message}`);
+
+  return (data || []).map((row: any) => ({
+    ...row,
+    patient_name: row.patient?.full_name,
+    patient_code: row.patient?.patient_code,
+    department_name: row.department?.name,
+  })) as OpdQueueEntry[];
+}
+
+export async function transitionOpdQueueDb(
+  id: string,
+  targetStatus: OpdQueueStatus,
+  actorOrToken?: AuthUser | string | null
+): Promise<OpdQueueEntry> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.transitionOpdQueue(id, targetStatus);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const updates: Record<string, any> = { status: targetStatus, updated_at: new Date().toISOString() };
+  if (targetStatus === "CALLED") updates.called_at = new Date().toISOString();
+  if (targetStatus === "IN_CONSULTATION") updates.consultation_started_at = new Date().toISOString();
+  if (targetStatus === "DONE") updates.completed_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("opd_queue_entries")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Database error updating queue entry: ${error.message}`);
+  return data as OpdQueueEntry;
+}
+
+// ─── Diagnostics Database Functions ─────────────────────────────────────────
+
+export async function getDiagnosticCatalogDb(
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticCatalogItem[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDiagnosticCatalog();
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("diagnostic_catalog")
+    .select("*")
+    .eq("active", true)
+    .order("name", { ascending: true });
+
+  if (error) throw new Error(`Database error fetching diagnostic catalog: ${error.message}`);
+  return (data || []) as DiagnosticCatalogItem[];
+}
+
+export async function createDiagnosticOrderDb(
+  data: {
+    patientId: string;
+    caseId: string;
+    facilityId: string;
+    orderingClinicianId: string;
+    priority?: "ROUTINE" | "URGENT" | "STAT";
+    clinicalContext?: string | null;
+    items: Array<{
+      catalogId?: string;
+      testName: string;
+      testCode: string;
+      category?: string | null;
+      instructions?: string | null;
+    }>;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticOrder> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.createDiagnosticOrder(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data: order, error: orderErr } = await supabase
+    .from("diagnostic_orders")
+    .insert({
+      patient_id: data.patientId,
+      case_id: data.caseId,
+      facility_id: data.facilityId,
+      ordering_clinician_id: data.orderingClinicianId,
+      priority: data.priority || "ROUTINE",
+      clinical_context: data.clinicalContext || null,
+      status: "ORDERED",
+    })
+    .select()
+    .single();
+
+  if (orderErr || !order) throw new Error(`Database error creating diagnostic order: ${orderErr?.message}`);
+
+  const itemPayloads = data.items.map((it) => ({
+    diagnostic_order_id: order.id,
+    diagnostic_catalog_id: it.catalogId || null,
+    test_name_snapshot: it.testName,
+    test_code_snapshot: it.testCode,
+    instructions: it.instructions || null,
+    status: "ORDERED",
+  }));
+
+  const { data: items, error: itemsErr } = await supabase
+    .from("diagnostic_order_items")
+    .insert(itemPayloads)
+    .select();
+
+  if (itemsErr) throw new Error(`Database error inserting order items: ${itemsErr.message}`);
+
+  return { ...order, items: items || [] } as DiagnosticOrder;
+}
+
+export async function getDiagnosticOrdersDb(
+  params: { facilityId?: string; patientId?: string; caseId?: string; status?: DiagnosticOrderStatus },
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticOrder[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDiagnosticOrders(params);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase
+    .from("diagnostic_orders")
+    .select("*, items:diagnostic_order_items(*), patient:patients(full_name, patient_code), ordering_clinician:profiles(full_name)");
+
+  if (params.facilityId) q = q.eq("facility_id", params.facilityId);
+  if (params.patientId) q = q.eq("patient_id", params.patientId);
+  if (params.caseId) q = q.eq("case_id", params.caseId);
+  if (params.status) q = q.eq("status", params.status);
+
+  const { data, error } = await q.order("ordered_at", { ascending: false });
+  if (error) throw new Error(`Database error fetching diagnostic orders: ${error.message}`);
+
+  return (data || []).map((row: any) => ({
+    ...row,
+    patient_name: row.patient?.full_name,
+    patient_code: row.patient?.patient_code,
+    ordering_clinician_name: row.ordering_clinician?.full_name,
+  })) as DiagnosticOrder[];
+}
+
+export async function getDiagnosticOrderByIdDb(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticOrder | null> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDiagnosticOrderById(id);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("diagnostic_orders")
+    .select("*, items:diagnostic_order_items(*), results:diagnostic_results(*), patient:patients(full_name, patient_code), ordering_clinician:profiles(full_name)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(`Database error fetching diagnostic order: ${error.message}`);
+  if (!data) return null;
+
+  return {
+    ...data,
+    patient_name: data.patient?.full_name,
+    patient_code: data.patient?.patient_code,
+    ordering_clinician_name: data.ordering_clinician?.full_name,
+  } as DiagnosticOrder;
+}
+
+export async function transitionDiagnosticOrderDb(
+  id: string,
+  targetStatus: DiagnosticOrderStatus,
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticOrder> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.transitionDiagnosticOrder(id, targetStatus);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const updates: Record<string, any> = { status: targetStatus, updated_at: new Date().toISOString() };
+  if (targetStatus === "ACCEPTED") updates.accepted_at = new Date().toISOString();
+  if (targetStatus === "RESULT_AVAILABLE") updates.completed_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("diagnostic_orders")
+    .update(updates)
+    .eq("id", id)
+    .select("*, items:diagnostic_order_items(*)")
+    .single();
+
+  if (error) throw new Error(`Database error updating diagnostic order: ${error.message}`);
+
+  // Update order items status
+  await supabase
+    .from("diagnostic_order_items")
+    .update({ status: targetStatus })
+    .eq("diagnostic_order_id", id);
+
+  return data as DiagnosticOrder;
+}
+
+export async function submitDiagnosticResultDb(
+  data: {
+    orderItemId: string;
+    patientId: string;
+    caseId: string;
+    resultJson: Record<string, any>;
+    resultText?: string | null;
+    documentId?: string | null;
+    performedBy: string;
+    verifiedBy?: string | null;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticResult> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.submitDiagnosticResult(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const now = new Date().toISOString();
+  const { data: res, error } = await supabase
+    .from("diagnostic_results")
+    .insert({
+      diagnostic_order_item_id: data.orderItemId,
+      patient_id: data.patientId,
+      case_id: data.caseId,
+      result_json: data.resultJson,
+      result_text: data.resultText || null,
+      document_id: data.documentId || null,
+      performed_by: data.performedBy,
+      verified_by: data.verifiedBy || null,
+      performed_at: now,
+      verified_at: data.verifiedBy ? now : null,
+    })
+    .select()
+    .single();
+
+  if (error || !res) throw new Error(`Database error recording diagnostic result: ${error?.message}`);
+
+  // Update item & order status
+  await supabase
+    .from("diagnostic_order_items")
+    .update({ status: "RESULT_AVAILABLE" })
+    .eq("id", data.orderItemId);
+
+  return res as DiagnosticResult;
+}
+
+export async function reviewDiagnosticResultDb(
+  orderId: string,
+  reviewedBy: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticOrder> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.reviewDiagnosticResult(orderId, reviewedBy);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("diagnostic_orders")
+    .update({ status: "REVIEWED", reviewed_at: now, reviewed_by: reviewedBy, updated_at: now })
+    .eq("id", orderId)
+    .select("*, items:diagnostic_order_items(*)")
+    .single();
+
+  if (error) throw new Error(`Database error reviewing diagnostic order: ${error.message}`);
+
+  await supabase
+    .from("diagnostic_order_items")
+    .update({ status: "REVIEWED" })
+    .eq("diagnostic_order_id", orderId);
+
+  return data as DiagnosticOrder;
+}
+
+export const reviewDiagnosticOrderDb = reviewDiagnosticResultDb;
+
+export async function getDiagnosticResultsByCaseDb(
+  caseId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<DiagnosticResult[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDiagnosticResultsByCase(caseId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("diagnostic_results")
+    .select("*, document:documents(storage_path, original_filename)")
+    .eq("case_id", caseId)
+    .order("performed_at", { ascending: false });
+
+  if (error) throw new Error(`Database error fetching diagnostic results: ${error.message}`);
+
+  return (data || []).map((row: any) => ({
+    ...row,
+    document_storage_path: row.document?.storage_path,
+    document_filename: row.document?.original_filename,
+  })) as DiagnosticResult[];
+}
+
+// ─── Prescriptions Database Functions ───────────────────────────────────────
+
+export async function createDraftPrescriptionDb(
+  data: {
+    patientId: string;
+    caseId: string;
+    facilityId: string;
+    prescriberId: string;
+    notes?: string | null;
+    items: Array<{
+      medicineName: string;
+      genericName?: string | null;
+      strength?: string | null;
+      route?: string;
+      dose: string;
+      frequency: string;
+      duration: string;
+      quantity?: number;
+      instructions?: string | null;
+    }>;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<Prescription> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.createDraftPrescription(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data: rx, error: rxErr } = await supabase
+    .from("prescriptions")
+    .insert({
+      patient_id: data.patientId,
+      case_id: data.caseId,
+      facility_id: data.facilityId,
+      prescriber_id: data.prescriberId,
+      status: "DRAFT",
+      notes: data.notes || null,
+    })
+    .select()
+    .single();
+
+  if (rxErr || !rx) throw new Error(`Database error creating prescription: ${rxErr?.message}`);
+
+  const itemPayloads = data.items.map((it) => ({
+    prescription_id: rx.id,
+    medicine_name: it.medicineName,
+    generic_name: it.genericName || null,
+    strength: it.strength || null,
+    route: it.route || "oral",
+    dose: it.dose,
+    frequency: it.frequency,
+    duration: it.duration,
+    quantity: it.quantity || 1,
+    instructions: it.instructions || null,
+  }));
+
+  const { data: items, error: itErr } = await supabase
+    .from("prescription_items")
+    .insert(itemPayloads)
+    .select();
+
+  if (itErr) throw new Error(`Database error adding prescription items: ${itErr.message}`);
+
+  return { ...rx, items: items || [] } as Prescription;
+}
+
+export const createPrescriptionDb = createDraftPrescriptionDb;
+
+export async function finalizePrescriptionDb(
+  id: string,
+  finalizedBy: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<Prescription> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.finalizePrescription(id, finalizedBy);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("prescriptions")
+    .update({ status: "FINAL", finalized_at: now, finalized_by: finalizedBy, updated_at: now })
+    .eq("id", id)
+    .eq("status", "DRAFT") // Enforce valid transition
+    .select("*, items:prescription_items(*)")
+    .single();
+
+  if (error) throw new Error(`Database error finalizing prescription: ${error.message}`);
+  return data as Prescription;
+}
+
+export async function getPrescriptionsDb(
+  params: {
+    patientId?: string;
+    caseId?: string;
+    facilityId?: string;
+    status?: PrescriptionStatus;
+    onlyFinalOrDispensed?: boolean;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<Prescription[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getPrescriptions(params);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  let q = supabase
+    .from("prescriptions")
+    .select("*, items:prescription_items(*), patient:patients(full_name, patient_code), prescriber:profiles(full_name)");
+
+  if (params.patientId) q = q.eq("patient_id", params.patientId);
+  if (params.caseId) q = q.eq("case_id", params.caseId);
+  if (params.facilityId) q = q.eq("facility_id", params.facilityId);
+  if (params.status) q = q.eq("status", params.status);
+  if (params.onlyFinalOrDispensed) {
+    q = q.in("status", ["FINAL", "PARTIALLY_DISPENSED", "DISPENSED"]);
+  }
+
+  const { data, error } = await q.order("created_at", { ascending: false });
+  if (error) throw new Error(`Database error fetching prescriptions: ${error.message}`);
+
+  return (data || []).map((row: any) => ({
+    ...row,
+    patient_name: row.patient?.full_name,
+    patient_code: row.patient?.patient_code,
+    prescriber_name: row.prescriber?.full_name,
+  })) as Prescription[];
+}
+
+export async function getPrescriptionByIdDb(
+  id: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<Prescription | null> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getPrescriptionById(id);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("prescriptions")
+    .select("*, items:prescription_items(*), clarifications:prescription_clarifications(*), patient:patients(full_name, patient_code), prescriber:profiles(full_name)")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(`Database error fetching prescription: ${error.message}`);
+  if (!data) return null;
+
+  return {
+    ...data,
+    patient_name: data.patient?.full_name,
+    patient_code: data.patient?.patient_code,
+    prescriber_name: data.prescriber?.full_name,
+  } as Prescription;
+}
+
+// ─── Pharmacy & Dispensing Database Functions ───────────────────────────────
+
+export async function getPharmacyInventoryDb(
+  facilityId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<PharmacyInventoryItem[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getPharmacyInventory(facilityId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("pharmacy_inventory")
+    .select("*")
+    .eq("facility_id", facilityId)
+    .eq("active", true)
+    .order("medicine_name", { ascending: true });
+
+  if (error) throw new Error(`Database error fetching inventory: ${error.message}`);
+  return (data || []) as PharmacyInventoryItem[];
+}
+
+export async function dispenseMedicationDb(
+  data: {
+    prescriptionId: string;
+    facilityId: string;
+    dispensedBy: string;
+    notes?: string | null;
+    items: Array<{
+      prescriptionItemId: string;
+      quantityDispensed: number;
+      batchNumber?: string | null;
+      expiryDate?: string | null;
+    }>;
+  },
+  actorOrToken?: AuthUser | string | null
+): Promise<{ dispenseEvent: DispenseEvent; prescription: Prescription }> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.dispenseMedication(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  // In production mode, perform dispense via service role
+  const now = new Date().toISOString();
+  const { data: rx, error: rxErr } = await supabase
+    .from("prescriptions")
+    .select("*, items:prescription_items(*)")
+    .eq("id", data.prescriptionId)
+    .single();
+
+  if (rxErr || !rx) throw new Error("PRESCRIPTION_NOT_FOUND: Prescription does not exist");
+  if (rx.status !== "FINAL" && rx.status !== "PARTIALLY_DISPENSED") {
+    throw new Error("FORBIDDEN: Only FINAL or PARTIALLY_DISPENSED prescriptions can be dispensed");
+  }
+
+  const { data: dEvent, error: dErr } = await supabase
+    .from("dispense_events")
+    .insert({
+      prescription_id: rx.id,
+      patient_id: rx.patient_id,
+      facility_id: data.facilityId,
+      dispensed_by: data.dispensedBy,
+      status: "COMPLETE",
+      notes: data.notes || null,
+      dispensed_at: now,
+      confirmed_at: now,
+    })
+    .select()
+    .single();
+
+  if (dErr || !dEvent) throw new Error(`Database error creating dispense event: ${dErr?.message}`);
+
+  const dItems = data.items.map((it) => ({
+    dispense_event_id: dEvent.id,
+    prescription_item_id: it.prescriptionItemId,
+    quantity_dispensed: it.quantityDispensed,
+    batch_number: it.batchNumber || null,
+    expiry_date: it.expiryDate || null,
+  }));
+
+  await supabase.from("dispense_items").insert(dItems);
+
+  await supabase
+    .from("prescriptions")
+    .update({ status: "DISPENSED", updated_at: now })
+    .eq("id", rx.id);
+
+  return { dispenseEvent: dEvent as DispenseEvent, prescription: { ...rx, status: "DISPENSED" } as Prescription };
+}
+
+export async function raisePrescriptionClarificationDb(
+  data: { prescriptionId: string; raisedBy: string; reason: string },
+  actorOrToken?: AuthUser | string | null
+): Promise<PrescriptionClarification> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.raisePrescriptionClarification(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data: c, error } = await supabase
+    .from("prescription_clarifications")
+    .insert({
+      prescription_id: data.prescriptionId,
+      raised_by: data.raisedBy,
+      reason: data.reason,
+      status: "OPEN",
+    })
+    .select()
+    .single();
+
+  if (error || !c) throw new Error(`Database error raising clarification: ${error?.message}`);
+  return c as PrescriptionClarification;
+}
+
+export async function resolvePrescriptionClarificationDb(
+  data: { clarificationId: string; responseBy: string; responseText: string },
+  actorOrToken?: AuthUser | string | null
+): Promise<PrescriptionClarification> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.resolvePrescriptionClarification(data);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const now = new Date().toISOString();
+  const { data: c, error } = await supabase
+    .from("prescription_clarifications")
+    .update({
+      status: "RESOLVED",
+      response_by: data.responseBy,
+      response_text: data.responseText,
+      resolved_at: now,
+    })
+    .eq("id", data.clarificationId)
+    .select()
+    .single();
+
+  if (error || !c) throw new Error(`Database error resolving clarification: ${error?.message}`);
+  return c as PrescriptionClarification;
+}
+
+export async function getDispenseEventsByPatientDb(
+  patientId: string,
+  actorOrToken?: AuthUser | string | null
+): Promise<DispenseEvent[]> {
+  if (env.isDemoMode) {
+    return ecosystemMockStore.getDispenseEventsByPatient(patientId);
+  }
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
+  if (!supabase) throw new Error("Database unavailable: Supabase client not configured");
+
+  const { data, error } = await supabase
+    .from("dispense_events")
+    .select("*, items:dispense_items(*)")
+    .eq("patient_id", patientId)
+    .order("dispensed_at", { ascending: false });
+
+  if (error) throw new Error(`Database error fetching dispense events: ${error.message}`);
+  return (data || []) as DispenseEvent[];
 }

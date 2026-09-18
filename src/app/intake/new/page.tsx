@@ -19,10 +19,14 @@ import {
   Send,
   AlertTriangle,
   UserCircle,
+  Building2,
+  Calendar,
+  Info,
 } from "lucide-react";
 import { KioskIntro } from "@/components/onboarding/kiosk-intro";
 import { hasCompletedKioskOnboarding, resetKioskOnboarding } from "@/lib/onboarding/onboarding-state";
 import { DEMO_PATIENT_ID, DEMO_QUICK_ACCESS } from "@/lib/auth/demo-users";
+import { PreliminaryIntakeGuidance } from "@/types/ecosystem";
 
 export default function PatientKioskIntakePage() {
   const router = useRouter();
@@ -47,6 +51,7 @@ export default function PatientKioskIntakePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
   const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
+  const [guidance, setGuidance] = useState<PreliminaryIntakeGuidance | null>(null);
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [intakeErrorCode, setIntakeErrorCode] = useState<string | null>(null);
 
@@ -126,6 +131,24 @@ export default function PatientKioskIntakePage() {
         const submitData = await submitRes.json();
         if (submitRes.ok && submitData.case) {
           setCreatedCaseId(submitData.case.id);
+          try {
+            const guideRes = await fetch("/api/guidance/intake", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chiefComplaint: submitData.case.chiefComplaint || "General Consultation",
+                rawComplaint: Array.isArray(submitData.case.rawComplaints) ? submitData.case.rawComplaints[0] : "",
+                redFlags: submitData.case.redFlags || [],
+                caseType: submitData.case.caseType || "general",
+              }),
+            });
+            const guideData = await guideRes.json();
+            if (guideRes.ok && guideData.guidance) {
+              setGuidance(guideData.guidance);
+            }
+          } catch (e) {
+            console.error("Failed to generate intake guidance:", e);
+          }
         }
         setStage("completed");
       } else {
@@ -457,13 +480,64 @@ export default function PatientKioskIntakePage() {
             </p>
           </div>
 
+          {/* Preliminary Intake Guidance Card */}
+          {guidance && (
+            <div className="text-left rounded-2xl border border-clinical-200 bg-clinical-50/50 p-6 space-y-4 max-w-xl mx-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-clinical-700" />
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Recommended Department
+                  </span>
+                </div>
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    guidance.priorityLevel === "EMERGENCY"
+                      ? "bg-red-100 text-red-800"
+                      : guidance.priorityLevel === "URGENT"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {guidance.priorityLevel} TRIAGE
+                </span>
+              </div>
+
+              <div>
+                <div className="text-lg font-bold text-slate-900">
+                  {guidance.recommendedDepartmentName} ({guidance.recommendedDepartmentCode})
+                </div>
+                <div className="text-xs text-slate-600 mt-1">
+                  Suggested Clinician: <span className="font-semibold text-slate-800">{guidance.suggestedDoctorRole}</span>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-600 bg-white/80 rounded-xl p-3 border border-clinical-100">
+                <span className="font-semibold text-slate-700">Rationale: </span>
+                {guidance.rationale}
+              </div>
+
+              <div className="flex items-start gap-2 text-[11px] text-slate-500 italic pt-1">
+                <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                <span>{guidance.disclaimer}</span>
+              </div>
+            </div>
+          )}
+
           <div className="pt-4 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/patient/portal?book=true"
+              className="inline-flex items-center gap-2 rounded-xl bg-clinical-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors"
+            >
+              <Calendar className="h-4 w-4" />
+              Book OPD Consultation & Check-In &rarr;
+            </Link>
             {createdCaseId && (
               <Link
                 href={`/doctor/cases/${createdCaseId}`}
-                className="rounded-xl bg-clinical-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700"
+                className="rounded-xl border border-surface-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-50 transition-colors"
               >
-                View Structured Case in Doctor Portal &rarr;
+                View Structured Case (Doctor) &rarr;
               </Link>
             )}
             <button
@@ -475,8 +549,9 @@ export default function PatientKioskIntakePage() {
                 setIntakeToken(null);
                 setQuestionsAnswered(0);
                 setConsentAcknowledged(false);
+                setGuidance(null);
               }}
-              className="rounded-xl border border-surface-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-50"
+              className="rounded-xl border border-surface-200 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-surface-50"
             >
               Start Next Patient Intake
             </button>

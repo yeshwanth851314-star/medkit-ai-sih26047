@@ -14,6 +14,9 @@ import { VisitComparisonView } from "@/components/timeline/visit-comparison";
 import { ContextualHelp } from "@/components/help/contextual-help";
 import { RedFlagBanner } from "@/components/red-flags/red-flag-banner";
 import { RedFlagAlertItem } from "@/features/red-flags/types";
+import { DoctorQuickView } from "@/components/cases/doctor-quick-view";
+import { DoctorDiagnosticsCard } from "@/components/cases/doctor-diagnostics-card";
+import { DoctorPrescriptionCard } from "@/components/cases/doctor-prescription-card";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   Stethoscope,
@@ -159,6 +162,14 @@ export default async function CaseDetailsPage({
           </div>
         )}
       </div>
+
+      {/* 15-Second Doctor View & Case Readiness Meter */}
+      <DoctorQuickView
+        clinicalCase={c}
+        patientName={patient?.full_name}
+        hasChangedSinceLastVisit={visitComparison?.hasPreviousVisit}
+        changesSummary={visitComparison?.symptomChanges?.added || []}
+      />
 
       {/* Signature Longitudinal Feature: What Changed Since Previous Visit */}
       {visitComparison && visitComparison.hasPreviousVisit && (
@@ -377,6 +388,21 @@ export default async function CaseDetailsPage({
         {c.case_type === "ayush" && c.ayush_assessment && (
           <AyushCaseDisplay assessment={c.ayush_assessment} />
         )}
+
+        {/* Diagnostic Orders & Lab Results Section */}
+        <DoctorDiagnosticsCard
+          caseId={c.id}
+          patientId={c.patient_id}
+          facilityId={user.facilityId || patient?.facility_id || "fac-hyd-01"}
+        />
+
+        {/* Prescription & Ayurvedic Regimen Section */}
+        <DoctorPrescriptionCard
+          caseId={c.id}
+          patientId={c.patient_id}
+          facilityId={user.facilityId || patient?.facility_id || "fac-hyd-01"}
+          doctorName={user.fullName || "Dr. Attending Physician"}
+        />
 
         {/* Post-finalization Clinical Addenda / Amendments */}
         {c.amendments && c.amendments.length > 0 && (
