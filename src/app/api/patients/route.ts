@@ -97,6 +97,7 @@ export async function POST(request: Request) {
         {
           warning: "Duplicate patient suspect detected.",
           duplicateWarning: result.duplicateWarning,
+          patient: null,
         },
         { status: 409 }
       );
