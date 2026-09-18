@@ -1,84 +1,243 @@
 import Link from "next/link";
-import { Stethoscope, Sparkles, ShieldCheck, Clock, FileSearch, HeartPulse } from "lucide-react";
+import {
+  Stethoscope,
+  Sparkles,
+  ShieldCheck,
+  Clock,
+  FileSearch,
+  HeartPulse,
+  UserCircle,
+  ArrowRight,
+  Mic,
+  FileText,
+  Shield,
+  Activity,
+  CheckCircle2,
+} from "lucide-react";
+import { DEMO_QUICK_ACCESS } from "@/lib/auth/demo-users";
 
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Hero Banner */}
-      <div className="rounded-2xl border border-clinical-200 bg-gradient-to-b from-clinical-50 to-white p-8 shadow-sm sm:p-12 text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-clinical-200 bg-white px-3 py-1 text-xs font-semibold text-clinical-700 shadow-sm mb-4">
-          <HeartPulse className="h-3.5 w-3.5 text-clinical-600" />
-          SIH26047 — Patient Case-Taking Software
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-12">
+      {/* ─── Hero Header & Government Provenance ─── */}
+      <section className="text-center max-w-3xl mx-auto space-y-4">
+        <div className="inline-flex items-center gap-2 rounded-full border border-clinical-200 bg-clinical-50 px-3.5 py-1.5 text-xs font-semibold text-clinical-800 shadow-sm">
+          <HeartPulse className="h-4 w-4 text-clinical-600" aria-hidden="true" />
+          <span>SIH26047 — Patient Case-Taking Software • Ministry of Ayush / AIIA</span>
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
+
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
           MedKit AI
         </h1>
-        <p className="mt-3 text-lg font-medium text-clinical-700 max-w-2xl mx-auto">
-          Intelligent Multimodal Clinical Intake & Physician Copilot
-        </p>
-        <p className="mt-4 text-base text-slate-600 max-w-2xl mx-auto">
-          Turns patient voice, questionnaire responses, and prior medical documents into a verified, structured clinical history—before the doctor begins the consultation.
+
+        <p className="text-lg font-medium text-clinical-800 sm:text-xl">
+          Intelligent Multimodal Clinical Intake &amp; Physician Copilot
         </p>
 
-        {/* Primary Action Buttons */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link
-            href="/doctor/dashboard"
-            className="flex items-center gap-2 rounded-lg bg-clinical-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-clinical-600"
+        <p className="text-sm sm:text-base text-slate-700 leading-relaxed max-w-2xl mx-auto">
+          Turns patient voice, bilingual symptom responses, and prior medical documents into a verified, structured clinical history before consultation begins.
+        </p>
+      </section>
+
+      {/* ─── Primary Role Selection (Doctor vs Patient) ─── */}
+      <section
+        aria-labelledby="portal-selection-heading"
+        className="rounded-3xl border border-surface-200 bg-surface-50/60 p-6 sm:p-10 shadow-sm space-y-8"
+      >
+        <div className="text-center max-w-xl mx-auto space-y-2">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-clinical-700">
+            <Activity className="h-4 w-4" aria-hidden="true" />
+            <span>Select Your Portal to Continue</span>
+          </div>
+          <h2
+            id="portal-selection-heading"
+            className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl"
           >
-            <Stethoscope className="h-4 w-4" />
-            Open Doctor Dashboard
-          </Link>
-          <Link
-            href="/intake/new"
-            className="flex items-center gap-2 rounded-lg border border-surface-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
-          >
-            <Sparkles className="h-4 w-4 text-amber-500" />
-            Start Patient Kiosk Intake
-          </Link>
+            Are you a Doctor or a Patient?
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-700">
+            Choose your role below to access the authorized clinician workspace or start patient voice intake.
+          </p>
+        </div>
+
+        {/* Two High-Impact Interactive Role Cards */}
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 max-w-5xl mx-auto">
+          {/* ─── Card 1: Doctor / Healthcare Professional ─── */}
+          <div className="flex flex-col justify-between rounded-2xl border-2 border-clinical-300 bg-white p-6 sm:p-8 shadow-sm hover:shadow-md hover:border-clinical-500 transition-all">
+            <div className="space-y-6">
+              {/* Card Header & Badge */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-clinical-100 text-clinical-700 shadow-sm">
+                  <Stethoscope className="h-8 w-8" aria-hidden="true" />
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-clinical-100 px-3 py-1 text-xs font-bold text-clinical-800 border border-clinical-200">
+                  <Shield className="h-3 w-3 text-clinical-600" aria-hidden="true" />
+                  Institutional Access
+                </span>
+              </div>
+
+              {/* Title & Description */}
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-slate-900">
+                  Doctor &amp; Clinician Portal
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  For Physicians, AYUSH Vaidyas, and Triage Staff to review patient queues, consult with AI copilot, verify document OCR, and manage longitudinal records.
+                </p>
+              </div>
+
+              {/* Feature Checklist */}
+              <ul className="space-y-2.5 text-xs text-slate-700 border-t border-surface-200 pt-4">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-clinical-600 shrink-0" aria-hidden="true" />
+                  <span>Clinical Copilot &amp; Triage Queues</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-clinical-600 shrink-0" aria-hidden="true" />
+                  <span>Longitudinal Timeline &amp; Visit Delta Analysis</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-clinical-600 shrink-0" aria-hidden="true" />
+                  <span>Multimodal OCR Document Verification</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-clinical-600 shrink-0" aria-hidden="true" />
+                  <span>Zero-Trust MFA (AAL2) Security &amp; Facility Isolation</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-8 space-y-3">
+              <Link
+                href="/login"
+                className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-clinical-600 px-6 py-3.5 text-sm font-bold text-white shadow hover:bg-clinical-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-clinical-600 transition-colors text-center"
+              >
+                <span>Doctor Login &rarr;</span>
+              </Link>
+
+              {/* Quick demo shortcut */}
+              <div className="text-center">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-clinical-800 hover:text-clinical-950 focus:underline"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-clinical-600" aria-hidden="true" />
+                  <span>Quick Access: Demo Doctor ({DEMO_QUICK_ACCESS.doctor.demoId})</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Card 2: Patient / Multimodal Kiosk ─── */}
+          <div className="flex flex-col justify-between rounded-2xl border-2 border-amber-300 bg-white p-6 sm:p-8 shadow-sm hover:shadow-md hover:border-amber-500 transition-all">
+            <div className="space-y-6">
+              {/* Card Header & Badge */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 shadow-sm">
+                  <UserCircle className="h-8 w-8" aria-hidden="true" />
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 border border-amber-200">
+                  <Sparkles className="h-3 w-3 text-amber-700" aria-hidden="true" />
+                  No Password Required
+                </span>
+              </div>
+
+              {/* Title & Description */}
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-slate-900">
+                  Patient Intake Kiosk
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                  For Patients arriving at hospital kiosks or scanning QR check-in codes to provide symptoms via speech (Telugu or English), scan prescriptions, and give consent.
+                </p>
+              </div>
+
+              {/* Feature Checklist */}
+              <ul className="space-y-2.5 text-xs text-slate-700 border-t border-surface-200 pt-4">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-amber-700 shrink-0" aria-hidden="true" />
+                  <span>Multilingual Voice Intake (Telugu &amp; English)</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-amber-700 shrink-0" aria-hidden="true" />
+                  <span>Guided Symptom &amp; Allergy Questionnaire</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-amber-700 shrink-0" aria-hidden="true" />
+                  <span>Prior Prescription &amp; Lab Report Upload</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-amber-700 shrink-0" aria-hidden="true" />
+                  <span>Non-Coercive ABHA &amp; Digital Consent Recording</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-8 space-y-3">
+              <Link
+                href="/intake/new"
+                className="flex w-full min-h-[48px] items-center justify-center gap-2 rounded-xl bg-amber-700 px-6 py-3.5 text-sm font-bold text-white shadow hover:bg-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700 transition-colors text-center"
+              >
+                <span>Start Patient Intake &rarr;</span>
+              </Link>
+
+              {/* Quick demo shortcut */}
+              <div className="text-center">
+                <Link
+                  href="/intake/new"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900 hover:text-amber-950 focus:underline"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+                  <span>Quick Access: Demo Patient ({DEMO_QUICK_ACCESS.patient.fullName})</span>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Safety Disclaimer Banner */}
-        <div className="mt-8 rounded-lg bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-800 max-w-2xl mx-auto flex items-start gap-2 text-left">
-          <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <strong>Non-Autonomous Safety Boundary:</strong> MedKit AI assists with clinical history acquisition and documentation. It never performs autonomous diagnosis, prescribing, or treatment decisions. The clinician remains the final decision-maker.
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-xs text-amber-900 max-w-4xl mx-auto flex items-start gap-2.5 text-left">
+          <ShieldCheck className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="leading-relaxed">
+            <strong className="font-semibold text-amber-950">Non-Autonomous Safety Boundary:</strong> MedKit AI assists with clinical history acquisition and documentation. It never performs autonomous diagnosis, prescribing, or treatment decisions. The clinician remains the final decision-maker.
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Core Workflow Pillars */}
-      <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-clinical-100 text-clinical-700 mb-4">
-            <Sparkles className="h-5 w-5" />
+      {/* ─── Core Workflow Pillars ─── */}
+      <section aria-label="System Capabilities" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm space-y-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-clinical-100 text-clinical-700">
+            <Mic className="h-5 w-5" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold text-slate-900">Multimodal Intake & Voice</h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <h3 className="text-base font-bold text-slate-900">Multimodal Intake &amp; Voice</h3>
+          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
             Voice-to-text with Telugu/English support, touch question graph, and immediate touch/text fallback for complete accessibility.
           </p>
         </div>
 
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 mb-4">
-            <FileSearch className="h-5 w-5" />
+        <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm space-y-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+            <FileText className="h-5 w-5" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold text-slate-900">Document Intelligence</h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <h3 className="text-base font-bold text-slate-900">Document Intelligence</h3>
+          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
             Digitize prescriptions, lab reports, and discharge summaries with OCR extraction, confidence scores, and source page references.
           </p>
         </div>
 
-        <div className="rounded-xl border border-surface-200 bg-white p-6 shadow-sm">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 mb-4">
-            <Clock className="h-5 w-5" />
+        <div className="rounded-2xl border border-surface-200 bg-white p-6 shadow-sm space-y-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-800">
+            <Clock className="h-5 w-5" aria-hidden="true" />
           </div>
-          <h2 className="text-base font-semibold text-slate-900">Longitudinal Clinical Timeline</h2>
-          <p className="mt-2 text-sm text-slate-600">
+          <h3 className="text-base font-bold text-slate-900">Longitudinal Clinical Timeline</h3>
+          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
             Signature longitudinal view answering &quot;What changed since the last visit?&quot; comparing current and past encounters cleanly.
           </p>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

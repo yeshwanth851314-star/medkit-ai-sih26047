@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Stethoscope,
@@ -242,6 +243,15 @@ export default function LoginPage() {
           <p className="mt-1 text-xs text-slate-700">
             Sign in to access your Clinical Copilot, Patient Queues &amp; Longitudinal Records
           </p>
+          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-700">
+            <span>Are you a patient?</span>
+            <Link
+              href="/intake/new"
+              className="font-bold text-amber-900 hover:text-amber-950 underline decoration-amber-500 underline-offset-2 focus:outline-none focus:ring-1 focus:ring-amber-500 rounded"
+            >
+              Switch to Patient Kiosk Intake &rarr;
+            </Link>
+          </div>
         </div>
 
         {/* ─── Demo Quick Access Panel ─── */}
