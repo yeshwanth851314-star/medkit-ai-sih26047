@@ -6,6 +6,26 @@ import type { AuthUser } from "@/features/auth/types";
 import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
 import { computePayloadHash } from "@/features/security/canonical-hash";
 
+if (typeof globalThis !== "undefined" && typeof (globalThis as any).WebSocket === "undefined") {
+  class NodeFallbackWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+    readonly CONNECTING = 0;
+    readonly OPEN = 1;
+    readonly CLOSING = 2;
+    readonly CLOSED = 3;
+    readyState = 1;
+    close() {}
+    send() {}
+    addEventListener() {}
+    removeEventListener() {}
+    dispatchEvent() { return true; }
+  }
+  (globalThis as any).WebSocket = NodeFallbackWebSocket;
+}
+
 /**
  * Create an ephemeral, request-bound Supabase client.
  * In a serverless/multi-user Node.js environment, persistSession MUST be false

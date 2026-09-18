@@ -13,3 +13,32 @@ setTestTotpMocks(
   (secret, code) => verifyTotpCode(secret, code)
 );
 
+if (typeof globalThis.WebSocket === "undefined") {
+  class MockWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+    readonly CONNECTING = 0;
+    readonly OPEN = 1;
+    readonly CLOSING = 2;
+    readonly CLOSED = 3;
+    readyState = 1;
+    binaryType = "blob";
+    url = "";
+    bufferedAmount = 0;
+    extensions = "";
+    protocol = "";
+    onopen = null;
+    onclose = null;
+    onerror = null;
+    onmessage = null;
+    close() {}
+    send() {}
+    addEventListener() {}
+    removeEventListener() {}
+    dispatchEvent() { return true; }
+  }
+  (globalThis as any).WebSocket = MockWebSocket;
+}
+
