@@ -4,6 +4,11 @@ export interface DemoUser extends AuthUser {
   password?: string;
 }
 
+/**
+ * Demo clinician accounts used when NEXT_PUBLIC_DEMO_MODE="true".
+ * These are used exclusively for live SIH demos and local development.
+ * In production mode, authentication goes through Supabase GoTrue.
+ */
 export const DEMO_CLINICIAN_USERS: Record<string, DemoUser> = {
   "doctor@medkit.ai": {
     id: "usr-doc-0001",
@@ -36,3 +41,32 @@ export const DEMO_CLINICIAN_USERS: Record<string, DemoUser> = {
     mfaEnrolled: true,
   },
 };
+
+/**
+ * Distinct demo credential profiles for live SIH presentations.
+ * - Doctor: Authenticated clinician portal & AI copilot
+ * - Patient: Anonymous multimodal intake kiosk (pre-seeded identity: Ramesh Kumar Varma / MED-2026-0001)
+ */
+export const DEMO_QUICK_ACCESS = {
+  doctor: {
+    label: "Doctor Demo",
+    demoId: "doctor@medkit.ai",
+    fullName: "Dr. Ananya Rao, MD",
+    roleDescription: "Clinician Portal & AI Copilot",
+    facility: "AIIA Main Hospital (fac-hyd-01)",
+    email: "doctor@medkit.ai",
+    password: "MedKit#Doctor!2026$SecP9",
+    href: null, // Uses form login flow
+  },
+  patient: {
+    label: "Patient Demo",
+    demoId: "MED-2026-0001",
+    abhaId: "91-2026-4047-1001",
+    fullName: "Ramesh Kumar Varma",
+    roleDescription: "Patient Voice Intake Kiosk",
+    facility: "Reception Terminal 01",
+    email: null,
+    password: null,
+    href: "/intake/new", // Direct kiosk entry, no password required
+  },
+} as const;
