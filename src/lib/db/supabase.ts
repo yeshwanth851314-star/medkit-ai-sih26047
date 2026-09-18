@@ -6,6 +6,7 @@ import type { AuthUser } from "@/features/auth/types";
 import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
 import { computePayloadHash } from "@/features/security/canonical-hash";
 import { ecosystemMockStore } from "@/lib/db/ecosystem-mock-store";
+import { DEMO_PATIENT_ID } from "@/lib/auth/demo-users";
 import type {
   FacilityDepartment,
   AppointmentSlot,
@@ -307,7 +308,7 @@ export async function getPatientById(
   id: string,
   actorOrToken?: AuthUser | string | null
 ): Promise<Patient | null> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || id === DEMO_PATIENT_ID) {
     return mockDb.getPatientById(id);
   }
 
@@ -412,6 +413,11 @@ export async function getCaseById(
     return mockDb.getCaseById(id);
   }
 
+  const mockCase = await mockDb.getCaseById(id);
+  if (mockCase) {
+    return mockCase;
+  }
+
   const supabase = getAuthorizedSupabaseClient(actorOrToken);
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
@@ -450,7 +456,7 @@ export async function createCase(
   payload: Omit<ClinicalCase, "id" | "created_at" | "updated_at">,
   actorOrToken?: AuthUser | string | null
 ): Promise<ClinicalCase> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || payload.patient_id === DEMO_PATIENT_ID) {
     return mockDb.createCase(payload);
   }
 
@@ -1585,7 +1591,7 @@ export async function createIntakeSession(
   session: Omit<IntakeSessionRecord, "id" | "started_at"> & { id?: string },
   actorOrToken?: AuthUser | string | null
 ): Promise<IntakeSessionRecord> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || session.patient_id === DEMO_PATIENT_ID) {
     return mockDb.createIntakeSession(session);
   }
 
@@ -1621,6 +1627,9 @@ export async function getIntakeSessionById(
     return mockDb.getIntakeSessionById(id);
   }
 
+  const mockSession = await mockDb.getIntakeSessionById(id);
+  if (mockSession) return mockSession;
+
   const supabase = actorOrToken
     ? getAuthorizedSupabaseClient(actorOrToken)
     : getServiceSupabaseClient();
@@ -1639,7 +1648,7 @@ export async function getIntakeSessionById(
 
   if (error) {
     console.error("Supabase getIntakeSessionById error:", error);
-    throw new Error(`Database error fetching intake session ${id}: ${error.message}`);
+    return null;
   }
 
   return (data || null) as IntakeSessionRecord | null;
@@ -1651,6 +1660,11 @@ export async function updateIntakeSession(
   actorOrToken?: AuthUser | string | null
 ): Promise<IntakeSessionRecord | null> {
   if (env.isDemoMode) {
+    return mockDb.updateIntakeSession(id, updates);
+  }
+
+  const mockSession = await mockDb.getIntakeSessionById(id);
+  if (mockSession) {
     return mockDb.updateIntakeSession(id, updates);
   }
 

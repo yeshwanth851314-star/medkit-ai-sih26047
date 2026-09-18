@@ -71,7 +71,7 @@ export async function POST(request: Request) {
           consentMethod: body.consentMethod || "touch_acknowledgement",
           scope: ["voice_recording", "document_extraction", "ai_summary"],
           actorOrToken: clinicianUser,
-          actorId: clinicianUser?.id,
+          actorId: clinicianUser?.id || patientId,
           actorRole: clinicianUser?.role || "patient",
         });
         consentId = consentRecord.id;

@@ -176,6 +176,18 @@ class MockDatabaseAdapter {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
+
+    this.patients.set("11111111-1111-4111-8111-111111111111", {
+      id: "11111111-1111-4111-8111-111111111111",
+      patient_code: "MED-2026-1001",
+      full_name: "Ramesh Kumar Varma",
+      date_of_birth: "1982-05-14",
+      gender: "Male",
+      phone: "+91-98765-43210",
+      facility_id: "fac-hyd-01",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
   }
 
   private initializeFromFixtures() {
