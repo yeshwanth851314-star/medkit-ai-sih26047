@@ -25,7 +25,22 @@ async function loginAsDoctor(page: Page) {
   await page.fill('input[type="email"]', "doctor@medkit.ai");
   await page.fill('input[type="password"]', process.env.CLINICIAN_PASSWORD || "MedKit#Doctor!2026$SecP9");
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/doctor\/patients/);
+
+  const mfaHeading = page.getByText(/Multi-Factor Authentication Required/i);
+  const outcome = await Promise.race([
+    page.waitForURL(/\/doctor\/patients/, { timeout: 15000 }).then(() => "navigated").catch(() => null),
+    mfaHeading.waitFor({ state: "visible", timeout: 15000 }).then(() => "mfa").catch(() => null),
+  ]);
+
+  if (outcome === "mfa") {
+    const totpInput = page.locator('input#totpCode, input[name="verificationCode"]');
+    await totpInput.fill("123456");
+    const verifyBtn = page.getByRole("button", { name: /Verify & Access Portal/i });
+    await expect(verifyBtn).toBeEnabled({ timeout: 5000 });
+    await verifyBtn.click();
+  }
+
+  await page.waitForURL(/\/doctor\/patients/, { timeout: 15000 });
   await expect(page).toHaveURL(/\/doctor\/patients/);
 }
 

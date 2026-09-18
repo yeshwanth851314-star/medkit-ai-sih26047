@@ -27,6 +27,8 @@ export interface PublicAuthUser {
   fullName: string;
   role: UserRole;
   facilityId: string | null;
+  aal?: "aal1" | "aal2";
+  mfaEnrolled?: boolean;
 }
 
 export function toPublicAuthUser(user: AuthUser): PublicAuthUser {
@@ -36,6 +38,8 @@ export function toPublicAuthUser(user: AuthUser): PublicAuthUser {
     fullName: user.fullName,
     role: user.role,
     facilityId: user.facilityId ?? null,
+    aal: user.aal || "aal1",
+    mfaEnrolled: user.mfaEnrolled ?? false,
   };
 }
 

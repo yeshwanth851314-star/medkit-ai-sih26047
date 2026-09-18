@@ -12,6 +12,30 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     }
   }
 
+  async function ensureLoggedInAsDoctor(page: any, targetUrlPattern: RegExp) {
+    if (page.url().includes("/login")) {
+      await page.fill('input[type="email"]', "doctor@medkit.ai");
+      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
+      await page.click('button[type="submit"]');
+
+      const mfaHeading = page.getByText(/Multi-Factor Authentication Required/i);
+      const outcome = await Promise.race([
+        page.waitForURL(targetUrlPattern, { timeout: 15000 }).then(() => "navigated").catch(() => null),
+        mfaHeading.waitFor({ state: "visible", timeout: 15000 }).then(() => "mfa").catch(() => null),
+      ]);
+
+      if (outcome === "mfa") {
+        const totpInput = page.locator('input#totpCode, input[name="verificationCode"]');
+        await totpInput.fill("123456");
+        const verifyBtn = page.getByRole("button", { name: /Verify & Access Portal/i });
+        await expect(verifyBtn).toBeEnabled({ timeout: 5000 });
+        await verifyBtn.click();
+      }
+
+      await page.waitForURL(targetUrlPattern, { timeout: 15000 });
+    }
+  }
+
   test.beforeEach(async ({ page }, testInfo) => {
     // For standard feature verification tests 1-10, pre-seed completed onboarding
     // so modal overlays do not disrupt unrelated feature assertions.
@@ -57,8 +81,23 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await page.fill('input[type="password"]', DOCTOR_PASSWORD);
     await page.click('button[type="submit"]');
 
+    // If MFA challenge appears (when doctor account enforces AAL2 MFA just like real user), complete challenge
+    const mfaHeading = page.getByText(/Multi-Factor Authentication Required/i);
+    const outcome = await Promise.race([
+      page.waitForURL(/\/doctor\/patients/, { timeout: 15000 }).then(() => "navigated").catch(() => null),
+      mfaHeading.waitFor({ state: "visible", timeout: 15000 }).then(() => "mfa").catch(() => null),
+    ]);
+
+    if (outcome === "mfa") {
+      const totpInput = page.locator('input#totpCode, input[name="verificationCode"]');
+      await totpInput.fill("123456");
+      const verifyBtn = page.getByRole("button", { name: /Verify & Access Portal/i });
+      await expect(verifyBtn).toBeEnabled({ timeout: 5000 });
+      await verifyBtn.click();
+    }
+
     // Should redirect to doctor patients hub
-    await page.waitForURL(/\/doctor\/patients/);
+    await page.waitForURL(/\/doctor\/patients/, { timeout: 15000 });
     await expect(page).toHaveURL(/\/doctor\/patients/);
 
     // Dismiss Doctor Tour if it auto-opens on fresh login so it doesn't obstruct background elements
@@ -147,12 +186,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     await page.goto("/doctor/cases/c3333333-3333-4333-8333-333333333333");
 
     // If redirected to login, log in first
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     await dismissDoctorTourIfOpen(page);
 
     // Verify Red Flag Warning is displayed prominently
@@ -182,12 +216,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     // Navigate to timeline for patient 11111111-1111-4111-8111-111111111111
     await page.goto("/doctor/patients/11111111-1111-4111-8111-111111111111/timeline");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/timeline/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/timeline/);
     await dismissDoctorTourIfOpen(page);
 
     // Verify Longitudinal Journey
@@ -202,12 +231,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
   test("6. Document OCR side-by-side review, candidate verification, and doctor confirmation", async ({ page }) => {
     await page.goto("/doctor/patients/11111111-1111-4111-8111-111111111111/documents");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/documents/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/patients\/11111111-1111-4111-8111-111111111111\/documents/);
     await dismissDoctorTourIfOpen(page);
 
     // Verify OCR side-by-side header
@@ -235,12 +259,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
   test("7. AI-assisted summary narrative inline editing, clinician confirmation, and provenance badge", async ({ page }) => {
     await page.goto("/doctor/cases/c3333333-3333-4333-8333-333333333333");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/cases\/c3333333-3333-4333-8333-333333333333/);
     await dismissDoctorTourIfOpen(page);
 
     // Check summary card is visible
@@ -275,12 +294,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
   test("8. FHIR R4 / ABDM preview drawer, resource summary counts, and standard compliance verification", async ({ page }) => {
     await page.goto("/doctor/cases/c1111111-1111-4111-8111-111111111111");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/cases\/c1111111-1111-4111-8111-111111111111/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/cases\/c1111111-1111-4111-8111-111111111111/);
     await dismissDoctorTourIfOpen(page);
 
     // Click FHIR R4 / ABDM View button
@@ -317,12 +331,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
   test("9. Ministry of Ayush / AIIA Dashavidha Pariksha, Prakriti-Vikriti, and Ahara-Vihara clinical case display", async ({ page }) => {
     await page.goto("/doctor/cases/c4444444-4444-4444-8444-444444444444");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/cases\/c4444444-4444-4444-8444-444444444444/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/cases\/c4444444-4444-4444-8444-444444444444/);
     await dismissDoctorTourIfOpen(page);
 
     // Verify AYUSH Stream badge
@@ -346,12 +355,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
     // Navigate to follow-up encounter c2222222-2222-4222-8222-222222222222
     await page.goto("/doctor/cases/c2222222-2222-4222-8222-222222222222");
 
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/cases\/c2222222-2222-4222-8222-222222222222/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/cases\/c2222222-2222-4222-8222-222222222222/);
     await dismissDoctorTourIfOpen(page);
 
     // 1. Verify Longitudinal Delta Analysis signature section is mounted directly on physician case sheet
@@ -387,12 +391,7 @@ test.describe("MedKit AI: SIH26047 Full Clinical Golden Path & Verification Suit
   test("11. First-time user onboarding: Doctor 5-step guided tour, persistent replay menu, bilingual kiosk intro, and contextual help", async ({ page }) => {
     // 1. Doctor Tour flow on clean preference
     await page.goto("/doctor/patients");
-    if (page.url().includes("/login")) {
-      await page.fill('input[type="email"]', "doctor@medkit.ai");
-      await page.fill('input[type="password"]', DOCTOR_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/doctor\/patients/);
-    }
+    await ensureLoggedInAsDoctor(page, /\/doctor\/patients/);
 
     // Reset onboarding state in localStorage to simulate fresh clinician login
     await page.evaluate(() => {

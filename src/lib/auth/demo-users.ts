@@ -17,7 +17,7 @@ export const DEMO_CLINICIAN_USERS: Record<string, DemoUser> = {
     role: "doctor",
     facilityId: "fac-hyd-01",
     password: "MedKit#Doctor!2026$SecP9",
-    aal: "aal2",
+    aal: "aal1",
     mfaEnrolled: true,
   },
   "ayush@medkit.ai": {
@@ -56,6 +56,8 @@ export const DEMO_QUICK_ACCESS = {
     facility: "AIIA Main Hospital (fac-hyd-01)",
     email: "doctor@medkit.ai",
     password: "MedKit#Doctor!2026$SecP9",
+    totpSecret: "MEDKITDOCTORDEMOTOTPSECRET234567",
+    factorId: "11111111-2222-3333-4444-555555555555",
     href: null, // Uses form login flow
   },
   patient: {

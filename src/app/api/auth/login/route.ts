@@ -24,9 +24,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const aal = authResult.user.aal || "aal1";
+    const mfaEnrolled = authResult.user.mfaEnrolled === true;
+    const mfaRequired = mfaEnrolled && aal !== "aal2";
+
     const response = NextResponse.json({
       success: true,
       user: toPublicAuthUser(authResult.user),
+      aal,
+      mfaRequired,
+      mfaEnrolled,
     });
 
     // Set secure HTTP-only cookie
