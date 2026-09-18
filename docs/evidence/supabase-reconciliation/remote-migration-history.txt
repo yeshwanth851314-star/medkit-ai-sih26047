@@ -1,6 +1,6 @@
-﻿================================================================================
+================================================================================
 MedKit AI — Remote Migration History Evidence
-Timestamp: 2026-09-12T06:17:00.000Z
+Timestamp: 2026-09-18T04:26:00.000Z
 Supabase Project: MED-KIT-AI
 Project Ref: aqxwmlqfvnlwabpxqchr
 Region: ap-southeast-1
@@ -8,7 +8,7 @@ Source Table: supabase_migrations.schema_migrations
 Query: SELECT version FROM supabase_migrations.schema_migrations ORDER BY version;
 ================================================================================
 
-Total Remote Migrations: 21
+Total Remote Migrations: 35
 
 #   Version         Local Migration Name Match                                   Status
 --  --------------  -----------------------------------------------------------  ----------
@@ -33,8 +33,22 @@ Total Remote Migrations: 21
 19  20260911000004  20260911000004_clinician_actor_and_revocation_integrity.sql  APPLIED_OK
 20  20260911000005  20260911000005_final_session_state_authority.sql             APPLIED_OK
 21  20260912000001  20260912000001_reconcile_remote_schema_drift.sql              APPLIED_OK
+22  20260913000001  20260913000001_clinician_onboarding_and_profile_authority.sql APPLIED_OK
+23  20260914000001  20260914000001_security_hardening_closure.sql                 APPLIED_OK
+24  20260915000001  20260915000001_fix_onboarding_registry_and_mfa.sql            APPLIED_OK
+25  20260915000002  20260915000002_authoritative_session_sync.sql                 APPLIED_OK
+26  20260916000001  20260916000001_phase_c_identity_and_consent_closure.sql       APPLIED_OK
+27  20260916000002  20260916000002_phase_c_security_hardening.sql                 APPLIED_OK
+28  20260917000001  20260917000001_phase_c_production_evidence_closure.sql         APPLIED_OK
+29  20260918000001  20260918000001_fix_audit_table_and_case_concurrency.sql       APPLIED_OK
+30  20260918000002  20260918000002_fix_rpc_update_case_atomic_types.sql           APPLIED_OK
+31  20260918000003  20260918000003_authoritative_identity_audit_and_invitations.sql APPLIED_OK
+32  20260918000004  20260918000004_fix_patient_atomic_and_idempotent_mutation.sql APPLIED_OK
+33  20260918000005  20260918000005_enforce_zero_plaintext_abha_and_authoritative_mutation.sql APPLIED_OK
+34  20260918000006  20260918000006_fix_consents_columns_and_clean_lint.sql        APPLIED_OK
+35  20260918000007  20260918000007_refine_case_update_atomic.sql                 APPLIED_OK
 ================================================================================
-Remote / Local Lineage Comparison: EXACT MATCH (21 / 21)
+Remote / Local Lineage Comparison: EXACT MATCH (35 / 35)
 Missing Remote Migrations: 0
 Unapplied Local Migrations: 0
 Mismatched Migration Versions: 0

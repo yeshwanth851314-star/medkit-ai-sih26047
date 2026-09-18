@@ -71,6 +71,41 @@ export function maskExternalIdentifier(identifierType: string, rawValue: string)
   return `${"*".repeat(trimmed.length - 4)}${trimmed.slice(-4)}`;
 }
 
+function formatDuplicateWarning(candidates: DuplicateCandidate[]): DuplicatePatientWarning {
+  if (candidates.length > 0) {
+    const primary = candidates[0];
+    let legacyReason: string = primary.matchType.toLowerCase();
+    if (primary.matchType === "PHONE_MATCH") legacyReason = "matching_phone";
+    if (primary.matchType === "NAME_AND_DOB_MATCH") legacyReason = "matching_name_and_dob";
+    if (primary.matchType === "EXACT_FACILITY_MRN") legacyReason = "matching_mrn";
+    if (primary.matchType === "EXACT_ABHA_ID") legacyReason = "matching_abha";
+    if (primary.matchType === "EXTERNAL_IDENTIFIER_EXISTS_OUTSIDE_CURRENT_FACILITY") {
+      legacyReason = "external_identifier_exists_outside_current_facility";
+      return {
+        isDuplicateSuspect: true,
+        matchConfidence: "MANUAL_IDENTITY_REVIEW_REQUIRED",
+        matchedPatientId: undefined,
+        matchedPatientCode: undefined,
+        matchedName: "REDACTED_CROSS_FACILITY",
+        reason: legacyReason,
+        candidates,
+      };
+    }
+
+    return {
+      isDuplicateSuspect: true,
+      matchConfidence: primary.matchConfidence,
+      matchedPatientId: primary.patientId,
+      matchedPatientCode: primary.patientCode,
+      matchedName: primary.fullName,
+      reason: legacyReason,
+      candidates,
+    };
+  }
+
+  return { isDuplicateSuspect: false, matchConfidence: "NO_MATCH" };
+}
+
 /**
  * Deterministic duplicate patient candidate detection.
  * Invariant: Weak matches generate candidate warnings for clinical review;
@@ -96,7 +131,13 @@ export async function checkDuplicatePatient(
     const userClient = getAuthorizedSupabaseClient(actorOrToken);
     const client = userClient || getServiceSupabaseClient();
 
-    if (client && resolvedFacilityId) {
+    if (!client || !resolvedFacilityId) {
+      if (input.abhaId?.trim() || process.env.NODE_ENV === "production") {
+        throw new Error(
+          "IDENTITY_DUPLICATE_CHECK_UNAVAILABLE: Authoritative Supabase client unavailable for duplicate check in production mode"
+        );
+      }
+    } else {
       const { data, error } = await client.rpc("rpc_find_duplicate_patient_candidates", {
         p_facility_id: resolvedFacilityId,
         p_phone: cleanPhone || null,
@@ -107,7 +148,14 @@ export async function checkDuplicatePatient(
         p_abha_identifier_hash: abhaKeyedHash,
       });
 
-      if (!error && Array.isArray(data)) {
+      if (error) {
+        console.error("rpc_find_duplicate_patient_candidates error:", error);
+        throw new Error(
+          `IDENTITY_DUPLICATE_CHECK_UNAVAILABLE: Authoritative duplicate check failed in production mode: ${error.message}`
+        );
+      }
+
+      if (Array.isArray(data)) {
         for (const r of data) {
           candidates.push({
             patientId: r.candidate_patient_id,
@@ -121,10 +169,13 @@ export async function checkDuplicatePatient(
           });
         }
       }
+
+      // In production mode, database RPC result is authoritative; NEVER fall back to mockDb
+      return formatDuplicateWarning(candidates);
     }
   }
 
-  // If no DB candidates found or in demo/test mode, perform local deterministic evaluation
+  // If in demo mode or test harness without live DB, perform local deterministic evaluation
   if (candidates.length === 0) {
     const existingPatients = await getPatients(undefined, actorOrToken);
     const facilityPatients = resolvedFacilityId
@@ -150,8 +201,13 @@ export async function checkDuplicatePatient(
       }
     }
 
-    // 2. Verified ABHA collision via HMAC index
+    // 2. Verified ABHA collision via HMAC index (Demo/Test mode ONLY)
     if (input.abhaId && input.abhaId.trim()) {
+      if (process.env.NODE_ENV === "production" || !env.isDemoMode) {
+        throw new Error(
+          "IDENTITY_DUPLICATE_CHECK_UNAVAILABLE: Direct mockDb fallback for ABHA duplicate check is strictly prohibited in production mode"
+        );
+      }
       const abhaKeyedHash = computeKeyedIdentifierDigest("ABHA_NUMBER", input.abhaId);
       let abhaMatch: Patient | undefined;
       const ext = mockDb.getExternalIdentifiers().find(
@@ -238,38 +294,7 @@ export async function checkDuplicatePatient(
     }
   }
 
-  if (candidates.length > 0) {
-    const primary = candidates[0];
-    let legacyReason: string = primary.matchType.toLowerCase();
-    if (primary.matchType === "PHONE_MATCH") legacyReason = "matching_phone";
-    if (primary.matchType === "NAME_AND_DOB_MATCH") legacyReason = "matching_name_and_dob";
-    if (primary.matchType === "EXACT_FACILITY_MRN") legacyReason = "matching_mrn";
-    if (primary.matchType === "EXACT_ABHA_ID") legacyReason = "matching_abha";
-    if (primary.matchType === "EXTERNAL_IDENTIFIER_EXISTS_OUTSIDE_CURRENT_FACILITY") {
-      legacyReason = "external_identifier_exists_outside_current_facility";
-      return {
-        isDuplicateSuspect: true,
-        matchConfidence: "MANUAL_IDENTITY_REVIEW_REQUIRED",
-        matchedPatientId: undefined,
-        matchedPatientCode: undefined,
-        matchedName: "REDACTED_CROSS_FACILITY",
-        reason: legacyReason,
-        candidates,
-      };
-    }
-
-    return {
-      isDuplicateSuspect: true,
-      matchConfidence: primary.matchConfidence,
-      matchedPatientId: primary.patientId,
-      matchedPatientCode: primary.patientCode,
-      matchedName: primary.fullName,
-      reason: legacyReason,
-      candidates,
-    };
-  }
-
-  return { isDuplicateSuspect: false, matchConfidence: "NO_MATCH" };
+  return formatDuplicateWarning(candidates);
 }
 
 export async function searchPatients(

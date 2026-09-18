@@ -24,11 +24,7 @@ jobs:
         run: npm ci
 
       - name: Verify Secret Leaks / Environment Hygiene
-        run: |
-          if grep -rn "sk-ant" . --exclude-dir=node_modules || grep -rn "AIzaSy" . --exclude-dir=node_modules; then
-            echo "::error::Potential hardcoded secrets detected!"
-            exit 1
-          fi
+        run: node scripts/verify-secret-leaks.mjs
 
       - name: Typecheck
         run: npm run typecheck

@@ -114,6 +114,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, patient: result.patient }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/patients error:", err);
+    if (err.message && err.message.includes("IDENTITY_DUPLICATE_CHECK_UNAVAILABLE")) {
+      return NextResponse.json(
+        { error: err.message, code: "IDENTITY_DUPLICATE_CHECK_UNAVAILABLE" },
+        { status: 503 }
+      );
+    }
     if (err.message && err.message.includes("IDENTIFIER_CONFLICT")) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }

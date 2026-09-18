@@ -301,4 +301,41 @@ describe("Phase D V1 Surgical Closure Verification Gate", () => {
       expect(entry.action).toBe("REMOTE_INVITE_REVOKED");
     });
   });
+
+  describe("T8: Production ABHA Duplicate Check Fail-Closed (F1)", () => {
+    it("fails closed with IDENTITY_DUPLICATE_CHECK_UNAVAILABLE when client is unavailable in production mode", async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDemoMode = env.isDemoMode;
+      const originalPepper = process.env.IDENTIFIER_INDEX_PEPPER;
+
+      try {
+        (process.env as any).NODE_ENV = "production";
+        (env as any).isDemoMode = false;
+        process.env.IDENTIFIER_INDEX_PEPPER = "test-pepper-production-fail-closed-999";
+
+        const { checkDuplicatePatient } = await import("@/features/patients/patient-service");
+        await expect(
+          checkDuplicatePatient(
+            {
+              fullName: "Test FailClosed",
+              gender: "Female",
+              phone: "+91-9876543210",
+              abhaId: "12-3456-7890-1234",
+            },
+            mockDoctor,
+            "fac-hyd-01"
+          )
+        ).rejects.toThrow(/IDENTITY_DUPLICATE_CHECK_UNAVAILABLE/);
+      } finally {
+        (process.env as any).NODE_ENV = originalNodeEnv;
+        (env as any).isDemoMode = originalDemoMode;
+        if (originalPepper !== undefined) {
+          process.env.IDENTIFIER_INDEX_PEPPER = originalPepper;
+        } else {
+          delete process.env.IDENTIFIER_INDEX_PEPPER;
+        }
+      }
+    });
+  });
 });
+

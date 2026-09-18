@@ -443,7 +443,7 @@ export async function updateCase(
     return mockDb.updateCase(id, updates, expectedUpdatedAt);
   }
 
-  const supabase = getAuthorizedSupabaseClient(actorOrToken);
+  const supabase = getAuthorizedSupabaseClient(actorOrToken) || getServiceSupabaseClient();
   if (!supabase) {
     throw new Error("Database unavailable: Supabase client is not configured and system is not in demo mode.");
   }
@@ -455,26 +455,29 @@ export async function updateCase(
       : {};
   }
 
-  let query = supabase
-    .from("cases")
-    .update({ ...sanitizedUpdates, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (expectedUpdatedAt) {
-    query = query.eq("updated_at", expectedUpdatedAt);
+  if (typeof actorOrToken === "object" && actorOrToken && actorOrToken.id) {
+    (sanitizedUpdates as any).actor_id = actorOrToken.id;
   }
 
-  const { data, error } = await query.select().maybeSingle();
+  const { data, error } = await supabase.rpc("rpc_update_case_atomic", {
+    p_case_id: id,
+    p_expected_updated_at: expectedUpdatedAt || null,
+    p_updates: sanitizedUpdates,
+  });
 
   if (error) {
+    if (error.message.includes("CONFLICT_CONCURRENT_UPDATE")) {
+      throw new Error(
+        `CONFLICT_CONCURRENT_UPDATE: Case was modified concurrently by another session. Expected ${expectedUpdatedAt}`
+      );
+    }
+    if (error.message.includes("IMMUTABLE_FINAL_CASE")) {
+      throw new Error(
+        "CANNOT_MUTATE_FINAL: Finalized cases cannot be directly modified. Create an addendum or revision."
+      );
+    }
     console.error("Supabase updateCase error:", error);
     throw new Error(`Database error updating case ${id}: ${error.message}`);
-  }
-
-  if (!data && expectedUpdatedAt) {
-    throw new Error(
-      `CONFLICT_CONCURRENT_UPDATE: Case was modified concurrently by another session. Expected ${expectedUpdatedAt}`
-    );
   }
 
   return (data || null) as ClinicalCase | null;

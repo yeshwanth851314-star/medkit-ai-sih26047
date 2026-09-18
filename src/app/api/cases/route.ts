@@ -62,50 +62,35 @@ export async function POST(request: Request) {
       return patientCheck.errorResponse;
     }
 
-    if (idempotencyKey && idempotencyKey.trim().length > 0) {
-      const { executeIdempotentMutation, getCaseById } = await import("@/lib/db/supabase");
-      const { computePayloadHash } = await import("@/features/security/canonical-hash");
-      const payloadHash = computePayloadHash(validated.data);
-      const result = await executeIdempotentMutation({
-        idempotencyKey: idempotencyKey.trim(),
-        userId: auth.user.id,
-        entity: "cases",
-        action: "create",
-        payloadHash,
-        payload: validated.data,
-        actorOrToken: auth.user,
-      });
-
-      if (result.isReplay) {
-        const caseId = result.resourceId || result.summary?.caseId;
-        const existingCase = caseId ? await getCaseById(caseId, auth.user) : null;
-        return NextResponse.json(
-          { success: true, case: existingCase || result.summary, isReplay: true },
-          { status: 200, headers: { "Idempotency-Replay": "true" } }
-        );
-      }
-
-      const createdCaseId = result.resourceId || result.summary?.caseId;
-      const createdCase = createdCaseId ? await getCaseById(createdCaseId, auth.user) : null;
-      return NextResponse.json(
-        { success: true, case: createdCase || result.summary },
-        { status: 201 }
-      );
-    }
-
-    const newCase = await createCaseDraft(validated.data, auth.user.id, auth.user);
-
-    await logAuditEvent({
-      actorId: auth.user.id,
-      actorRole: auth.user.role,
-      action: "CREATE_CASE",
-      resourceType: "cases",
-      resourceId: newCase.id,
-      metadata: { case_type: newCase.case_type, status: newCase.status },
+    const effectiveIdempotencyKey = idempotencyKey?.trim() || `case-create-auto-${crypto.randomUUID()}`;
+    const { executeIdempotentMutation, getCaseById } = await import("@/lib/db/supabase");
+    const { computePayloadHash } = await import("@/features/security/canonical-hash");
+    const payloadHash = computePayloadHash(validated.data);
+    const result = await executeIdempotentMutation({
+      idempotencyKey: effectiveIdempotencyKey,
+      userId: auth.user.id,
+      entity: "cases",
+      action: "create",
+      payloadHash,
+      payload: validated.data,
       actorOrToken: auth.user,
     });
 
-    return NextResponse.json({ success: true, case: newCase }, { status: 201 });
+    if (result.isReplay) {
+      const caseId = result.resourceId || result.summary?.caseId;
+      const existingCase = caseId ? await getCaseById(caseId, auth.user) : null;
+      return NextResponse.json(
+        { success: true, case: existingCase || result.summary, isReplay: true },
+        { status: 200, headers: { "Idempotency-Replay": "true" } }
+      );
+    }
+
+    const createdCaseId = result.resourceId || result.summary?.caseId;
+    const createdCase = createdCaseId ? await getCaseById(createdCaseId, auth.user) : null;
+    return NextResponse.json(
+      { success: true, case: createdCase || result.summary },
+      { status: 201 }
+    );
   } catch (err: any) {
     console.error("POST /api/cases error:", err);
     if (err.message && err.message.includes("CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH")) {
