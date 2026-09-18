@@ -1691,9 +1691,14 @@ class MockDatabaseAdapter {
     };
     this.syncMutations.set(compositeKey, record);
 
+    const auditAction =
+      params.entity === "cases" && params.action === "create"
+        ? "CREATE_CASE"
+        : "SYNC_MUTATION_EXECUTED";
+
     this.recordAudit(
       params.userId,
-      "SYNC_MUTATION_EXECUTED",
+      auditAction,
       params.entity,
       resourceId || params.idempotencyKey,
       {

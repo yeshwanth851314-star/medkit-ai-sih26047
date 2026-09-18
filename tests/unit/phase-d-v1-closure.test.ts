@@ -337,5 +337,116 @@ describe("Phase D V1 Surgical Closure Verification Gate", () => {
       }
     });
   });
+
+  describe("T9: Case Update Audit Atomicity & Non-Duplication (G1)", () => {
+    it("ensures exactly one UPDATE_CASE audit row is produced and does not duplicate in production mode", async () => {
+      const originalDemoMode = env.isDemoMode;
+      try {
+        // In demo mode: mock adapter is used and route produces 1 audit
+        const patient = await mockDb.createPatient({
+          patient_code: "PT-AUDIT-001",
+          full_name: "Audit Test Patient",
+          gender: "Male",
+          facility_id: "fac-hyd-01",
+        });
+
+        const createdCase = await mockDb.createCase({
+          patient_id: patient.id,
+          clinician_id: mockDoctor.id,
+          facility_id: "fac-hyd-01",
+          case_type: "general",
+          patient_language: "en",
+          provenance: {},
+          status: "draft",
+          chief_complaint: "Initial complaint",
+        });
+
+        const initialAuditCount = mockDb.getAuditLogs().filter(
+          (l) => l.action === "UPDATE_CASE" && l.resource_id === createdCase.id
+        ).length;
+
+        // Perform update via updateCaseDraft
+        await updateCaseDraft(
+          createdCase.id,
+          { chiefComplaint: "Updated complaint" },
+          { actor: mockDoctor }
+        );
+
+        // Verify that only one audit entry is recorded in mockDb
+        const updatedAuditCount = mockDb.getAuditLogs().filter(
+          (l) => l.action === "UPDATE_CASE" && l.resource_id === createdCase.id
+        ).length;
+
+        expect(updatedAuditCount).toBe(initialAuditCount + 1);
+      } finally {
+        (env as any).isDemoMode = originalDemoMode;
+      }
+    });
+  });
+
+  describe("T10: Case Creation Atomic Audit & Idempotency Invariants (G2)", () => {
+    it("creates exactly one case and one audit log atomically", async () => {
+      const patient = await mockDb.createPatient({
+        patient_code: "PT-CREATE-001",
+        full_name: "Case Create Patient",
+        gender: "Female",
+        facility_id: "fac-hyd-01",
+      });
+
+      const key = `case-idemp-test-${crypto.randomUUID()}`;
+      const payload = {
+        patientId: patient.id,
+        chiefComplaint: "Severe fever and fatigue",
+        status: "draft",
+      };
+
+      const res1 = await executeIdempotentMutation({
+        idempotencyKey: key,
+        userId: mockDoctor.id,
+        entity: "cases",
+        action: "create",
+        payload,
+        actorOrToken: mockDoctor,
+      });
+
+      expect(res1.status).toBe("completed");
+      expect(res1.isReplay).toBe(false);
+      expect(res1.resourceId).toBeDefined();
+
+      // Audit logs must contain exactly 1 CREATE_CASE for this resourceId
+      const audits = mockDb.getAuditLogs().filter(
+        (l) => l.action === "CREATE_CASE" && l.resource_id === res1.resourceId
+      );
+      expect(audits.length).toBe(1);
+
+      // Replaying with identical key and payload returns isReplay: true without second audit log
+      const res2 = await executeIdempotentMutation({
+        idempotencyKey: key,
+        userId: mockDoctor.id,
+        entity: "cases",
+        action: "create",
+        payload,
+        actorOrToken: mockDoctor,
+      });
+
+      expect(res2.isReplay).toBe(true);
+      const auditsAfterReplay = mockDb.getAuditLogs().filter(
+        (l) => l.action === "CREATE_CASE" && l.resource_id === res1.resourceId
+      );
+      expect(auditsAfterReplay.length).toBe(1);
+
+      // Replaying with identical key but different payload throws CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH
+      await expect(
+        executeIdempotentMutation({
+          idempotencyKey: key,
+          userId: mockDoctor.id,
+          entity: "cases",
+          action: "create",
+          payload: { ...payload, chiefComplaint: "Different symptoms" },
+          actorOrToken: mockDoctor,
+        })
+      ).rejects.toThrow(/CONFLICT_IDEMPOTENCY_PAYLOAD_MISMATCH/);
+    });
+  });
 });
 

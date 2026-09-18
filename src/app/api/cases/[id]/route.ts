@@ -129,15 +129,17 @@ export async function PATCH(
       actor: auth.user,
     });
 
-    await logAuditEvent({
-      actorId: auth.user.id,
-      actorRole: auth.user.role,
-      action: "UPDATE_CASE",
-      resourceType: "cases",
-      resourceId: id,
-      metadata: { fields_updated: Object.keys(body) },
-      actorOrToken: auth.user,
-    });
+    if (env.isDemoMode) {
+      await logAuditEvent({
+        actorId: auth.user.id,
+        actorRole: auth.user.role,
+        action: "UPDATE_CASE",
+        resourceType: "cases",
+        resourceId: id,
+        metadata: { fields_updated: Object.keys(body) },
+        actorOrToken: auth.user,
+      });
+    }
 
     return NextResponse.json({ success: true, case: updated });
   } catch (err: any) {
