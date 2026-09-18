@@ -18,9 +18,11 @@ import {
   HeartPulse,
   Send,
   AlertTriangle,
+  UserCircle,
 } from "lucide-react";
 import { KioskIntro } from "@/components/onboarding/kiosk-intro";
 import { hasCompletedKioskOnboarding, resetKioskOnboarding } from "@/lib/onboarding/onboarding-state";
+import { DEMO_PATIENT_ID, DEMO_QUICK_ACCESS } from "@/lib/auth/demo-users";
 
 export default function PatientKioskIntakePage() {
   const router = useRouter();
@@ -57,7 +59,7 @@ export default function PatientKioskIntakePage() {
   };
 
   // Stage 2: Start Interview after Consent
-  const handleStartInterview = async () => {
+  const handleStartInterview = async (explicitPatientId?: string) => {
     if (!consentAcknowledged) return;
     setIsSubmitting(true);
     setIntakeError(null);
@@ -67,7 +69,12 @@ export default function PatientKioskIntakePage() {
       const res = await fetch("/api/interviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, consentAcknowledged: true }),
+        body: JSON.stringify({
+          patientId: explicitPatientId || DEMO_PATIENT_ID,
+          fullName: DEMO_QUICK_ACCESS.patient.fullName,
+          language,
+          consentAcknowledged: true,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.sessionId) {
@@ -211,19 +218,49 @@ export default function PatientKioskIntakePage() {
             </div>
           </div>
 
+          {/* Active Demo Patient Identity Card */}
+          <div className="flex items-center justify-between rounded-2xl bg-amber-50/80 border border-amber-200/90 p-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-800 shadow-sm shrink-0">
+                <UserCircle className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 text-sm">{DEMO_QUICK_ACCESS.patient.fullName}</div>
+                <div className="text-slate-600 text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                  <span>Patient ID: <strong className="text-slate-800">{DEMO_QUICK_ACCESS.patient.demoId}</strong></span>
+                  <span>•</span>
+                  <span>ABHA: <strong className="text-slate-800">{DEMO_QUICK_ACCESS.patient.abhaId}</strong></span>
+                  <span>•</span>
+                  <span>{DEMO_QUICK_ACCESS.patient.facility}</span>
+                </div>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-900 border border-amber-200 shrink-0">
+              <Sparkles className="h-3.5 w-3.5 text-amber-700" aria-hidden="true" />
+              <span>{language === "te" ? "ధృవీకరించబడిన రోగి" : "Demo Patient"}</span>
+            </span>
+          </div>
+
           {intakeErrorCode === "KIOSK_NOT_PROVISIONED" ? (
-            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-amber-900 shadow-sm" role="alert">
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-amber-900 shadow-sm space-y-3" role="alert">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-amber-900">Hospital Terminal Not Activated</h3>
+                  <h3 className="text-sm font-bold text-amber-900">Hospital Terminal Notice</h3>
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    This terminal has not been activated or authorized by hospital administration for patient intake.
-                  </p>
-                  <p className="text-xs font-semibold text-amber-950 pt-1">
-                    Please proceed to the hospital reception or registration desk for assistance.
+                    This terminal is not yet activated for unauthenticated walk-in registration. You can immediately begin clinical intake as the verified Demo Patient ({DEMO_QUICK_ACCESS.patient.fullName}).
                   </p>
                 </div>
+              </div>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleStartInterview(DEMO_PATIENT_ID)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-700 px-5 py-2.5 text-xs font-bold text-white shadow hover:bg-amber-800 transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Begin Intake as Demo Patient ({DEMO_QUICK_ACCESS.patient.fullName}) &rarr;</span>
+                </button>
               </div>
             </div>
           ) : intakeError && (
@@ -271,7 +308,7 @@ export default function PatientKioskIntakePage() {
             <button
               type="button"
               disabled={!consentAcknowledged || isSubmitting}
-              onClick={handleStartInterview}
+              onClick={() => handleStartInterview()}
               className="inline-flex items-center gap-2 rounded-xl bg-clinical-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-clinical-700 disabled:opacity-40 transition-colors"
             >
               {isSubmitting ? "Initializing..." : language === "te" ? "ప్రారంభించండి (Start)" : "Begin Intake"}

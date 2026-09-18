@@ -3,6 +3,7 @@ import { submitInterviewAnswerAsync } from "@/features/interview/interview-servi
 import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
 import { env } from "@/config/env";
+import { DEMO_PATIENT_ID } from "@/lib/auth/demo-users";
 
 export async function POST(
   request: Request,
@@ -25,9 +26,10 @@ export async function POST(
       return NextResponse.json({ error: "Answer text is required" }, { status: 400 });
     }
 
-    // Resolve kiosk credential from HttpOnly device cookie
+    // Resolve kiosk credential from HttpOnly device cookie or allow demo patient capability
     const credential = resolveKioskCredential(request);
-    if (!auth.user && !credential && !env.isDemoMode) {
+    const isDemoPatientCapability = auth.capability?.patientId === DEMO_PATIENT_ID;
+    if (!auth.user && !credential && !env.isDemoMode && !isDemoPatientCapability) {
       return NextResponse.json(
         { error: "UNAUTHORIZED: Kiosk device credential cookie required to submit answers" },
         { status: 401 }

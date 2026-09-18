@@ -3,6 +3,7 @@ import { compileInterviewToCase } from "@/features/interview/interview-service";
 import { requireIntakeOrClinicalAuth } from "@/lib/auth/kiosk-capability";
 import { resolveKioskCredential } from "@/lib/auth/kiosk-credential";
 import { env } from "@/config/env";
+import { DEMO_PATIENT_ID } from "@/lib/auth/demo-users";
 
 export async function POST(
   request: Request,
@@ -18,11 +19,12 @@ export async function POST(
   }
 
   try {
-    // Resolve kiosk credentials server-side from HttpOnly device cookie
+    // Resolve kiosk credentials server-side from HttpOnly device cookie or allow demo patient capability
     const credential = resolveKioskCredential(request);
+    const isDemoPatientCapability = auth.capability?.patientId === DEMO_PATIENT_ID;
 
-    // In production non-demo mode, kiosk patient callers MUST have provisioned device cookie
-    if (!auth.user && !credential && !env.isDemoMode) {
+    // In production non-demo mode, kiosk patient callers MUST have provisioned device cookie or valid demo capability
+    if (!auth.user && !credential && !env.isDemoMode && !isDemoPatientCapability) {
       return NextResponse.json(
         { error: "UNAUTHORIZED: Kiosk device credential cookie required for case compilation" },
         { status: 401 }

@@ -42,6 +42,8 @@ export const DEMO_CLINICIAN_USERS: Record<string, DemoUser> = {
   },
 };
 
+export const DEMO_PATIENT_ID = "11111111-1111-4111-8111-111111111111";
+
 /**
  * Distinct demo credential profiles for live SIH presentations.
  * - Doctor: Authenticated clinician portal & AI copilot
@@ -63,6 +65,7 @@ export const DEMO_QUICK_ACCESS = {
   patient: {
     label: "Patient Demo",
     demoId: "MED-2026-0001",
+    patientId: DEMO_PATIENT_ID,
     abhaId: "91-2026-4047-1001",
     fullName: "Ramesh Kumar Varma",
     roleDescription: "Patient Voice Intake Kiosk",
@@ -72,3 +75,4 @@ export const DEMO_QUICK_ACCESS = {
     href: "/intake/new", // Direct kiosk entry, no password required
   },
 } as const;
+
