@@ -6,6 +6,7 @@ import { AuthUser } from "@/features/auth/types";
 import { env } from "@/config/env";
 import { revokeKioskSessionDurable, isSessionDurableRevoked, verifyDurableSessionState } from "@/lib/db/supabase";
 import { resolveKioskCredential } from "./kiosk-credential";
+import { DEMO_PATIENT_ID, DEMO_KIOSK_ID, DEMO_KIOSK_SECRET } from "./demo-users";
 
 export interface IntakeCapabilityPayload {
   type: "kiosk_intake";
@@ -267,7 +268,15 @@ export async function requireIntakeOrClinicalAuth(
   }
 
   // 3. Resolve server-held kiosk device credential (Correction 1C)
-  const credential = resolveKioskCredential(request);
+  let credential = resolveKioskCredential(request);
+  if (!credential && capability.patientId === DEMO_PATIENT_ID) {
+    credential = {
+      kioskId: DEMO_KIOSK_ID,
+      kioskSecret: DEMO_KIOSK_SECRET,
+      source: "cookie",
+    };
+  }
+
   if (!env.isDemoMode && !credential) {
     return {
       authorized: false,

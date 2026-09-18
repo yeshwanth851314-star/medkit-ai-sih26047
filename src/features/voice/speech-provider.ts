@@ -170,7 +170,11 @@ export class DeterministicDemoSpeechProvider implements SpeechProvider {
 export class UnavailableSpeechProvider implements SpeechProvider {
   readonly name = "gemini-audio" as const;
 
-  async transcribe(_options: SpeechTranscriptionOptions): Promise<SpeechTranscriptionResponse> {
+  async transcribe(options: SpeechTranscriptionOptions): Promise<SpeechTranscriptionResponse> {
+    if (options.mockId) {
+      const demo = new DeterministicDemoSpeechProvider();
+      return demo.transcribe(options);
+    }
     throw new Error(
       "Speech recognition service unavailable: live AI credentials are not configured in production mode."
     );

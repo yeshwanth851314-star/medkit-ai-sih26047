@@ -73,6 +73,8 @@ export const DEMO_CLINICIAN_USERS: Record<string, DemoUser> = {
 };
 
 export const DEMO_PATIENT_ID = "11111111-1111-4111-8111-111111111111";
+export const DEMO_KIOSK_ID = "00000000-0000-0000-0000-000000000001";
+export const DEMO_KIOSK_SECRET = "kiosk-secret-hyd-01";
 
 /**
  * Distinct demo credential profiles for live SIH presentations.

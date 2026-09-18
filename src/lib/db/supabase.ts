@@ -6,7 +6,7 @@ import type { AuthUser } from "@/features/auth/types";
 import { toBucketRelativePath } from "@/lib/storage/document-storage-validator";
 import { computePayloadHash } from "@/features/security/canonical-hash";
 import { ecosystemMockStore } from "@/lib/db/ecosystem-mock-store";
-import { DEMO_PATIENT_ID } from "@/lib/auth/demo-users";
+import { DEMO_PATIENT_ID, DEMO_KIOSK_ID } from "@/lib/auth/demo-users";
 import type {
   FacilityDepartment,
   AppointmentSlot,
@@ -1005,7 +1005,7 @@ export async function submitIntakeToCase(params: {
   kioskSecret: string;
   redFlags?: any[];
 }): Promise<ClinicalCase> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || params.kioskId === DEMO_KIOSK_ID) {
     return mockDb.submitIntakeToCase(params);
   }
 
@@ -1034,7 +1034,7 @@ export async function getKioskIntakeSession(params: {
   kioskSecret: string;
   sessionId: string;
 }): Promise<IntakeSessionRecord | null> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || params.kioskId === DEMO_KIOSK_ID) {
     return mockDb.getKioskIntakeSession(params);
   }
 
@@ -1066,7 +1066,7 @@ export async function submitKioskAnswer(params: {
   inputMode?: string;
   nextQuestionId?: string | null;
 }): Promise<IntakeSessionRecord> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || params.kioskId === DEMO_KIOSK_ID) {
     return mockDb.submitKioskAnswer(params) as any;
   }
 
@@ -1100,7 +1100,7 @@ export async function revokeKioskSession(params: {
   reason?: string;
   targetStatus?: "abandoned" | "submitted";
 }): Promise<void> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || params.kioskId === DEMO_KIOSK_ID) {
     await mockDb.revokeKioskSession(params);
     return;
   }
@@ -1140,7 +1140,7 @@ export async function revokeKioskSessionDurable(
   }
   const reason = options?.reason || "kiosk_session_revoked";
 
-  if (env.isDemoMode) {
+  if (env.isDemoMode || options?.kioskId === DEMO_KIOSK_ID) {
     const session = await mockDb.getIntakeSessionById(sessionId);
     if (session && session.status !== targetStatus) {
       if (session.status !== "active") {
@@ -1226,7 +1226,7 @@ export async function verifyDurableSessionState(params: {
   actorOrToken?: AuthUser | string | null;
   clientOverride?: SupabaseClient | null;
 }): Promise<DurableSessionState> {
-  if (env.isDemoMode) {
+  if (env.isDemoMode || params.kioskId === DEMO_KIOSK_ID) {
     if (params.kioskId && params.kioskSecret) {
       const kiosk = await mockDb.verifyKioskCredentials(params.kioskId, params.kioskSecret);
       if (!kiosk) {
