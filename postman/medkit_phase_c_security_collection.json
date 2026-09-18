@@ -228,6 +228,7 @@
                   "        pm.expect(jsonData.patient.id).to.be.a('string');",
                   "        pm.expect(jsonData.patient.facility_id).to.be.a('string');",
                   "        pm.collectionVariables.set('createdPatientId', jsonData.patient.id);",
+                  "        pm.environment.set('createdPatientId', jsonData.patient.id);",
                   "    }",
                   "});"
                 ],
@@ -249,7 +250,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Kalyan Varma\",\"dateOfBirth\":\"1982-04-12\",\"gender\":\"Male\",\"phone\":\"+91-9876543201\"}"
+              "raw": "{\"fullName\":\"Kalyan Varma\",\"dateOfBirth\":\"1982-04-12\",\"gender\":\"Male\",\"phone\":\"+91-9876543201\",\"ignoreDuplicateWarning\":true}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/patients",
@@ -298,7 +299,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"fullName\":\"Somanna Naik\",\"dateOfBirth\":null,\"ageEstimate\":54,\"gender\":\"Male\",\"phone\":\"+91-9876543202\"}"
+              "raw": "{\"fullName\":\"Somanna Naik\",\"dateOfBirth\":null,\"ageEstimate\":54,\"gender\":\"Male\",\"phone\":\"+91-9876543202\",\"ignoreDuplicateWarning\":true}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/patients",
@@ -699,6 +700,10 @@
                   "    pm.expect(jsonData.invitation.id).to.be.a('string');",
                   "    pm.collectionVariables.set('activeInviteToken', jsonData.rawToken);",
                   "    pm.collectionVariables.set('activeInviteId', jsonData.invitation.id);",
+                  "    pm.collectionVariables.set('facilityAInviteId', jsonData.invitation.id);",
+                  "    pm.environment.set('activeInviteToken', jsonData.rawToken);",
+                  "    pm.environment.set('activeInviteId', jsonData.invitation.id);",
+                  "    pm.environment.set('facilityAInviteId', jsonData.invitation.id);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -956,7 +961,8 @@
                   "pm.test('Case is explicitly bound to target patient', function () {",
                   "    var jsonData = pm.response.json();",
                   "    if (jsonData.case) {",
-                  "        pm.expect(jsonData.case.patient_id).to.eql(pm.collectionVariables.get('createdPatientId'));",
+                  "        var targetId = pm.collectionVariables.get('createdPatientId') || pm.environment.get('createdPatientId');",
+                  "        pm.expect(jsonData.case.patient_id).to.eql(targetId);",
                   "    }",
                   "});"
                 ],
