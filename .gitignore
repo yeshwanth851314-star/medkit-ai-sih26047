@@ -43,3 +43,4 @@ Thumbs.db
 *.webm
 supabase/.temp/
 .packaging.lock
+.env*

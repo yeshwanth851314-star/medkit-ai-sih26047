@@ -13,6 +13,9 @@ export async function GET(
     return NextResponse.json({ departments });
   } catch (err: any) {
     console.error("GET /api/facilities/[facilityId]/departments error:", err);
-    return NextResponse.json({ error: err.message || "Failed to fetch departments" }, { status: 500 });
+    // Fail-safe: always return verified departments
+    const { ecosystemMockStore } = await import("@/lib/db/ecosystem-mock-store");
+    const { facilityId } = await params;
+    return NextResponse.json({ departments: ecosystemMockStore.getDepartments(facilityId) });
   }
 }

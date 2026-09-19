@@ -57,6 +57,13 @@ const PATIENT_PROFILE: ProfileShareData = {
   validity: "Active / Verified",
 };
 
+const DEFAULT_DEPARTMENTS: FacilityDepartment[] = [
+  { id: "dept-gen-01", facility_id: "fac-hyd-01", name: "General Medicine", code: "GEN_MED", active: true, created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "dept-kaya-01", facility_id: "fac-hyd-01", name: "Kayachikitsa (Ayurveda Internal Medicine)", code: "KAYA", active: true, created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "dept-panch-01", facility_id: "fac-hyd-01", name: "Panchakarma Department", code: "PANCH", active: true, created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+  { id: "dept-shalya-01", facility_id: "fac-hyd-01", name: "Shalya Tantra (Surgical OPD)", code: "SHALYA", active: true, created_at: "2026-01-01T00:00:00.000Z", updated_at: "2026-01-01T00:00:00.000Z" },
+];
+
 export default function PatientPortalPage() {
   const [patientId] = useState(DEMO_PATIENT_ID);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -64,7 +71,7 @@ export default function PatientPortalPage() {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [diagnosticOrders, setDiagnosticOrders] = useState<DiagnosticOrder[]>([]);
   const [timeline, setTimeline] = useState<TimelineMilestone[]>([]);
-  const [departments, setDepartments] = useState<FacilityDepartment[]>([]);
+  const [departments, setDepartments] = useState<FacilityDepartment[]>(DEFAULT_DEPARTMENTS);
 
   // Navigation tabs: 'appointments' | 'history' | 'reports' | 'prescriptions'
   const [activeTab, setActiveTab] = useState<
@@ -74,7 +81,7 @@ export default function PatientPortalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [selectedDept, setSelectedDept] = useState<string>("");
+  const [selectedDept, setSelectedDept] = useState<string>("dept-gen-01");
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [bookingReason, setBookingReason] = useState("");
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
@@ -997,13 +1004,37 @@ export default function PatientPortalPage() {
 
             <form onSubmit={handleBookAppointment} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Select Department:
+                <label className="block font-bold text-slate-700 mb-1.5">
+                  Select Clinical Department:
                 </label>
+                {/* One-Tap Quick Selection Buttons */}
+                <div className="grid grid-cols-2 gap-2 mb-2.5">
+                  {departments.map((d) => {
+                    const isSelected = selectedDept === d.id;
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => setSelectedDept(d.id)}
+                        className={`flex flex-col items-start p-2.5 rounded-xl border-2 text-left transition-all ${
+                          isSelected
+                            ? "border-clinical-600 bg-clinical-50/80 text-clinical-900 font-bold shadow-xs"
+                            : "border-surface-200 bg-surface-50/60 text-slate-700 hover:border-clinical-300 hover:bg-white"
+                        }`}
+                      >
+                        <span className="text-xs font-bold leading-tight">{d.name}</span>
+                        <span className="text-[10px] text-slate-500 font-mono mt-0.5 uppercase">
+                          {d.code} {isSelected ? "✓ Selected" : ""}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <select
                   value={selectedDept}
                   onChange={(e) => setSelectedDept(e.target.value)}
-                  className="w-full rounded-xl border border-surface-300 p-2.5 text-xs text-slate-900 focus:border-clinical-600 focus:outline-none bg-white"
+                  className="w-full rounded-xl border border-surface-300 p-2.5 text-xs text-slate-900 focus:border-clinical-600 focus:outline-none bg-white font-medium"
                 >
                   {departments.map((d) => (
                     <option key={d.id} value={d.id}>

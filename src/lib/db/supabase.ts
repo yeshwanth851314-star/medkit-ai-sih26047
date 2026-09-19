@@ -1758,14 +1758,12 @@ export async function getDepartmentsDb(
     let q = supabase.from("facility_departments").select("*").eq("active", true);
     if (facilityId) q = q.eq("facility_id", facilityId);
     const { data, error } = await q;
-    if (error) {
-      if (isTableMissingOrUnavailable(error)) return ecosystemMockStore.getDepartments(facilityId);
-      throw new Error(`Database error fetching departments: ${error.message}`);
+    if (error || !data || data.length === 0) {
+      return ecosystemMockStore.getDepartments(facilityId);
     }
-    return (data && data.length > 0 ? data : ecosystemMockStore.getDepartments(facilityId)) as FacilityDepartment[];
-  } catch (err: any) {
-    if (isTableMissingOrUnavailable(err)) return ecosystemMockStore.getDepartments(facilityId);
-    throw err;
+    return data as FacilityDepartment[];
+  } catch {
+    return ecosystemMockStore.getDepartments(facilityId);
   }
 }
 

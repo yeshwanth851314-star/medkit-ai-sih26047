@@ -33,7 +33,7 @@ export default function PatientKioskIntakePage() {
 
   // Intake Stages: 'intro' -> 'language' -> 'consent' -> 'interview' -> 'completed'
   const [stage, setStage] = useState<"intro" | "language" | "consent" | "interview" | "completed">("language");
-  const [language, setLanguage] = useState<"en" | "te">("en");
+  const [language, setLanguage] = useState<"en" | "hi" | "te" | "ta" | "kn">("en");
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function PatientKioskIntakePage() {
   const [intakeErrorCode, setIntakeErrorCode] = useState<string | null>(null);
 
   // Stage 1: Select Language
-  const handleSelectLanguage = (lang: "en" | "te") => {
+  const handleSelectLanguage = (lang: "en" | "hi" | "te" | "ta" | "kn") => {
     setLanguage(lang);
     setIntakeError(null);
     setIntakeErrorCode(null);
@@ -196,23 +196,50 @@ export default function PatientKioskIntakePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-w-lg mx-auto">
             <button
               type="button"
               onClick={() => handleSelectLanguage("en")}
-              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
+              className="rounded-2xl border-2 border-surface-200 p-4 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
             >
-              <div className="text-lg font-bold text-slate-900 group-hover:text-clinical-700">English</div>
-              <div className="text-xs text-slate-500 mt-1">Standard clinical intake</div>
+              <div className="text-base font-bold text-slate-900 group-hover:text-clinical-700">English</div>
+              <div className="text-xs text-slate-500 mt-0.5">Standard clinical intake</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage("hi")}
+              className="rounded-2xl border-2 border-surface-200 p-4 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
+            >
+              <div className="text-base font-bold text-slate-900 group-hover:text-clinical-700">हिन्दी (Hindi)</div>
+              <div className="text-xs text-slate-500 mt-0.5">हिंदी में संवाद करें</div>
             </button>
 
             <button
               type="button"
               onClick={() => handleSelectLanguage("te")}
-              className="rounded-2xl border-2 border-surface-200 p-6 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
+              className="rounded-2xl border-2 border-surface-200 p-4 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
             >
-              <div className="text-lg font-bold text-slate-900 group-hover:text-clinical-700">తెలుగు (Telugu)</div>
-              <div className="text-xs text-slate-500 mt-1">ప్రాంతీయ భాషలో సంభాషణ</div>
+              <div className="text-base font-bold text-slate-900 group-hover:text-clinical-700">తెలుగు (Telugu)</div>
+              <div className="text-xs text-slate-500 mt-0.5">ప్రాంతీయ భాషలో సంభాషణ</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage("ta")}
+              className="rounded-2xl border-2 border-surface-200 p-4 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group"
+            >
+              <div className="text-base font-bold text-slate-900 group-hover:text-clinical-700">தமிழ் (Tamil)</div>
+              <div className="text-xs text-slate-500 mt-0.5">தமிழில் உரையாடுங்கள்</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSelectLanguage("kn")}
+              className="rounded-2xl border-2 border-surface-200 p-4 text-center hover:border-clinical-600 hover:bg-clinical-50/50 transition-all shadow-sm group sm:col-span-2 md:col-span-1"
+            >
+              <div className="text-base font-bold text-slate-900 group-hover:text-clinical-700">ಕನ್ನಡ (Kannada)</div>
+              <div className="text-xs text-slate-500 mt-0.5">ಕನ್ನಡದಲ್ಲಿ ಮಾತನಾಡಿ</div>
             </button>
           </div>
         </div>

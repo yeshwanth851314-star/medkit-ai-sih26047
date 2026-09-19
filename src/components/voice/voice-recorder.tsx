@@ -10,7 +10,7 @@ export function VoiceRecorder({
   onTranscriptionConfirmed,
   onCancel,
 }: {
-  language?: "en" | "te" | "hi";
+  language?: "en" | "te" | "hi" | "ta" | "kn" | string;
   intakeToken?: string | null;
   onTranscriptionConfirmed: (transcript: string, translation?: string) => void;
   onCancel?: () => void;
