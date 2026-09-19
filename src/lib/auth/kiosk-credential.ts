@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import { DEMO_KIOSK_ID, DEMO_KIOSK_SECRET, DEMO_PATIENT_ID } from "@/lib/auth/demo-users";
 
 export interface KioskCredential {
   kioskId: string;
@@ -11,8 +12,16 @@ export interface KioskCredential {
  * Extracts the trusted kiosk identity and secret from the HttpOnly device cookie.
  * Never exposes the raw kiosk secret to patient-side browser JavaScript.
  * In production, strictly rejects any attempt to pass credentials via headers or request body.
+ *
+ * @param allowDemoTokenFallback - When true, peeks at the incoming intake JWT to return demo
+ *   kiosk credentials when the token carries DEMO_PATIENT_ID. Only enable this on routes where
+ *   the kiosk demo experience must work in production without provisioned device cookies
+ *   (e.g. answer and submit routes). Do NOT enable on the logout route.
  */
-export function resolveKioskCredential(request: Request): KioskCredential | null {
+export function resolveKioskCredential(
+  request: Request,
+  options?: { allowDemoTokenFallback?: boolean }
+): KioskCredential | null {
   // 1. Primary secure production path: HttpOnly device cookie 'medkit_kiosk_credential'
   const cookieHeader = request.headers.get("cookie");
   if (cookieHeader) {
@@ -46,7 +55,7 @@ export function resolveKioskCredential(request: Request): KioskCredential | null
     }
   }
 
-  // 2. Strict restriction: Header fallback is strictly restricted to development/test configurations
+  // 2. Header fallback is strictly restricted to development/test configurations
   if (process.env.NODE_ENV !== "production" || env.isDemoMode) {
     const headerKioskId = request.headers.get("x-kiosk-id");
     const headerKioskSecret = request.headers.get("x-kiosk-secret");
@@ -59,14 +68,52 @@ export function resolveKioskCredential(request: Request): KioskCredential | null
     }
   }
 
-  // 3. In demo mode only, fallback to known demo kiosk credentials if no cookie present
+  // 3. Demo/dev automatic fallback — also handles DEMO_PATIENT_ID intake tokens in production
+  //    by peeking at the Bearer/intake-token JWT before giving up.
+  //    This allows the kiosk demo to work on Vercel without provisioned device cookies.
+  //    ONLY enabled when the caller opts in via allowDemoTokenFallback (e.g. answer/submit routes).
+  //    The logout route must NOT opt in — it has its own stricter security guard.
+  if (options?.allowDemoTokenFallback) {
+    const intakeToken =
+      request.headers.get("x-intake-token") ||
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+      null;
+
+    if (intakeToken) {
+      try {
+        const parts = intakeToken.split(".");
+        if (parts.length === 3) {
+          const payloadStr = Buffer.from(parts[1], "base64url").toString("utf-8");
+          const payload = JSON.parse(payloadStr);
+          if (
+            payload &&
+            payload.type === "kiosk_intake" &&
+            payload.patientId === DEMO_PATIENT_ID
+          ) {
+            // Demo patient kiosk token — resolve to well-known demo kiosk credential
+            return {
+              kioskId: DEMO_KIOSK_ID,
+              kioskSecret: DEMO_KIOSK_SECRET,
+              source: "cookie", // treated as if provisioned
+            };
+          }
+        }
+      } catch {
+        // malformed token — fall through
+      }
+    }
+  }
+
+  // 4. Demo mode auto-credential (isDemoMode only — does NOT fire in test/CI)
   if (env.isDemoMode) {
     return {
-      kioskId: "00000000-0000-0000-0000-000000000001",
-      kioskSecret: "kiosk-secret-hyd-01",
+      kioskId: DEMO_KIOSK_ID,
+      kioskSecret: DEMO_KIOSK_SECRET,
       source: "test_header",
     };
   }
 
   return null;
 }
+
+

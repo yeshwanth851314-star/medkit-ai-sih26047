@@ -75,7 +75,10 @@ export default function PatientKioskIntakePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patientId: explicitPatientId || DEMO_PATIENT_ID,
+          // Only include patientId when a specific patient was explicitly chosen (e.g. by a clinician).
+          // Kiosk/public intake must NOT send patientId — the server resolves it via kiosk credentials,
+          // avoiding facility-access guard failures.
+          ...(explicitPatientId ? { patientId: explicitPatientId } : {}),
           fullName: DEMO_QUICK_ACCESS.patient.fullName,
           language,
           consentAcknowledged: true,
