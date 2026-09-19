@@ -1,4 +1,3 @@
-import { createHash } from "crypto";
 import { ClinicalCase, Patient, MedicalDocument } from "../../types/database";
 import {
   FhirR4Bundle,
@@ -15,12 +14,32 @@ import {
 export const ABDM_COMPLIANCE_DISCLAIMER =
   "FHIR-compatible representation / ABDM integration-ready architecture";
 
+function getDeterministicHex32(seed: string): string {
+  // Pure JavaScript deterministic hash for universal runtime compatibility (Node + Edge + Browser)
+
+  // Pure JavaScript deterministic hash fallback for browser / client components
+  let h1 = 0xdeadbeef ^ seed.length;
+  let h2 = 0x41c64e6d ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    const ch = seed.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const s1 = (h1 >>> 0).toString(16).padStart(8, "0");
+  const s2 = (h2 >>> 0).toString(16).padStart(8, "0");
+  const s3 = ((h1 ^ h2) >>> 0).toString(16).padStart(8, "0");
+  const s4 = ((h1 + h2) >>> 0).toString(16).padStart(8, "0");
+  return (s1 + s2 + s3 + s4).slice(0, 32);
+}
+
 export function toDeterministicUuid(seed: string): string {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(seed)) {
     return seed.toLowerCase();
   }
-  const hash = createHash("sha256").update(seed).digest("hex");
+  const hash = getDeterministicHex32(seed);
   const p1 = hash.substring(0, 8);
   const p2 = hash.substring(8, 12);
   const p3 = "4" + hash.substring(13, 16);

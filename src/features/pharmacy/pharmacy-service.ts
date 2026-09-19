@@ -1,6 +1,7 @@
 import {
   getPrescriptionsDb,
   getPharmacyInventoryDb,
+  updatePharmacyStockDb,
   dispenseMedicationDb,
   raisePrescriptionClarificationDb,
   resolvePrescriptionClarificationDb,
@@ -150,4 +151,12 @@ export async function getPatientDispenseHistory(
   actorOrToken?: AuthUser | string | null
 ): Promise<DispenseEvent[]> {
   return getDispenseEventsByPatientDb(patientId, actorOrToken);
+}
+
+export async function updatePharmacyInventoryStock(
+  itemId: string,
+  stockQuantity: number,
+  actorOrToken?: AuthUser | string | null
+): Promise<PharmacyInventoryItem | null> {
+  return updatePharmacyStockDb(itemId, stockQuantity, actorOrToken);
 }

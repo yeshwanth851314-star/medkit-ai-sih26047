@@ -17,8 +17,28 @@ import {
   Upload,
   Sparkles,
   AlertTriangle,
+  Printer,
+  Share2,
 } from "lucide-react";
 import { DiagnosticOrder, DiagnosticOrderItem, DiagnosticOrderStatus, DiagnosticPriority } from "@/types/ecosystem";
+import {
+  ShareProfileModal,
+  ProfileShareData,
+} from "@/components/shared/share-profile-modal";
+import { QrCode } from "@/components/shared/qr-code";
+
+const DIAGNOSTIC_PROFILE: ProfileShareData = {
+  role: "diagnostic",
+  roleTitle: "NABL Accredited Pathology & Radiology Lab",
+  uniqueId: "LAB-TECH-4092",
+  name: "Ramesh V., M.Sc MLT",
+  secondaryIdLabel: "NABL Accreditation",
+  secondaryIdValue: "NABL-MED-883",
+  facility: "Central Diagnostic Laboratory & Imaging, AIIA",
+  departmentOrScope: "Clinical Biochemistry & Digital Radiology",
+  contactOrMeta: "+91 98765 33445 • Central Lab",
+  validity: "Active / Verified",
+};
 
 export default function DiagnosticsQueuePage() {
   const facilityId = "fac-hyd-01";
@@ -28,6 +48,8 @@ export default function DiagnosticsQueuePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [printReportOrder, setPrintReportOrder] = useState<DiagnosticOrder | null>(null);
 
   // Result entry modal state
   const [activeOrderForResults, setActiveOrderForResults] = useState<DiagnosticOrder | null>(null);
@@ -190,6 +212,13 @@ export default function DiagnosticsQueuePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      {/* Share Profile Modal */}
+      <ShareProfileModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        profile={DIAGNOSTIC_PROFILE}
+      />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-surface-200 pb-6">
         <div>
@@ -198,6 +227,9 @@ export default function DiagnosticsQueuePage() {
               Central Pathology &amp; Diagnostic Lab
             </span>
             <span className="text-xs text-slate-500">• AIIA Diagnostic Wing</span>
+            <span className="text-xs font-mono font-bold text-slate-800 bg-surface-100 px-2.5 py-0.5 rounded">
+              ID: {DIAGNOSTIC_PROFILE.uniqueId}
+            </span>
           </div>
           <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Diagnostic Orders &amp; Specimen Worklist
@@ -210,11 +242,19 @@ export default function DiagnosticsQueuePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-white px-3.5 py-2 text-xs font-bold text-purple-800 shadow-2xs hover:bg-purple-50 transition-colors"
+          >
+            <Share2 className="h-4 w-4 text-purple-600" />
+            <span>Share Lab Profile</span>
+          </button>
+          <button
+            type="button"
             onClick={() => fetchOrders()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-surface-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-surface-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin text-purple-600" : ""}`} />
-            Refresh Queue
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -449,9 +489,19 @@ export default function DiagnosticsQueuePage() {
                           )}
 
                           {(order.status === "RESULT_AVAILABLE" || order.status === "REVIEWED") && (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Report Filed
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Filed
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setPrintReportOrder(order)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-bold text-purple-900 hover:bg-purple-100 shadow-2xs transition-colors"
+                              >
+                                <Printer className="h-3.5 w-3.5 text-purple-700" />
+                                <span>Print Report</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -616,6 +666,176 @@ export default function DiagnosticsQueuePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Printable Official NABL Laboratory Report Modal ─── */}
+      {printReportOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-surface-200 space-y-6 max-h-[90vh] overflow-y-auto animate-scaleUp">
+            {/* Modal Actions Header */}
+            <div className="flex items-center justify-between border-b border-surface-200 pb-3">
+              <div className="flex items-center gap-2">
+                <Printer className="h-5 w-5 text-purple-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Official NABL Accredited Diagnostic Report
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-purple-700"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Print Report</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintReportOrder(null)}
+                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            {/* Formatted Report Sheet */}
+            <div className="rounded-2xl border-2 border-slate-300 bg-white p-6 space-y-6 shadow-sm font-sans text-xs">
+              {/* Institution Header */}
+              <div className="border-b-2 border-slate-900 pb-4 text-center space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-purple-800">
+                  Ministry of Ayush • Government of India
+                </div>
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  ALL INDIA INSTITUTE OF AYURVEDA (AIIA)
+                </h2>
+                <div className="text-xs text-slate-600 font-medium">
+                  Central Diagnostic Pathology &amp; Imaging Center • Facility ID: fac-hyd-01
+                </div>
+                <div className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-[10px] font-bold text-slate-700 border border-slate-300">
+                  NABL ISO 15189 Accredited Laboratory (Cert # NABL-MED-883)
+                </div>
+              </div>
+
+              {/* Patient & Order Demographics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-50 p-4 rounded-xl border border-surface-200">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Patient Name</span>
+                  <span className="font-extrabold text-slate-900 text-sm">Ramesh Kumar Varma</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Patient ID / ABHA</span>
+                  <span className="font-mono font-bold text-slate-900">MED-2026-1001</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Age / Gender</span>
+                  <span className="font-bold text-slate-900">45 Yrs / Male</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Referred By</span>
+                  <span className="font-bold text-slate-900">Dr. Ananya Rao, MD</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Sample Accession ID</span>
+                  <span className="font-mono font-bold text-slate-900">ACC-{printReportOrder.id.substring(0, 8).toUpperCase()}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Collection Date</span>
+                  <span className="font-bold text-slate-900">{new Date(printReportOrder.ordered_at).toLocaleDateString()}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Priority</span>
+                  <span className="font-bold text-slate-900">{printReportOrder.priority}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Report Status</span>
+                  <span className="font-bold text-emerald-700 uppercase">VERIFIED FINAL</span>
+                </div>
+              </div>
+
+              {/* Investigation Results Table */}
+              <div className="space-y-4">
+                <h4 className="font-extrabold text-sm text-slate-900 border-b border-surface-200 pb-1">
+                  Investigation Findings &amp; Quantitative Values
+                </h4>
+
+                {(printReportOrder.results || []).map((res) => (
+                  <div key={res.id} className="space-y-3">
+                    <table className="w-full text-left border border-surface-200 rounded-xl overflow-hidden">
+                      <thead className="bg-surface-100 text-slate-700 font-bold text-[11px]">
+                        <tr>
+                          <th className="px-4 py-2.5">Investigation Parameter</th>
+                          <th className="px-4 py-2.5">Observed Value</th>
+                          <th className="px-4 py-2.5">Reference Interval</th>
+                          <th className="px-4 py-2.5">Evaluation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-surface-100">
+                        {Object.entries(res.result_json || {}).map(([key, val]: any) => (
+                          <tr key={key} className="hover:bg-surface-50/50">
+                            <td className="px-4 py-2.5 font-bold text-slate-900">
+                              {val?.label || key}
+                            </td>
+                            <td className="px-4 py-2.5 font-extrabold text-slate-900">
+                              {val?.value ?? String(val)} {val?.unit || ""}
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-600">
+                              {val?.ref_low && val?.ref_high
+                                ? `${val.ref_low} - ${val.ref_high} ${val.unit || ""}`
+                                : "N/A"}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span
+                                className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  val?.flag === "NORMAL" || !val?.flag
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {val?.flag || "Normal"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {res.finding && (
+                      <div className="rounded-xl bg-surface-50 p-3 text-slate-700 border border-surface-200">
+                        <strong>Clinical Impression / Notes:</strong> {res.finding}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer: Signatures & QR Code */}
+              <div className="pt-4 border-t-2 border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <QrCode
+                    value={`https://medkit-ai-sih26047.vercel.app/verify/profile?id=${printReportOrder.id}&role=diagnostic`}
+                    size={90}
+                    title="Report Verification QR"
+                  />
+                  <div className="text-[10px] text-slate-500">
+                    <div>Scannable Digital Verification</div>
+                    <div className="font-mono text-slate-700 font-bold">SHA-256 Verified</div>
+                    <div>AIIA LIS v2.6.0</div>
+                  </div>
+                </div>
+
+                <div className="text-right space-y-1">
+                  <div className="font-bold text-slate-900 text-xs">Ramesh V., M.Sc MLT</div>
+                  <div className="text-[10px] text-slate-500">Senior Medical Lab Technologist</div>
+                  <div className="text-[10px] font-mono text-purple-700 font-bold">
+                    Reg: NABL-MED-883
+                  </div>
+                  <div className="text-[9px] text-slate-400">Electronically signed on {new Date().toLocaleDateString()}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

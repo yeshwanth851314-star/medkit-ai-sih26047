@@ -20,6 +20,8 @@ import {
   HelpCircle,
   ShieldCheck,
   Send,
+  Share2,
+  Edit,
 } from "lucide-react";
 import {
   Prescription,
@@ -28,6 +30,23 @@ import {
   DispenseStatus,
   PrescriptionClarification,
 } from "@/types/ecosystem";
+import {
+  ShareProfileModal,
+  ProfileShareData,
+} from "@/components/shared/share-profile-modal";
+
+const PHARMACY_PROFILE: ProfileShareData = {
+  role: "pharmacy",
+  roleTitle: "Licensed Hospital Dispensary",
+  uniqueId: "PHARM-7741",
+  name: "Venkatesh Iyer, B.Pharm",
+  secondaryIdLabel: "State Pharmacy License",
+  secondaryIdValue: "TS-PHARM-2026-902",
+  facility: "AIIA Hospital Dispensary & Formulary",
+  departmentOrScope: "Central Dispensary & Stock Formulary",
+  contactOrMeta: "+91 98765 11223 • Central Store",
+  validity: "Active / Verified",
+};
 
 export default function PharmacyQueuePage() {
   const facilityId = "fac-hyd-01";
@@ -37,6 +56,15 @@ export default function PharmacyQueuePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"prescriptions" | "inventory">("prescriptions");
   const [notification, setNotification] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Sub-filter for prescriptions
+  const [rxSubFilter, setRxSubFilter] = useState<"ALL" | "UNCOMPLETED" | "COMPLETED" | "CLARIFICATIONS">("ALL");
+
+  // Stock update modal state
+  const [stockEditItem, setStockEditItem] = useState<PharmacyInventoryItem | null>(null);
+  const [newStockQty, setNewStockQty] = useState<number>(100);
+  const [submittingStockUpdate, setSubmittingStockUpdate] = useState(false);
 
   // Dispense Modal State
   const [selectedRx, setSelectedRx] = useState<Prescription | null>(null);
@@ -185,7 +213,49 @@ export default function PharmacyQueuePage() {
   const completedRxCount = prescriptions.filter((p) => p.status === "DISPENSED").length;
   const lowStockCount = inventory.filter((i) => i.stock_quantity < 50).length;
 
+  const handleUpdateStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockEditItem) return;
+    setSubmittingStockUpdate(true);
+    try {
+      const res = await fetch("/api/pharmacy/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId: stockEditItem.id,
+          stockQuantity: newStockQty,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInventory((prev) =>
+          prev.map((item) =>
+            item.id === stockEditItem.id
+              ? { ...item, stock_quantity: newStockQty }
+              : item
+          )
+        );
+        setNotification(
+          `Stock quantity for ${stockEditItem.medicine_name} updated to ${newStockQty} units.`
+        );
+        setStockEditItem(null);
+        setTimeout(() => setNotification(null), 4000);
+      } else {
+        alert(data.error || "Failed to update stock");
+      }
+    } catch {
+      alert("Network error updating stock");
+    } finally {
+      setSubmittingStockUpdate(false);
+    }
+  };
+
   const filteredRx = prescriptions.filter((p) => {
+    if (rxSubFilter === "UNCOMPLETED" && p.status === "DISPENSED") return false;
+    if (rxSubFilter === "COMPLETED" && p.status !== "DISPENSED") return false;
+    if (rxSubFilter === "CLARIFICATIONS" && (!p.clarifications || p.clarifications.length === 0))
+      return false;
+
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -198,6 +268,13 @@ export default function PharmacyQueuePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      {/* Share Profile Modal */}
+      <ShareProfileModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        profile={PHARMACY_PROFILE}
+      />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-surface-200 pb-6">
         <div>
@@ -206,6 +283,9 @@ export default function PharmacyQueuePage() {
               Hospital Pharmacy &amp; Dispensary
             </span>
             <span className="text-xs text-slate-500">• AIIA Dispensary Wing</span>
+            <span className="text-xs font-mono font-bold text-slate-800 bg-surface-100 px-2.5 py-0.5 rounded">
+              ID: {PHARMACY_PROFILE.uniqueId}
+            </span>
           </div>
           <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Pharmacy Dispense &amp; Inventory Management
@@ -218,11 +298,19 @@ export default function PharmacyQueuePage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-50 transition-colors"
+          >
+            <Share2 className="h-4 w-4 text-emerald-600" />
+            <span>Share Dispensary Profile</span>
+          </button>
+          <button
+            type="button"
             onClick={() => fetchPharmacyData()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-surface-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-surface-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 transition-colors"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin text-emerald-600" : ""}`} />
-            Refresh Dispensary
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -330,6 +418,44 @@ export default function PharmacyQueuePage() {
             <span className="text-xs font-mono bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg border border-emerald-200">
               Facility: {facilityId}
             </span>
+          </div>
+
+          {/* Sub-Filters for Uncompleted vs Completed Prescriptions */}
+          <div className="px-6 py-3 bg-surface-50/70 border-b border-surface-200 flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-bold text-slate-500 mr-1">Filter Queue:</span>
+            <button
+              type="button"
+              onClick={() => setRxSubFilter("ALL")}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                rxSubFilter === "ALL"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-slate-700 border border-surface-200 hover:bg-surface-100"
+              }`}
+            >
+              All Prescriptions ({prescriptions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRxSubFilter("UNCOMPLETED")}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                rxSubFilter === "UNCOMPLETED"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-slate-700 border border-surface-200 hover:bg-surface-100"
+              }`}
+            >
+              Uncompleted / Pending Pickup ({pendingRxCount + partialRxCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRxSubFilter("COMPLETED")}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                rxSubFilter === "COMPLETED"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-slate-700 border border-surface-200 hover:bg-surface-100"
+              }`}
+            >
+              Completed / Dispensed ({completedRxCount})
+            </button>
           </div>
 
           {filteredRx.length === 0 ? (
@@ -494,6 +620,7 @@ export default function PharmacyQueuePage() {
                   <th className="px-6 py-3.5">Batch #</th>
                   <th className="px-6 py-3.5">Expiry Date</th>
                   <th className="px-6 py-3.5">Available Stock</th>
+                  <th className="px-6 py-3.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 text-xs">
@@ -528,11 +655,92 @@ export default function PharmacyQueuePage() {
                           {inv.stock_quantity} units
                         </span>
                       </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStockEditItem(inv);
+                            setNewStockQty(inv.stock_quantity);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-50 shadow-2xs transition-colors"
+                        >
+                          <Edit className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Update Stock</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Stock Quantity Update Modal ─── */}
+      {stockEditItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-surface-200 space-y-4 animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-surface-200 pb-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Update Inventory Stock Level
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockEditItem(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateStockSubmit} className="space-y-4 text-xs">
+              <div className="rounded-xl bg-surface-50 p-3 border border-surface-200 space-y-1">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Medicine Name</div>
+                <div className="font-extrabold text-slate-900 text-sm">{stockEditItem.medicine_name}</div>
+                <div className="text-slate-500">
+                  Code: {stockEditItem.medicine_key} • Strength: {stockEditItem.strength || "Standard"}
+                </div>
+                <div className="text-slate-500">
+                  Current Available Stock: <strong>{stockEditItem.stock_quantity} units</strong>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  New Verified Stock Quantity (Units):
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={50000}
+                  required
+                  value={newStockQty}
+                  onChange={(e) => setNewStockQty(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-surface-300 p-2.5 text-xs text-slate-900 focus:border-emerald-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-surface-200">
+                <button
+                  type="button"
+                  onClick={() => setStockEditItem(null)}
+                  className="rounded-xl border border-surface-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-surface-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingStockUpdate}
+                  className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow disabled:opacity-50"
+                >
+                  {submittingStockUpdate ? "Updating..." : "Confirm & Save Stock"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

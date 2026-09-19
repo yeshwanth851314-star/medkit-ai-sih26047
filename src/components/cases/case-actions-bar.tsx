@@ -69,12 +69,21 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
     }
   };
 
-  // Generate valid FHIR R4 Bundle on demand
-  const fhirBundle = mapCaseToFhirBundle({
-    clinicalCase,
-    patient,
-    documents,
-  });
+  const [fhirBundle, setFhirBundle] = useState<any>(null);
+
+  const handleOpenFhir = () => {
+    try {
+      const bundle = mapCaseToFhirBundle({
+        clinicalCase,
+        patient,
+        documents,
+      });
+      setFhirBundle(bundle);
+    } catch (err) {
+      console.error("Failed to generate FHIR bundle on demand:", err);
+    }
+    setIsFhirOpen(true);
+  };
 
   const handleCreateAmendment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +135,7 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
         <div className="inline-flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setIsFhirOpen(true)}
+            onClick={handleOpenFhir}
             className="inline-flex items-center gap-1.5 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-surface-50 hover:text-clinical-700 transition-colors"
           >
             <FileCode className="h-3.5 w-3.5 text-clinical-600" />
@@ -175,11 +184,13 @@ export function CaseActionsBar({ clinicalCase, patient, documents = [] }: CaseAc
       </div>
 
       {/* FHIR Drawer */}
-      <FhirPreviewDrawer
-        bundle={fhirBundle}
-        isOpen={isFhirOpen}
-        onClose={() => setIsFhirOpen(false)}
-      />
+      {isFhirOpen && fhirBundle && (
+        <FhirPreviewDrawer
+          bundle={fhirBundle}
+          isOpen={isFhirOpen}
+          onClose={() => setIsFhirOpen(false)}
+        />
+      )}
 
       {/* Amendment Modal */}
       {isAmendModalOpen && (

@@ -317,6 +317,202 @@ class EcosystemMockStore {
         updated_at: now,
       });
     }
+
+    // 5. Seed initial appointment & OPD Queue entry for demo patient
+    const demoPatientId = "11111111-1111-4111-8111-111111111111";
+    const demoApptId = "appt-demo-1001";
+    const apptScheduled = new Date(Date.now() + 3600000).toISOString();
+    const demoDept = this.departments.get("dept-gen_med") || seededDepts[0];
+
+    const demoAppt: Appointment = {
+      id: demoApptId,
+      patient_id: demoPatientId,
+      facility_id: facilityId,
+      department_id: demoDept ? demoDept.id : "dept-gen_med",
+      clinician_id: "usr-doc-0001",
+      scheduled_at: apptScheduled,
+      status: "CHECKED_IN",
+      reason: "Chronic cough, evening fatigue and seasonal joint stiffness",
+      created_by: "patient",
+      created_at: now,
+      updated_at: now,
+      department: demoDept,
+    };
+    this.appointments.set(demoApptId, demoAppt);
+
+    const demoQueueId = "queue-demo-101";
+    const demoQueueEntry: OpdQueueEntry = {
+      id: demoQueueId,
+      appointment_id: demoApptId,
+      patient_id: demoPatientId,
+      facility_id: facilityId,
+      department_id: demoDept ? demoDept.id : "dept-gen_med",
+      clinician_id: "usr-doc-0001",
+      token_number: 101,
+      status: "WAITING",
+      checked_in_at: now,
+      created_at: now,
+      updated_at: now,
+      department_name: demoDept ? demoDept.name : "General Medicine",
+    };
+    this.opdQueue.set(demoQueueId, demoQueueEntry);
+
+    // 6. Seed initial 1-time verified prescription with QR code metadata
+    const demoRxId = "rx-demo-7741";
+    const demoRx: Prescription = {
+      id: demoRxId,
+      facility_id: facilityId,
+      patient_id: demoPatientId,
+      case_id: "7b511c8e-efaa-4d49-9c9c-bcb26a2295aa",
+      prescriber_id: "usr-doc-0001",
+      prescriber_name: "Dr. Ananya Rao, MD",
+      prescription_number: "RX-AIIA-2026-9042",
+      status: "FINAL",
+      notes: "Take Maha Sudarshana with lukewarm water after food. Avoid cold and heavy sour foods.",
+      ayush_dietary_advice: "Warm water (Ushnodaka) and light nutritious diet.",
+      finalized_at: now,
+      finalized_by: "Dr. Ananya Rao, MD",
+      created_at: now,
+      updated_at: now,
+      items: [],
+      clarifications: [],
+    };
+
+    const item1: PrescriptionItem = {
+      id: "rx-item-1",
+      prescription_id: demoRxId,
+      medicine_name: "Maha Sudarshana Ghanvati",
+      generic_name: "Polyherbal Antipyretic",
+      strength: "250 mg",
+      dose: "1 Tablet",
+      frequency: "Twice daily (BD)",
+      duration: "7 days",
+      instructions: "After food with lukewarm water",
+      route: "oral",
+      anupana: "Ushnodaka (Lukewarm water)",
+      quantity: 14,
+      dispensed_quantity: 0,
+      created_at: now,
+    };
+    const item2: PrescriptionItem = {
+      id: "rx-item-2",
+      prescription_id: demoRxId,
+      medicine_name: "Ashwagandha Churna",
+      generic_name: "Withania Somnifera Powder",
+      strength: "100 g",
+      dose: "3 grams (1/2 tsp)",
+      frequency: "Once daily at bedtime (HS)",
+      duration: "14 days",
+      instructions: "Mix with warm milk before sleep",
+      route: "oral",
+      anupana: "Warm milk / Ksheera",
+      quantity: 1,
+      dispensed_quantity: 0,
+      created_at: now,
+    };
+    const item3: PrescriptionItem = {
+      id: "rx-item-3",
+      prescription_id: demoRxId,
+      medicine_name: "Paracetamol Tablet IP",
+      generic_name: "Paracetamol",
+      strength: "650 mg",
+      dose: "1 Tablet (SOS)",
+      frequency: "As needed, minimum 6 hrs apart",
+      duration: "3 days",
+      instructions: "Only in case of temperature > 100°F",
+      route: "oral",
+      quantity: 6,
+      dispensed_quantity: 0,
+      created_at: now,
+    };
+    demoRx.items = [item1, item2, item3];
+    this.prescriptionItems.set(item1.id, item1);
+    this.prescriptionItems.set(item2.id, item2);
+    this.prescriptionItems.set(item3.id, item3);
+    this.prescriptions.set(demoRxId, demoRx);
+
+    // 7. Seed initial diagnostic orders and reports (CBC, Chest X-Ray)
+    const demoDiagId = "diag-demo-4092";
+    const demoDiagOrder: DiagnosticOrder = {
+      id: demoDiagId,
+      patient_id: demoPatientId,
+      case_id: "7b511c8e-efaa-4d49-9c9c-bcb26a2295aa",
+      facility_id: facilityId,
+      ordering_clinician_id: "usr-doc-0001",
+      priority: "ROUTINE",
+      clinical_context: "Evaluate persistent dry cough and post-febrile fatigue.",
+      status: "RESULT_AVAILABLE",
+      ordered_at: now,
+      created_at: now,
+      updated_at: now,
+      items: [
+        {
+          id: "diag-item-cbc",
+          diagnostic_order_id: demoDiagId,
+          diagnostic_catalog_id: "diag-cbc",
+          test_name_snapshot: "Complete Blood Count (CBC) with Automated Differential",
+          test_code_snapshot: "CBC",
+          status: "RESULT_AVAILABLE",
+          created_at: now,
+        },
+        {
+          id: "diag-item-xray",
+          diagnostic_order_id: demoDiagId,
+          diagnostic_catalog_id: "diag-xray_chest",
+          test_name_snapshot: "Chest X-Ray (PA View)",
+          test_code_snapshot: "XRAY_CHEST",
+          status: "RESULT_AVAILABLE",
+          created_at: now,
+        },
+      ],
+      results: [
+        {
+          id: "res-demo-cbc",
+          diagnostic_order_item_id: "diag-item-cbc",
+          patient_id: demoPatientId,
+          case_id: "7b511c8e-efaa-4d49-9c9c-bcb26a2295aa",
+          result_json: {
+            hemoglobin: { label: "Hemoglobin (Hb)", value: "13.8", unit: "g/dL", ref_low: "12.0", ref_high: "16.0", flag: "NORMAL" },
+            wbc: { label: "Total Leukocyte Count (TLC)", value: "7,400", unit: "/mcL", ref_low: "4,000", ref_high: "11,000", flag: "NORMAL" },
+            platelets: { label: "Platelet Count", value: "2.4", unit: "Lakhs/mcL", ref_low: "1.5", ref_high: "4.5", flag: "NORMAL" },
+            esr: { label: "Erythrocyte Sedimentation Rate", value: "14", unit: "mm/hr", ref_low: "0", ref_high: "20", flag: "NORMAL" },
+          },
+          finding: "Hemogram parameters within healthy physiological limits. No evidence of active leukocytosis.",
+          performed_by: "Ramesh V., Senior MLT",
+          verified_by: "Vikram Das, Chief Lab Technologist (NABL)",
+          performed_at: now,
+          verified_at: now,
+          created_at: now,
+          updated_at: now,
+        },
+        {
+          id: "res-demo-xray",
+          diagnostic_order_item_id: "diag-item-xray",
+          patient_id: demoPatientId,
+          case_id: "7b511c8e-efaa-4d49-9c9c-bcb26a2295aa",
+          result_json: {
+            lung_fields: { label: "Bilateral Lung Fields", value: "Clear", unit: "", flag: "NORMAL" },
+            cardiac_silhouette: { label: "Cardiothoracic Ratio", value: "< 0.50", unit: "", flag: "NORMAL" },
+            costophrenic_angles: { label: "CP Angles", value: "Sharp & Clear", unit: "", flag: "NORMAL" },
+            impression: { label: "Radiological Impression", value: "Normal Chest Radiograph", unit: "", flag: "NORMAL" },
+          },
+          finding: "No focal consolidation, pneumothorax, or pleural effusion visualized. Normal cardiac apex.",
+          performed_by: "Ramesh V., Radiographer",
+          verified_by: "Dr. Sandeep Verma, Consultant Radiologist",
+          performed_at: now,
+          verified_at: now,
+          created_at: now,
+          updated_at: now,
+        },
+      ],
+    };
+    this.diagnosticOrders.set(demoDiagId, demoDiagOrder);
+    for (const item of demoDiagOrder.items!) {
+      this.diagnosticOrderItems.set(item.id, item);
+    }
+    for (const res of demoDiagOrder.results!) {
+      this.diagnosticResults.set(res.id, res);
+    }
   }
 
   public reset(): void {
@@ -1015,6 +1211,15 @@ class EcosystemMockStore {
       e.items = Array.from(this.dispenseItems.values()).filter((it) => it.dispense_event_id === e.id);
     }
     return list.sort((a, b) => new Date(b.dispensed_at).getTime() - new Date(a.dispensed_at).getTime());
+  }
+
+  updatePharmacyStock(itemId: string, newQuantity: number): PharmacyInventoryItem | null {
+    const item = this.pharmacyInventory.get(itemId);
+    if (!item) return null;
+    item.stock_quantity = Math.max(0, newQuantity);
+    item.updated_at = new Date().toISOString();
+    this.pharmacyInventory.set(itemId, item);
+    return item;
   }
 }
 

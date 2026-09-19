@@ -180,7 +180,8 @@ export default async function CaseDetailsPage({
 
       {/* Red Flag Alert Notice if present */}
       {(() => {
-        const redFlagAlerts: RedFlagAlertItem[] = (c.red_flags || []).map((rf: any) => ({
+        const rawRedFlags = Array.isArray(c.red_flags) ? c.red_flags : [];
+        const redFlagAlerts: RedFlagAlertItem[] = rawRedFlags.map((rf: any) => ({
           ruleId: rf.ruleId || rf.rule_id || "RED_FLAG_ALERT",
           ruleVersion: rf.ruleVersion || rf.rule_version || "1.0",
           severity: (rf.severity?.toLowerCase() || "critical") as any,
@@ -286,7 +287,7 @@ export default async function CaseDetailsPage({
                 Source: Patient reported
               </span>
             </div>
-            {c.medication_history && c.medication_history.length > 0 ? (
+            {Array.isArray(c.medication_history) && c.medication_history.length > 0 ? (
               <ul className="space-y-2 text-xs">
                 {c.medication_history.map((m, idx) => (
                   <li key={idx} className="rounded-lg bg-surface-50 p-2.5 border border-surface-200">
@@ -303,7 +304,7 @@ export default async function CaseDetailsPage({
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <AlertTriangle className="h-4 w-4 text-rose-500" /> Allergies
             </h3>
-            {c.allergy_history && c.allergy_history.length > 0 ? (
+            {Array.isArray(c.allergy_history) && c.allergy_history.length > 0 ? (
               <ul className="space-y-2 text-xs">
                 {c.allergy_history.map((a, idx) => (
                   <li key={idx} className="rounded-lg bg-rose-50/50 p-2.5 border border-rose-200 text-rose-900">
@@ -405,7 +406,7 @@ export default async function CaseDetailsPage({
         />
 
         {/* Post-finalization Clinical Addenda / Amendments */}
-        {c.amendments && c.amendments.length > 0 && (
+        {Array.isArray(c.amendments) && c.amendments.length > 0 && (
           <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-6 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-amber-200 pb-3">
               <History className="h-5 w-5 text-amber-700" />
