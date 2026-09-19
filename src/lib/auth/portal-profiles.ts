@@ -1,0 +1,48 @@
+import { ProfileShareData } from "@/components/shared/share-profile-modal";
+
+export const PORTAL_PROFILES: Record<string, ProfileShareData> = {
+  patient: {
+    role: "patient",
+    roleTitle: "Verified Citizen Patient Record",
+    uniqueId: "MED-2026-1001",
+    name: "Rajesh Kumar",
+    secondaryIdLabel: "ABHA Health ID",
+    secondaryIdValue: "91-4820-1940-2811",
+    facility: "AIIA Central Hospital (fac-hyd-01)",
+    departmentOrScope: "Outpatient Services (OPD)",
+    validity: "Active / Verified",
+  },
+  doctor: {
+    role: "doctor",
+    roleTitle: "Institutional Clinician Credential",
+    uniqueId: "AIIA-DOC-8921",
+    name: "Dr. Ananya Sharma, MD (AIIA)",
+    secondaryIdLabel: "Council Registration",
+    secondaryIdValue: "MCI-AYUSH-2024-589",
+    facility: "All India Institute of Ayurveda",
+    departmentOrScope: "General Medicine & Kayachikitsa",
+    validity: "NMC / Ayush Council Active",
+  },
+  pharmacy: {
+    role: "pharmacy",
+    roleTitle: "Licensed Hospital Dispensary",
+    uniqueId: "PHARM-7741",
+    name: "Venkatesh Iyer, B.Pharm",
+    secondaryIdLabel: "State Pharmacy License",
+    secondaryIdValue: "TS-PHARM-2026-902",
+    facility: "AIIA Central Dispensary & Formulary",
+    departmentOrScope: "Dispensary Unit #1",
+    validity: "Valid through 2028",
+  },
+  diagnostic: {
+    role: "diagnostic",
+    roleTitle: "NABL Diagnostic Pathology & Radiology",
+    uniqueId: "LAB-TECH-4092",
+    name: "Ramesh V., M.Sc MLT",
+    secondaryIdLabel: "NABL Accreditation",
+    secondaryIdValue: "NABL-MED-883",
+    facility: "Central Diagnostic Laboratory & Imaging",
+    departmentOrScope: "Biochemistry, Hematology & Radiology",
+    validity: "ISO 15189 Certified",
+  },
+};

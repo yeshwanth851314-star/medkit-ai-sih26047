@@ -166,8 +166,26 @@ export default function PatientPortalPage() {
 
   useEffect(() => {
     loadPatientData();
-    if (typeof window !== "undefined" && window.location.search.includes("book=true")) {
-      setIsBookingOpen(true);
+    if (typeof window !== "undefined") {
+      if (window.location.search.includes("book=true")) {
+        setIsBookingOpen(true);
+      }
+      const handleHash = () => {
+        const hash = window.location.hash.replace("#", "");
+        if (hash === "history" || hash === "reports" || hash === "prescriptions" || hash === "appointments") {
+          setActiveTab(hash as any);
+        }
+      };
+      handleHash();
+      window.addEventListener("hashchange", handleHash);
+
+      const handleOpenBooking = () => setIsBookingOpen(true);
+      window.addEventListener("medkit:open-booking", handleOpenBooking);
+
+      return () => {
+        window.removeEventListener("hashchange", handleHash);
+        window.removeEventListener("medkit:open-booking", handleOpenBooking);
+      };
     }
   }, [loadPatientData]);
 

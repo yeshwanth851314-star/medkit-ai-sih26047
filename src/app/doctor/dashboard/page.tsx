@@ -112,6 +112,21 @@ export default function DoctorDashboardPage() {
   useEffect(() => {
     fetchDoctorData();
     const interval = setInterval(fetchDoctorData, 10000);
+
+    if (typeof window !== "undefined") {
+      const handleHash = () => {
+        const hash = window.location.hash.replace("#", "");
+        if (hash === "waiting" || hash === "applied" || hash === "completed") {
+          setActiveTab(hash as any);
+        }
+      };
+      handleHash();
+      window.addEventListener("hashchange", handleHash);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("hashchange", handleHash);
+      };
+    }
     return () => clearInterval(interval);
   }, [fetchDoctorData]);
 
